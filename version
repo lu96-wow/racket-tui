@@ -1,0 +1,10 @@
+在这个测试环境下运行良好
+
+debian@vbox:~/work/racket_tui$ racket -v
+Welcome to Racket v8.7 [cs].
+debian@vbox:~/work/racket_tui$ dpkg -l | grep libncurses
+ii  libncurses-dev:amd64                   6.4-4                                    amd64        developer's libraries for ncurses
+ii  libncurses5-dev:amd64                  6.4-4                                    amd64        transitional package for libncurses-dev
+ii  libncurses6:amd64                      6.4-4                                    amd64        shared libraries for terminal handling
+ii  libncursesw5-dev:amd64                 6.4-4                                    amd64        transitional package for libncurses-dev
+ii  libncursesw6:amd64                     6.4-4                                    amd64        shared libraries for terminal handling (wide character support)
