@@ -10,21 +10,16 @@
   (cond
     [(eq? evt 'mouse-get-failed)
      "mouse: failed to read"]
-
     [(list? evt)
      (define key (get-mouse-event-key evt))
      (define id  (get-mouse-event-id evt))
      (cond
-       ;; 滚轮事件
        [(member key '(mouse-wheel-up mouse-wheel-down))
         (format "mouse: ~a (id=~a)" key id)]
-
-       ;; 普通点击/移动事件
        [else
         (define x (get-mouse-event-x evt))
         (define y (get-mouse-event-y evt))
         (format "mouse: ~a at (x=~a, y=~a) [id=~a]" key x y id)])]
-
     [else
      (format "mouse: unknown event ~v" evt)]))
 
@@ -35,10 +30,6 @@
   (refresh)
 
   (let loop ()
-    ;封装的getch会将字符以racket符号形式返回
-    ;支持大小写 ‘a 'A
-    ;支持鼠标 ’mouse
-    ;不支持ctrl+ alt+ 修饰键,建议写成命令式像vim：那样
     (define k (get-key))
 
     (cond
@@ -46,7 +37,7 @@
       [(or (eq? k 'q) (eq? k 'esc))
        (void)]
 
-      ;; 鼠标事件：特殊处理
+      ;; 鼠标事件
       [(eq? k 'mouse)
        (define mevt (get-mouse-event))
        (move 1 0)
@@ -55,7 +46,18 @@
        (refresh)
        (loop)]
 
-      ;; 普通按键
+      ;; 新增：Unicode 字符输入
+      [(eq? k 'unicode)
+       (define ustr (get-last-unicode))
+       (move 1 0)
+       (clrtoeol)
+       (if ustr
+           (addstr (format "unicode: ~a" ustr))   ; ← 显示实际字符！
+           (addstr "unicode: (decode failed)"))
+       (refresh)
+       (loop)]
+
+      ;; 其他普通按键（ASCII、功能键等）
       [else
        (move 1 0)
        (clrtoeol)
@@ -66,4 +68,4 @@
 
 ;; 启动
 (with-ncurses
-    main-loop)
+  main-loop)
