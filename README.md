@@ -13,3 +13,8 @@ auto initscr opencolor and release
 mouse.rkt supports mouse
 key.rkt supports keyboard
 color.rkt supports color show
+
+install_help_lib.sh install help c lib to system
+
+raco_install will use racket package install to local
+
