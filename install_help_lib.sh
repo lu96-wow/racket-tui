@@ -37,5 +37,7 @@ cp "$SOURCE_FILE" "$DEST_FILE"
 # 设置权限（通常 .so 文件权限为 644 或 755）
 chmod 644 "$DEST_FILE"
 
+ldconfig
+
 echo "成功安装 $LIB_NAME 到 $DEST_DIR"
 echo "如需卸载，请运行 ./uninstall_lib.sh（需 root 权限）"
