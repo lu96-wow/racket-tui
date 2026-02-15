@@ -3,8 +3,27 @@
 (require "lib.rkt"
          "key_data.rkt")
 
+(define current-input-timeout (make-parameter -1))
+(provide current-input-timeout)
+
+(define (getch-with-short-timeout)
+  (define original (current-input-timeout))
+  (cond
+    ;; 情况1: 当前是阻塞模式 (-1) → 需要临时设短超时
+    [(= original -1)
+     (timeout 50)
+     (define k (getch))
+     (timeout -1)  ; 恢复阻塞
+     (if (= k -1) #f k)]
+
+    ;; 情况2: 当前是非阻塞或有限超时 (0, 100, ...) → 直接读一次
+    [else 
+     (define k (getch))  ; 此时 getch 要么立即返回字符，要么返回 -1
+     (if (= k -1) #f k)]))
+
 ;; 内部状态：保存最近一次解析出的 Unicode 字符串
 (define last-unicode #f)
+(define last-unicode-length 0)
 
 ;; 根据 UTF-8 首字节判断总字节数
 (define (utf8-byte-length b)
@@ -18,6 +37,7 @@
 ;; 尝试从首字节 b 开始读取完整 UTF-8 序列并解码
 (define (read-utf8-char b)
   (define len (utf8-byte-length b))
+  (set! last-unicode-length len)
   (if (= len 1)
       #f  ; 不是多字节字符
       (let ([bytes-list (cons b (for/list ([i (- len 1)])
@@ -27,31 +47,45 @@
           (bytes->string/utf-8 (list->bytes bytes-list))))))
 
 (define (integer->key k)
+  (set! last-unicode #f)
+  (set! last-unicode-length 0)
   (cond
     ;; 超时
     [(= k -1) #f]
 
+    ;; Ctrl 组合键
+    [(and (>= k 1) (<= k 26))
+     (string->symbol (format "ctrl-~a" (integer->char (+ k 64))))]
+    [(= k 27)
+     (let ([next (getch-with-short-timeout)])
+       (if (and next (>= next 32) (<= next 126))
+           (string->symbol (format "alt-~a" (integer->char next)))
+           'esc))]
+    
+    [(= k 28) 'ctrl-backslash]
+    [(= k 29) 'ctrl-right-bracket]
+    [(= k 30) 'ctrl-caret]
+    [(= k 31) 'ctrl-underscore]
+
     ;; 可打印 ASCII
     [(and (>= k 32) (<= k 126))
-     (set! last-unicode #f)
      (string->symbol (string (integer->char k)))]
 
     ;; 控制字符
     [(memq k '(10 13))
-     (set! last-unicode #f) 'enter]
+      'enter]
     [(= k 27)
-     (set! last-unicode #f) 'esc]
+      'esc]
     [(= k 9)
-     (set! last-unicode #f) 'tab]
+      'tab]
     [(= k 32)
-     (set! last-unicode #f) 'space]
+      'space]
     [(memq k '(8 127))
-     (set! last-unicode #f) 'backspace]
+      'backspace]
 
     ;; 功能键等（KEY_XXX >= 257）
     [(hash-ref KEYCODE->SYMBOL k #f)
      => (lambda (sym)
-          (set! last-unicode #f)
           sym)]
 
     ;; 检测 UTF-8 多字节起始字节（128–255）
@@ -61,14 +95,16 @@
 
     ;; 其他未知（包括续字节？理论上不应单独出现）
     [else
-     (set! last-unicode #f)
      (string->symbol (format "~a" k))]))
 
 (define-syntax-rule (get-key)
   (integer->key (getch)))
 
-;; 新增：获取最近一次输入的 Unicode 字符串
+;; 获取最近一次输入的 Unicode 字符串
 (define (get-last-unicode)
   last-unicode)
 
-(provide get-key integer->key get-last-unicode)
+(define (get-last-unicode-length)
+  last-unicode-length)
+
+(provide get-key integer->key get-last-unicode get-last-unicode-length)
