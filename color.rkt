@@ -3,17 +3,17 @@
 (require "lib.rkt"
          "lib_help.rkt")
 
-;; ========== 配置 ==========
+;; 配置
 (define START_COLOR_ID 100)
 (define START_PAIR_ID 100)
 
-;; ========== 状态 ==========
+;; 状态
 (define color-name->id (make-hash))
 (define pair-name->id (make-hash))
 (define next-color-id START_COLOR_ID)
 (define next-pair-id START_PAIR_ID)
 
-;; ========== 定义颜色 ==========
+;; 定义颜色
 (define (define-color name r g b)
   
   (when (hash-has-key? color-name->id name)
@@ -29,7 +29,7 @@
   (set! next-color-id (add1 next-color-id))
   (void))
 
-;; ========== 定义颜色对 ==========
+;; 定义颜色对
 (define (define-color-pair name fg bg)
 
   ;; 判断 fg 和 bg 是颜色名称还是标准颜色 ID
@@ -65,14 +65,13 @@
   (set! next-pair-id (add1 next-pair-id))
   (void))
 
-;; ========== 查询函数 ==========
+;; 查询函数
+
 (define (color-id name)
-  (or (hash-ref color-name->id name #f)
-      (error "未定义的颜色" name)))
+  (hash-ref color-name->id name #f))
 
 (define (pair-id name)
-  (or (hash-ref pair-name->id name #f)
-      (error "未定义的颜色对" name)))
+  (hash-ref pair-name->id name #f))
  
 (define (pair pair-name)
          (help_COLOR_PAIR (pair-id pair-name)))
@@ -82,9 +81,11 @@
          (help_COLOR_PAIR (pair-id pair-name))
          attrs))
 
-;; ========== 导出 ==========
+;; 导出
 (provide
  define-color
  define-color-pair
+ color-id
+ pair-id
  pair-attr
  pair)

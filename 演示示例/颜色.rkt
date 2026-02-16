@@ -24,6 +24,7 @@
         ;纯彩色
         (define-color-pair 'c 'blue 'green)
         (mvaddstr/xy 0 2 "蓝字红底" (pair 'c))
+        (mvaddstr/xy 0 3 "蓝字红底粗体" (pair-attr 'c A_BOLD))
     )
     (getch)
     (refresh)

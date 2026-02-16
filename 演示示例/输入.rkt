@@ -52,7 +52,7 @@
        (move 1 0)
        (clrtoeol)
        (if ustr
-           (addstr (format "unicode: ~a" ustr))   ; ← 显示实际字符！
+           (addstr (format "unicode: ~a" ustr))
            (addstr "unicode: (decode failed)"))
        (refresh)
        (loop)]

@@ -78,6 +78,7 @@
   (keypad stdscr #t)
   (mousemask (help_get_ALL_MOUSE_EVENTS) #f)
   (timeout timeout-ms)
+  (current-input-timeout timeout-ms)
   (when (> (has_colors) 0)
     (start_color)
     (use_default_colors)    ;;为了ncurses兼容启用
@@ -179,31 +180,43 @@
 
 (define-syntax (waddstr/wxy stx)
   (syntax-parse stx
+    [(waddstr/wxy win:expr str:expr)
+     #'(waddstr win str)]
     [(waddstr/wxy win:expr str:expr attr:expr)
      #'(waddstr-wattr win str attr)]))
 
 (define-syntax (waddch/wxy stx)
   (syntax-parse stx
+   [(waddch/wxy win:expr ch:expr)
+     #'(waddch win ch)]
     [(waddch/wxy win:expr ch:expr attr:expr)
      #'(waddch-wattr win ch attr)]))
 
 (define-syntax (mvwaddstr/wxy stx)
   (syntax-parse stx
+    [(mvwaddstr/wxy win:expr x:expr y:expr str:expr)
+     #'(mvwaddstr win y x str)]
     [(mvwaddstr/wxy win:expr x:expr y:expr str:expr attr:expr)
      #'(mvwaddstr-wattr win y x str attr)]))
 
 (define-syntax (mvwaddch/wxy stx)
   (syntax-parse stx
+    [(mvwaddch/wxy win:expr x:expr y:expr ch:expr)
+     #'(mvwaddch win y x ch)]
     [(mvwaddch/wxy win:expr x:expr y:expr ch:expr attr:expr)
      #'(mvwaddch-wattr win y x ch attr)]))
 
 (define-syntax (waddnstr/wxy stx)
   (syntax-parse stx
+   [(waddnstr/wxy win:expr str:expr n:expr)
+     #'(waddnstr win str n)]
     [(waddnstr/wxy win:expr str:expr n:expr attr:expr)
      #'(waddnstr-wattr win str n attr)]))
 
 (define-syntax (mvwaddnstr/wxy stx)
   (syntax-parse stx
+    [(mvwaddnstr/wxy win:expr x:expr y:expr str:expr n:expr)
+     #'(mvwaddnstr win y x str n)]
     [(mvwaddnstr/wxy win:expr x:expr y:expr str:expr n:expr attr:expr)
      #'(mvwaddnstr-wattr win y x str n attr)]))
 
