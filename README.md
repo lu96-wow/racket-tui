@@ -2,7 +2,7 @@ first
 
 config system had libncurses/w
 
-use install_help_lib.sh build help lib
+use build_help_lib.sh and install_help_lib.sh to build and install c help lib
 
 then can go to 演示示例 look example code
 
