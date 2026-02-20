@@ -22,4 +22,11 @@ raco_install will use racket package install to local
 
 or:
   raco pkg install https://github.com/lu96-wow/racket-tui.git
-  git clone
+  
+  git clone https://github.com/lu96-wow/racket-tui.git
+
+  ./build_help_lib.sh
+  ./install_help_lib.sh
+
+remove:
+      raco pkg remove racket-tui
