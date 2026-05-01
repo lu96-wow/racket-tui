@@ -3,7 +3,7 @@
 
 (require "output.rkt")
 
-;; ================= 样式系统 =================
+;; 样式系统
 
 (define (make-style . specs)
   (λ () (for-each (λ (s) (s)) specs)))
@@ -33,9 +33,9 @@
   (cursor-move row col)
   (put-styled name v))
 
-;; ================= 颜色快捷输出 =================
+;; 颜色快捷输出
 
-;; --- 真彩色前景 ---
+;; 真彩色前景
 (define (put-rgb-fg r g b v)
   (put-string (format "\e[38;2;~a;~a;~am" r g b))
   (put v)
@@ -52,7 +52,7 @@
   (cursor-move row col)
   (put-rgb-fg r g b v))
 
-;; --- 真彩色背景 ---
+;; 真彩色背景
 (define (put-rgb-bg r g b v)
   (put-string (format "\e[48;2;~a;~a;~am" r g b))
   (put v)
@@ -69,7 +69,7 @@
   (cursor-move row col)
   (put-rgb-bg r g b v))
 
-;; --- 真彩色前景+背景 ---
+;; 真彩色前景+背景
 (define (put-rgb-fg-bg fr fg fb br bg bb v)
   (put-string (format "\e[38;2;~a;~a;~a;48;2;~a;~a;~am" fr fg fb br bg bb))
   (put v)
@@ -86,7 +86,7 @@
   (cursor-move row col)
   (put-rgb-fg-bg fr fg fb br bg bb v))
 
-;; --- 256 色前景 ---
+;; 256 色前景
 (define (put-256-fg n v)
   (put-string (format "\e[38;5;~am" n))
   (put v)
@@ -103,7 +103,7 @@
   (cursor-move row col)
   (put-256-fg n v))
 
-;; --- 256 色背景 ---
+;; 256 色背景
 (define (put-256-bg n v)
   (put-string (format "\e[48;5;~am" n))
   (put v)
@@ -120,7 +120,7 @@
   (cursor-move row col)
   (put-256-bg n v))
 
-;; ================= 颜色构造器（样式系统用） =================
+;; 颜色构造器（样式系统用）
 
 (define (color-fg n)
   (unless (<= 0 n 15) (error 'color-fg "ANSI color must be 0-15, got ~a" n))
@@ -150,7 +150,7 @@
   (unless (<= 0 b 255) (error 'color-rgb-bg "B must be 0-255, got ~a" b))
   (λ () (put-string (format "\e[48;2;~a;~a;~am" r g b))))
 
-;; ================= 属性构造器 =================
+;; 属性构造器
 (define attr-bold      (λ () (put-string "\e[1m")))
 (define attr-dim       (λ () (put-string "\e[2m")))
 (define attr-italic    (λ () (put-string "\e[3m")))
@@ -159,7 +159,7 @@
 (define attr-reverse   (λ () (put-string "\e[7m")))
 (define (style-reset)  (put-string "\e[0m"))
 
-;; ================= 颜色别名 =================
+;; 颜色别名
 (define clr-black    (color-fg 0))  (define clr-red     (color-fg 1))
 (define clr-green    (color-fg 2))  (define clr-yellow  (color-fg 3))
 (define clr-blue     (color-fg 4))  (define clr-magenta (color-fg 5))
@@ -172,7 +172,7 @@
 (define bclr-cyan    (color-bg 6))  (define bclr-white   (color-bg 7))
 (define bclr-default (λ () (put-string "\e[49m")))
 
-;; ================= 向后兼容 =================
+;; 向后兼容
 (define (fg-black)   (clr-black))   (define (fg-red)     (clr-red))
 (define (fg-green)   (clr-green))   (define (fg-blue)    (clr-blue))
 (define (fg-yellow)  (clr-yellow))  (define (fg-magenta) (clr-magenta))
@@ -192,7 +192,7 @@
 (define (style-blink)     (attr-blink))
 (define (style-reverse)   (attr-reverse))
 
-;; ================= 预设样式 =================
+;; 预设样式
 (style-define! 'red   clr-red)
 (style-define! 'green clr-green)
 (style-define! 'blue  clr-blue)
@@ -209,7 +209,7 @@
 (style-define! 'cursor    bclr-white clr-black)
 (style-define! 'selection bclr-blue clr-white)
 
-;; ================= 导出 =================
+;; 导出
 (provide put-styled put-styled-at put-styled-at!
          style-define! style-apply! style-reset
          color-fg color-bg color256-fg color256-bg

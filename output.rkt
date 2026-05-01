@@ -3,7 +3,7 @@
 
 (require racket/bytes)
 
-;; ================= 光标追踪 =================
+;; 光标追踪
 (define current-cursor-row 0)
 (define current-cursor-col 0)
 
@@ -11,7 +11,7 @@
   (set! current-cursor-row row)
   (set! current-cursor-col col))
 
-;; ================= 基础输出 =================
+;; 基础输出
 (define (put-byte b)        (write-byte b)  (flush-output))
 (define (put-bytes bs)      (write-bytes bs) (flush-output))
 (define (put-char c)        (write-char c)  (flush-output))
@@ -28,7 +28,7 @@
         [(integer? v) (put-byte v)]
         [else (void)]))
 
-;; ================= 光标控制 =================
+;; 光标控制
 (define (cursor-up n)
   (put-string (format "\e[~aA" n))
   (set-cursor! (max 0 (- current-cursor-row n)) current-cursor-col))
@@ -60,7 +60,7 @@
 (define (cursor-hide)  (put-string "\e[?25l"))
 (define (cursor-show)  (put-string "\e[?25h"))
 
-;; ================= 屏幕控制 =================
+;; 屏幕控制
 (define (screen-clear)
   (put-string "\e[2J")
   (set-cursor! 0 0))
@@ -73,7 +73,7 @@
 (define (buffer-alt-enable)    (put-string "\e[?1049h"))
 (define (buffer-alt-disable)   (put-string "\e[?1049l"))
 
-;; ================= 绝对位置输出 =================
+;; 绝对位置输出
 (define (put-at row col v)
   (define old-r current-cursor-row)
   (define old-c current-cursor-col)
@@ -85,7 +85,7 @@
   (cursor-move row col)
   (put v))
 
-;; ================= 导出 =================
+;; 导出
 (provide put put-byte put-bytes put-char put-string put-newline
          put-at put-at!
          cursor-up cursor-down cursor-right cursor-left

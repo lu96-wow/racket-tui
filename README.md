@@ -61,3 +61,5 @@ racket-tui/input	事件输入
 racket-tui/output	光标/屏幕控制
 racket-tui/output-color	颜色/样式
 racket-tui/resize	窗口大小
+
+ffi绑定只存在于base.rkt和resize.rkt,最小依赖
