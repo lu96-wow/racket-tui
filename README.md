@@ -20,17 +20,13 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 自动解析 CSI 序列参数、UTF-8 多字节、修饰键组合，内置阻塞/非阻塞模式。
 色彩输出
 样式 = 颜色 + 属性，位置无关的自由组合：
-racket
 
+```racket
 (style-define! 'fancy clr-yellow bclr-blue attr-bold attr-underline)
-
 (put-styled 'fancy "组合样式")
-
-
 ;; 真彩色快捷输出（不影响光标位置）
-
 (put-rgb-fg-at 5 10 255 128 0 "橙色文字")
-
+```
 支持 ANSI 16 色 / 256 色 / 真彩色。put-at 自动保存恢复光标，对交互透明。
 窗口 Resize
 后台线程每 100ms 通过 ioctl(TIOCGWINSZ) 查询窗口大小，变化时注入 read-event 为 'resize 事件：
