@@ -22,7 +22,7 @@
                                    (values (append ps (list cur)) b))]
                 [else         (loop (+ i 1) cur ps)])))))
 
-;; 替换 extract-modifiers
+;; 提取修饰键
 (define (extract-modifiers ps)
   ;; 只有多参数序列才可能含修饰键
   (if (<= (length ps) 1)
@@ -33,9 +33,7 @@
 
 ;; CSI 键类型
 (define csi-key-table '((65 . up) (66 . down) (67 . right) (68 . left)
-                                  (72 . home) (70 . end)
-                                  ;; 对于 ~ 结尾的序列，需要看参数
-                                  ))
+                                  (72 . home) (70 . end)))
 
 ;; 需要根据 params 和 final 联合判断
 (define (csi-params-final->type ps final)
@@ -54,6 +52,36 @@
                                        (72 . home) (70 . end))))
      (if p (cdr p) 'seq)]))
 
+;; 鼠标事件解析
+(define (parse-mouse-event ps final)
+  ;; SGR 鼠标事件 (final 为 'M' 或 'm')
+  (let* ([type (car ps)]
+         [x (cadr ps)]
+         [y (caddr ps)]
+         [button-code (bitwise-and type 3)]
+         [modifiers (arithmetic-shift type -2)]
+         [is-move? (bitwise-bit-set? type 5)]
+         [is-release? (and (= final 109) (not is-move?))]
+         [button (case button-code
+                   [(0) 'left]
+                   [(1) 'middle]
+                   [(2) 'right]
+                   [else 'unknown])]
+         [action (cond
+                   [(<= 64 type 65) 'scroll]
+                   [is-release? 'release]
+                   [is-move? 'move]
+                   [else 'press])]
+         [scroll-direction (cond
+                             [(= type 64) 'up]
+                             [(= type 65) 'down]
+                             [else #f])])
+
+    ;; 构建事件详情列表
+    (if scroll-direction
+        (list action 'scroll scroll-direction (- x 1) (- y 1) modifiers)
+        (list action button (- x 1) (- y 1) modifiers))))
+
 ;; 内部读取
 (define (read-n-bytes count)
   (let loop ([n 0] [acc (bytes)])
@@ -67,6 +95,43 @@
                          (if (csi-done? b) (list->bytes acc) (loop acc)))
           (list->bytes acc)))))
 
+;; 读取粘贴内容
+(define (read-paste-content)
+  (let loop ([acc (bytes)])
+    (define b (getc))
+    (cond [(eq? b 'null)
+           ;; 超时或错误，返回已收集的内容
+           acc]
+          [(= b ESC)
+           ;; 可能是粘贴结束序列
+           (define b2 (getc))
+           (cond [(eq? b2 'null)
+                  ;; ESC 后无数据，保留 ESC
+                  (bytes-append acc (bytes ESC))]
+                 [(= b2 91)  ; '['
+                  ;; 继续检查是否为 ESC[201~
+                  (define b3 (getc))
+                  (define b4 (getc))
+                  (define b5 (getc))
+                  ;; 只有在读取到完整序列且为 ESC[201~ 时才结束
+                  (if (and (integer? b3) (integer? b4) (integer? b5)
+                           (= b3 50)      ; '2'
+                           (= b4 49)      ; '1'
+                           (= b5 126))    ; '~'
+                      acc  ; 粘贴结束，返回内容
+                      ;; 不是粘贴结束，将所有字节添加到内容中
+                      (loop (bytes-append acc
+                                          (bytes ESC b2)
+                                          (if (integer? b3) (bytes b3) (bytes))
+                                          (if (integer? b4) (bytes b4) (bytes))
+                                          (if (integer? b5) (bytes b5) (bytes)))))]
+                 [else
+                  ;; 不是 '[' 开头的序列，继续收集
+                  (loop (bytes-append acc (bytes ESC b2)))])]
+          [else
+           ;; 普通字节，继续收集
+           (loop (bytes-append acc (bytes b)))])))
+
 ;; read-event 实现
 (define (read-event-impl)
   (define first (getc))
@@ -79,14 +144,30 @@
                [(= b2 79)
                 (define b3 (getc)) (change-noblock)
                 (values 'seq (bytes first b2 (if (eq? b3 'null) '() b3)) #f)]
-               ;; 将 (csi-final->type final) 改为 (csi-params-final->type ps final)
                [(= b2 91)
-                (define seq (read-csi-seq b2)) (change-noblock)
+                (define seq (read-csi-seq b2))
                 (let-values ([(ps final) (parse-csi-params seq)])
-                  (define mods (extract-modifiers ps))
-                  (if (or (car mods) (cdr mods))
-                      (values 'mod-seq seq mods)
-                      (values (csi-params-final->type ps final) seq #f)))]
+                  (cond
+                    ;; 括号粘贴开始 ESC[200~
+                    [(and (null? ps) (= final 126)
+                          (= (bytes-length seq) 5)
+                          (= (bytes-ref seq 2) 50)  ; '2'
+                          (= (bytes-ref seq 3) 48)  ; '0'
+                          (= (bytes-ref seq 4) 48)) ; '0'
+                     (define content (read-paste-content))
+                     (change-noblock)
+                     (values 'paste content #f)]
+                    ;; 鼠标事件检测 (final 为 'M'=77 或 'm'=109)
+                    [(and (memv final '(77 109)) (>= (length ps) 3))
+                     (change-noblock)
+                     (values 'mouse (parse-mouse-event ps final) #f)]
+                    ;; 原有的处理逻辑
+                    [else
+                     (change-noblock)
+                     (define mods (extract-modifiers ps))
+                     (if (or (car mods) (cdr mods))
+                         (values 'mod-seq seq mods)
+                         (values (csi-params-final->type ps final) seq #f))]))]
                [(<= 32 b2 126) (change-noblock) (values 'alt (bytes first b2) #f)]
                [else (change-noblock) (values 'seq (bytes first b2) #f)])]
         [(utf8-multi-start? first)
@@ -125,6 +206,44 @@
 (define (event-home? t)     (eq? t 'home))     (define (event-end? t)      (eq? t 'end))
 (define (event-pageup? t)   (eq? t 'pageup))   (define (event-pagedown? t) (eq? t 'pagedown))
 
+;; 鼠标事件判断 - 统一接口
+(define (event-touch? t)  (eq? t 'mouse))
+(define (event-mouse? t)  (eq? t 'mouse))
+
+;; 鼠标事件子类型判断
+(define (mouse-press? detail)   (eq? (car detail) 'press))
+(define (mouse-release? detail) (eq? (car detail) 'release))
+(define (mouse-move? detail)    (eq? (car detail) 'move))
+(define (mouse-scroll? detail)  (eq? (car detail) 'scroll))
+
+;; 鼠标按钮判断
+(define (mouse-left? detail)   (eq? (cadr detail) 'left))
+(define (mouse-middle? detail) (eq? (cadr detail) 'middle))
+(define (mouse-right? detail)  (eq? (cadr detail) 'right))
+
+;; 滚轮方向判断
+(define (scroll-up? detail)   (eq? (caddr detail) 'up))
+(define (scroll-down? detail) (eq? (caddr detail) 'down))
+
+;; 提取鼠标坐标
+(define (mouse-x d)
+  (if (eq? (car d) 'scroll)
+      (cadddr d)  ; scroll 事件中坐标在位置4
+      (caddr d)))  ; 普通鼠标事件中坐标在位置3
+
+(define (mouse-y d)
+  (if (eq? (car d) 'scroll)
+      (car (cddddr d))  ; scroll 事件中坐标在位置5
+      (cadddr d)))       ; 普通鼠标事件中坐标在位置4
+
+(define (get-mouse-pos d) (values (mouse-x d) (mouse-y d)))
+
+;; 提取鼠标修饰键
+(define (mouse-modifiers d) (last d))
+
+;; 粘贴事件判断
+(define (event-paste? t) (eq? t 'paste))
+
 (define (event-tab? t d)       (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) 9)))
 (define (event-backspace? t d) (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (memv (bytes-ref d 0) '(8 127))))
 
@@ -138,8 +257,21 @@
 (define (event->string d)  (with-handlers ([exn:fail? (const "")]) (bytes->string/utf-8 d)))
 (define (event->byte d)    (and (= (bytes-length d) 1) (bytes-ref d 0)))
 
-(provide read-event event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
+(provide read-event
+         ;; 键盘事件
+         event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?
          event-del? event-insert? event-home? event-end? event-pageup? event-pagedown?
-         event-tab? event-backspace? ctrl->char alt->char mod-seq->char
+         event-tab? event-backspace?
+         ;; 鼠标事件 - 统一接口
+         event-touch? event-mouse?
+         mouse-press? mouse-release? mouse-move? mouse-scroll?
+         mouse-left? mouse-middle? mouse-right?
+         scroll-up? scroll-down?
+         mouse-x mouse-y get-mouse-pos
+         mouse-modifiers
+         ;; 粘贴事件
+         event-paste?
+         ;; 数据提取
+         ctrl->char alt->char mod-seq->char
          get-resize-rows get-resize-cols get-resize-size event->string event->byte)
