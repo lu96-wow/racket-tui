@@ -8,7 +8,7 @@
 raco pkg install https://github.com/lu96-wow/racket-tui.git
 ```
 
-https://a.gif
+![Demo](a.gif)
 
 ## 快速开始
 
