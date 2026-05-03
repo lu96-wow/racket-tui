@@ -221,6 +221,7 @@ https://a.gif
 
 ```racket
 #lang racket
+
 (require tui)
 
 (define (draw-ui)
@@ -228,13 +229,25 @@ https://a.gif
     (bytes-append
      format-screen-clear
      (format-cursor-move 0 0)
-     (format-rgb-fg 255 255 0 "=== TUI Demo ===")))
+     (format-rgb-fg 255 255 0 "=== TUI Demo ===")
+     (format-cursor-move 2 0)
+     (format-rgb-fg 0 255 0 "Press 'q' to quit")
+     (format-cursor-move 4 0)
+     (format-rgb-fg 255 0 0 "Hello, TUI!")
+     (format-cursor-move 6 0)
+     (format-256-fg 46 "UTF-8 support: 你好世界")))
   (put-bytes buffer))
 
 (with-tui
-  (cursor-hide)
+    (cursor-hide)
   (let loop ()
     (draw-ui)
-    (read-event)
-    (loop)))
+    (let-values ([(type data mods) (read-event)])
+      (cond [(and (event-key? type)
+                  (let ([b (event->byte data)])
+                    (and b (= b (char->integer #\q)))))
+             (void)]  ;; 退出
+            [else (loop)]))))
 ```
+
+其他示例在test文件下
