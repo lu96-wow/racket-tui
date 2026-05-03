@@ -210,33 +210,27 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 ## Buffer
 
 ```racket
-;; 批量输出
 #lang racket
 (require tui)
 
-;; 定义 buffer 宏（添加到你的库中）
-(define-syntax-rule (buffer body ...)
-  (call-with-output-bytes
-   (λ (out)
-     (parameterize ([current-output-port out])
-       body ...))))
+(with-tui-nobuffer
+    (define buffer-content
+      (list
+       format-screen-clear
+       (format-cursor-move 0 0)
+       (format-rgb-fg 255 255 0 "=== Demo ===")
+       (format-cursor-move 2 0)
+       (format-rgb-fg 0 255 0 "Line 1")
+       (format-cursor-move 3 0)
+       (format-rgb-fg 0 255 0 "Line 2")
+       (format-cursor-move 4 0)
+       (format-rgb-fg 0 255 0 "Line 3")))
 
-;; 使用示例
-(with-tui
-  (define screen
-    (buffer
-     format-screen-clear
-     (format-cursor-move 0 0)
-     (format-rgb-fg 255 255 0 "=== Demo ===")
-     (format-cursor-move 2 0)
-     (for ([i 10])
-       (format-cursor-move (+ i 3) 0)
-       (format-rgb-fg 0 255 0 (format "Line ~a" i)))
-     (format-cursor-move 15 0)
-     (format-rgb-fg 255 0 0 "Press any key to exit")))
-  
-  (put-bytes screen)
-  (read-event))
+  ;; 拼接所有字节串
+  (define screen (apply bytes-append buffer-content))
+
+  ;; 一次性输出
+  (put-bytes screen))
 ```
 
 ## 完整示例
