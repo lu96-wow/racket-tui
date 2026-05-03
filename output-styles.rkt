@@ -2,6 +2,27 @@
 
 (require "output-color.rkt")
 
+;; 预定义颜色（用于样式系统）
+(define clr-black    (color-fg 0))
+(define clr-red      (color-fg 1))
+(define clr-green    (color-fg 2))
+(define clr-yellow   (color-fg 3))
+(define clr-blue     (color-fg 4))
+(define clr-magenta  (color-fg 5))
+(define clr-cyan     (color-fg 6))
+(define clr-white    (color-fg 7))
+(define clr-default  (color-fg 9))
+
+(define bclr-black   (color-bg 0))
+(define bclr-red     (color-bg 1))
+(define bclr-green   (color-bg 2))
+(define bclr-yellow  (color-bg 3))
+(define bclr-blue    (color-bg 4))
+(define bclr-magenta (color-bg 5))
+(define bclr-cyan    (color-bg 6))
+(define bclr-white   (color-bg 7))
+(define bclr-default (color-bg 9))
+
 ;; 基础颜色样式
 (style-define! 'red     clr-red)
 (style-define! 'green   clr-green)

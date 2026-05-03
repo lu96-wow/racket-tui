@@ -16,8 +16,7 @@
 ;; └─────────────────────────────────────────────┘
 
 (with-tui
-    (style-apply! 'theme-vim)
-  (screen-clear)
+    (screen-clear)
 
   ;; === 预设样式 ===
   (put-at 1 2 "=== 预设样式 ===")
@@ -40,6 +39,9 @@
 
   (style-define! 'fancy clr-yellow bclr-blue attr-bold attr-underline)
   (put-styled-at 13 4 'fancy "组合: 黄字蓝底粗体下划线")
+
+  (style-define! 'default clr-default bclr-default)
+  (put-styled-at 14 4 'default "16色原色")
 
   ;; === 位置无关组合 ===
   (put-at 15 2 "=== 位置无关组合 ===")
@@ -64,6 +66,5 @@
       [(= b (char->integer #\q)) (void)]
       [(= b (char->integer #\t))
        (screen-clear)
-       (put-at 1 2 "=== 主题已切换 ===")
        (loop)]
       [else (loop)])))
