@@ -47,11 +47,12 @@
 
 ;; 内容转换为字节串
 (define (format-content v)
-  (cond [(string? v) (string->bytes/utf-8 v)]
-        [(bytes? v) v]
-        [(char? v) (string->bytes/utf-8 (string v))]
-        [(integer? v) (bytes v)]
-        [else #""]))
+  (cond
+    [(bytes? v) v]
+    [(string? v) (string->bytes/utf-8 v)]
+    [(char? v) (string->bytes/utf-8 (string v))]
+    [(integer? v) (bytes v)]
+    [else #""]))
 
 ;; RGB 颜色格式化
 (define (format-rgb-fg r g b v)

@@ -363,7 +363,6 @@
 (define (event->byte d)
   (and (= (bytes-length d) 1) (bytes-ref d 0)))
 
-;; 导出
 (provide read-event
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?

@@ -251,3 +251,39 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 ```
 
 其他示例在test文件下
+
+输入系统补充说明
+ 高层事件判断必须优先于底层事件
+
+input.rkt 提供了两类事件判断函数：
+
+    高层语义化判断：event-tab?、event-space?、event-enter?、event-backspace?、event-escape?
+
+    底层类型判断：event-key?、event-ctrl?、event-alt?、event-up?、event-down? 等
+
+重要：高层判断必须写在底层判断之前，否则会被底层判断先捕获而无法触发。
+
+```racket
+
+;; ✓ 正确写法 - 高层优先
+(let-values ([(type data mods) (read-event)])
+  (cond
+    [(event-tab? type data)     (printf "Tab键\n")]
+    [(event-space? type data)   (printf "空格键\n")]
+    [(event-enter? type data)   (printf "回车键\n")]
+    [(event-key? type)          (printf "普通键: ~a\n" (event->byte data))]
+    [else (void)]))
+
+;; ✗ 错误写法 - event-key? 会先捕获所有按键
+(let-values ([(type data mods) (read-event)])
+  (cond
+    [(event-key? type)          (printf "键: ~a\n" (event->byte data))]  ; 这里会捕获 Tab/空格等
+    [(event-tab? type data)     (printf "Tab键\n")]  ; 永远不会执行
+    [else (void)]))
+
+```
+原因：Tab 键（ASCII 9）、空格键（ASCII 32）、Enter 键（10/13）、Escape（27）在底层都属于 'key 类型，如果 event-key? 写在前面会无条件匹配，导致后续的高层判断失效。
+
+set-immediate-mode! set-buffered-mode!
+用于控制put-函数的刷新行为
+(flush)手动触发刷新

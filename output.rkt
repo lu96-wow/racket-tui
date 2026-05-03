@@ -108,7 +108,6 @@
   (cursor-move row col)
   (put v))
 
-;; 导出
 (provide put put-byte put-bytes put-char put-string put-newline
          put-at put-at!
          cursor-up cursor-down cursor-right cursor-left

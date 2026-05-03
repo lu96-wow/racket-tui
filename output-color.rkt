@@ -13,21 +13,21 @@
   (hash-set! style-registry name (apply make-style specs)))
 
 (define (style-apply! name)
-  (define s (hash-ref style-registry name #f))
-  (when s (s)))
+  (define s (hash-ref style-registry name
+                      (λ () (error 'style-apply! "Undefined style: ~a" name))))
+  (s))
 
 (define (style-reset) (put-bytes format-reset))
 
 ;; 输出函数
 (define (put-styled name v)
-  (define style-proc (hash-ref style-registry name #f))
-  (if style-proc
-      (let ([style-bytes (call-with-output-bytes
-                          (λ (out)
-                            (parameterize ([current-output-port out])
-                              (style-proc))))])
-        (put-bytes (format-styled style-bytes v)))
-      (put v)))
+  (define style-proc (hash-ref style-registry name
+                               (λ () (error 'put-styled "Undefined style: ~a" name))))
+  (let ([style-bytes (call-with-output-bytes
+                      (λ (out)
+                        (parameterize ([current-output-port out])
+                          (style-proc))))])
+    (put-bytes (format-styled style-bytes v))))
 
 (define (put-styled-at row col name v)
   (define old-r current-cursor-row)
@@ -149,7 +149,7 @@
 (define attr-blink     (λ () (put-string "\e[5m")))
 (define attr-reverse   (λ () (put-string "\e[7m")))
 
-;; 颜色别名
+;; 颜色别名 clr = color
 (define clr-black    (color-fg 0))  (define clr-red     (color-fg 1))
 (define clr-green    (color-fg 2))  (define clr-yellow  (color-fg 3))
 (define clr-blue     (color-fg 4))  (define clr-magenta (color-fg 5))
@@ -182,34 +182,19 @@
 (define (style-blink)     (attr-blink))
 (define (style-reverse)   (attr-reverse))
 
-;; 预设样式
-(style-define! 'red   clr-red)
-(style-define! 'green clr-green)
-(style-define! 'blue  clr-blue)
-(style-define! 'yellow clr-yellow)
-(style-define! 'cyan  clr-cyan)
-(style-define! 'magenta clr-magenta)
-(style-define! 'white clr-white)
-
-(style-define! 'error   clr-red attr-bold)
-(style-define! 'warning clr-yellow attr-bold)
-(style-define! 'info    clr-cyan)
-(style-define! 'success clr-green)
-
-(style-define! 'cursor    bclr-white clr-black)
-(style-define! 'selection bclr-blue clr-white)
-
-;; 导出
 (provide put-styled put-styled-at put-styled-at!
          style-define! style-apply! style-reset
+
          color-fg color-bg color256-fg color256-bg
          color-rgb-fg color-rgb-bg
+
          attr-bold attr-dim attr-italic attr-underline attr-blink attr-reverse
          clr-black clr-red clr-green clr-yellow clr-blue clr-magenta clr-cyan clr-white
          bclr-black bclr-red bclr-green bclr-yellow bclr-blue bclr-magenta bclr-cyan bclr-white
          fg-black fg-red fg-green fg-blue fg-yellow fg-magenta fg-cyan fg-white fg-default
          bg-black bg-red bg-green bg-blue bg-yellow bg-magenta bg-cyan bg-white bg-default
          style-bold style-dim style-italic style-underline style-blink style-reverse
+
          put-rgb-fg put-rgb-fg-at put-rgb-fg-at!
          put-rgb-bg put-rgb-bg-at put-rgb-bg-at!
          put-rgb-fg-bg put-rgb-fg-bg-at put-rgb-fg-bg-at!
