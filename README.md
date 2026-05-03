@@ -310,6 +310,11 @@ set-immediate-mode! set-buffered-mode!
 
 only test in xterm qterminal
 
+前缀约定
+format- 返回字符串或bytes
+不立即输出，配合put 一次性输出
+put接受任意参数自动转换
+
 后缀约定
 | 后缀 | 含义 | 示例 |
 |----|------------------|-----------|
