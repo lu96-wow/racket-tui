@@ -287,3 +287,7 @@ input.rkt 提供了两类事件判断函数：
 set-immediate-mode! set-buffered-mode!
 用于控制put-函数的刷新行为
 (flush)手动触发刷新
+
+```racket
+(waring: with ai wrote)
+```
