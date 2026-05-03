@@ -309,3 +309,11 @@ set-immediate-mode! set-buffered-mode!
 ```
 
 only test in xterm qterminal
+
+后缀约定
+| 后缀 | 含义 | 示例 |
+|----|------------------|-----------|
+| !	| 有副作用（改变光标位置） | 	put-at!, style-define!|
+| ?	| 谓词，返回布尔值 |	event-key?, terminal? |
+| -at |	带位置参数 | put-at, cursor-move |
+| -at!	| 带位置参数 + 有副作用	| put-at! |
