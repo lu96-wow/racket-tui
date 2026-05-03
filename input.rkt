@@ -1,51 +1,43 @@
 #lang racket
 (require "base.rkt" "resize.rkt" "autoresources.rkt")
 
-;; 常量定义
+;; 常量定义 - 全部使用数字
 
-;; ASCII 控制字符 (使用字节字符串)
-(define TAB      #"\t")     ; 9 - Tab
-(define LF       #"\n")     ; 10 - Line Feed
-(define CR       #"\r")     ; 13 - Carriage Return
-(define ESC      #"\e")     ; 27 - Escape
-(define SPACE    #" ")      ; 32 - Space
-(define DELETE   #"\x7f")   ; 127 - Delete
+;; ASCII 控制字符
+(define TAB 9)           ; Tab
+(define LF 10)           ; Line Feed
+(define CR 13)           ; Carriage Return
+(define ESC 27)          ; Escape
+(define SPACE 32)        ; Space
+(define DELETE 127)      ; Delete
 
 ;; ASCII 字符范围
-(define ASCII-DIGIT-START 48)   ; '0'
-(define ASCII-DIGIT-END 57)     ; '9'
-(define ASCII-UPPER-START 65)   ; 'A'
-(define ASCII-UPPER-END 90)     ; 'Z'
-(define ASCII-LOWER-START 97)   ; 'a'
-(define ASCII-LOWER-END 122)    ; 'z'
+(define ASCII-DIGIT-START 48)    ; '0'
+(define ASCII-DIGIT-END 57)      ; '9'
 (define ASCII-PRINTABLE-START 32)
 (define ASCII-PRINTABLE-END 126)
 
 ;; CSI 序列字符
-(define CSI-OPEN (bytes-ref #"[" 0))    ; 91 - '['
-(define CSI-SS3 (bytes-ref #"O" 0))     ; 79 - 'O'
-(define CSI-FINAL-START 64)             ; '@'
-(define CSI-FINAL-END 126)              ; '~'
+(define CSI-OPEN 91)     ; '['
+(define CSI-SS3 79)      ; 'O'
+(define CSI-FINAL-START 64)   ; '@'
+(define CSI-FINAL-END 126)    ; '~'
 
-;; 括号粘贴标记 (ESC[200~ 和 ESC[201~)
-(define BRACKETED-PASTE-START-1 (bytes-ref #"2" 0))  ; '2'
-(define BRACKETED-PASTE-START-2 (bytes-ref #"0" 0))  ; '0'
-(define BRACKETED-PASTE-START-3 (bytes-ref #"0" 0))  ; '0'
-(define BRACKETED-PASTE-END-1 (bytes-ref #"2" 0))    ; '2'
-(define BRACKETED-PASTE-END-2 (bytes-ref #"0" 0))    ; '0'
-(define BRACKETED-PASTE-END-3 (bytes-ref #"1" 0))    ; '1'
-(define TILDE (bytes-ref #"~" 0))                    ; 126 - '~'
+;; 括号粘贴标记
+(define BRACKETED-PASTE-START-1 50)   ; '2'
+(define BRACKETED-PASTE-START-2 48)   ; '0'
+(define BRACKETED-PASTE-START-3 48)   ; '0'
+(define BRACKETED-PASTE-END-1 50)     ; '2'
+(define BRACKETED-PASTE-END-2 48)     ; '0'
+(define BRACKETED-PASTE-END-3 49)     ; '1'
+(define TILDE 126)                    ; '~'
 
 ;; 鼠标事件标记
-(define MOUSE-EVENT (bytes-ref #"M" 0))     ; 77 - 鼠标按下/移动
-(define MOUSE-RELEASE (bytes-ref #"m" 0))   ; 109 - 鼠标释放
+(define MOUSE-EVENT 77)      ; 'M' - 鼠标按下/移动
+(define MOUSE-RELEASE 109)   ; 'm' - 鼠标释放
 
 ;; CSI 参数分隔符
-(define CSI-PARAM-SEP (bytes-ref #";" 0))   ; 59 - ';'
-
-;; 退格键的替代值
-(define BACKSPACE 8)      ; BS
-(define DELETE-CHAR 127)  ; DEL
+(define CSI-PARAM-SEP 59)    ; ';'
 
 ;; UTF-8 编码范围
 (define UTF8-2BYTE-START 194)
@@ -56,9 +48,9 @@
 (define UTF8-4BYTE-END 244)
 
 ;; 修饰键参数值
-(define MOD-ALT 3)      ; Alt 修饰符
-(define MOD-CTRL 5)     ; Ctrl 修饰符
-(define MOD-ALT-CTRL 7) ; Alt+Ctrl
+(define MOD-ALT 3)       ; Alt 修饰符
+(define MOD-CTRL 5)      ; Ctrl 修饰符
+(define MOD-ALT-CTRL 7)  ; Alt+Ctrl
 
 ;; 鼠标事件类型位掩码
 (define MOUSE-BUTTON-MASK #b11)      ; 按钮掩码 (bits 0-1)
@@ -67,6 +59,7 @@
 (define MOUSE-SCROLL-END 65)         ; 滚轮向下
 
 ;; 字节分类函数
+
 (define (utf8-multi-start? b) (>= b UTF8-2BYTE-START))
 
 (define (utf8-length b)
@@ -79,10 +72,10 @@
 
 (define (ctrl-char? b)
   (and (integer? b) (<= 0 b 31)
-       (not (memv b (list (bytes-ref TAB 0) (bytes-ref LF 0)
-                          (bytes-ref CR 0) (bytes-ref ESC 0))))))
+       (not (memv b (list TAB LF CR ESC)))))
 
 ;; CSI 参数解析
+
 (define (parse-csi-params bytes)
   (let loop ([i 2] [cur 0] [ps '()])
     (if (>= i (bytes-length bytes)) (values '() 0)
@@ -108,7 +101,6 @@
 ;; CSI 键类型映射
 (define (csi-params-final->type ps final)
   (cond
-    ;; ~ 结尾的序列
     [(= final TILDE)
      (case (and (pair? ps) (car ps))
        [(3) 'del]
@@ -116,18 +108,18 @@
        [(5) 'pageup]
        [(6) 'pagedown]
        [else 'seq])]
-    ;; 方向键和编辑键
     [else
      (case final
-       [(65) 'up]    ; CSI A
-       [(66) 'down]  ; CSI B
-       [(67) 'right] ; CSI C
-       [(68) 'left]  ; CSI D
-       [(72) 'home]  ; CSI H
-       [(70) 'end]   ; CSI F
+       [(65) 'up]     ; CSI A
+       [(66) 'down]   ; CSI B
+       [(67) 'right]  ; CSI C
+       [(68) 'left]   ; CSI D
+       [(72) 'home]   ; CSI H
+       [(70) 'end]    ; CSI F
        [else 'seq])]))
 
 ;; 鼠标事件解析
+
 (define (parse-mouse-event ps final)
   (let* ([type (car ps)]
          [x (cadr ps)]
@@ -135,7 +127,7 @@
          [button-code (bitwise-and type MOUSE-BUTTON-MASK)]
          [modifiers (arithmetic-shift type -2)]
          [is-move? (bitwise-bit-set? type MOUSE-MOVE-FLAG)]
-         [is-release? (and (= final (bytes-ref MOUSE-RELEASE 0)) (not is-move?))]
+         [is-release? (and (= final MOUSE-RELEASE) (not is-move?))]
          [button (case button-code
                    [(0) 'left]
                    [(1) 'middle]
@@ -155,6 +147,7 @@
         (list action button (- x 1) (- y 1) modifiers))))
 
 ;; 内部读取函数
+
 (define (read-n-bytes count)
   (let loop ([n 0] [acc (bytes)])
     (if (>= n count) acc
@@ -164,7 +157,7 @@
               acc)))))
 
 (define (read-csi-seq b2)
-  (let loop ([acc (list (bytes-ref ESC 0) b2)])
+  (let loop ([acc (list ESC b2)])
     (let ([b (getc)])
       (if (integer? b)
           (let ([acc (append acc (list b))])
@@ -176,10 +169,10 @@
   (let loop ([acc (bytes)])
     (define b (getc))
     (cond [(eq? b 'null) acc]
-          [(= b (bytes-ref ESC 0))
+          [(= b ESC)
            (define b2 (getc))
            (cond [(eq? b2 'null)
-                  (bytes-append acc ESC)]
+                  (bytes-append acc (bytes ESC))]
                  [(= b2 CSI-OPEN)
                   (define b3 (getc))
                   (define b4 (getc))
@@ -188,35 +181,35 @@
                            (= b3 BRACKETED-PASTE-END-1)
                            (= b4 BRACKETED-PASTE-END-2)
                            (= b5 BRACKETED-PASTE-END-3))
-                      acc  ; 粘贴结束
+                      acc
                       (loop (bytes-append acc
-                                          ESC
+                                          (bytes ESC)
                                           (bytes b2)
                                           (if (integer? b3) (bytes b3) (bytes))
                                           (if (integer? b4) (bytes b4) (bytes))
                                           (if (integer? b5) (bytes b5) (bytes)))))]
                  [else
-                  (loop (bytes-append acc ESC (bytes b2)))])]
+                  (loop (bytes-append acc (bytes ESC) (bytes b2)))])]
           [else
            (loop (bytes-append acc (bytes b)))])))
 
 ;; read-event 核心实现
+
 (define (read-event-impl)
   (define first (getc))
   (cond [(eq? first 'null) (values 'null (bytes) #f)]
         [(ctrl-char? first) (values 'ctrl (bytes first) #f)]
-        [(= first (bytes-ref ESC 0))
+        [(= first ESC)
          (change-block)
          (define b2 (getc))
-         (cond [(eq? b2 'null) (change-noblock) (values 'key ESC #f)]
+         (cond [(eq? b2 'null) (change-noblock) (values 'key (bytes first) #f)]
                [(= b2 CSI-SS3)
                 (define b3 (getc)) (change-noblock)
-                (values 'seq (bytes (bytes-ref ESC 0) b2 (if (eq? b3 'null) '() b3)) #f)]
+                (values 'seq (bytes first b2 (if (eq? b3 'null) '() b3)) #f)]
                [(= b2 CSI-OPEN)
                 (define seq (read-csi-seq b2))
                 (let-values ([(ps final) (parse-csi-params seq)])
                   (cond
-                    ;; 括号粘贴开始 ESC[200~
                     [(and (null? ps) (= final TILDE)
                           (= (bytes-length seq) 5)
                           (= (bytes-ref seq 2) BRACKETED-PASTE-START-1)
@@ -225,12 +218,10 @@
                      (define content (read-paste-content))
                      (change-noblock)
                      (values 'paste content #f)]
-                    ;; 鼠标事件
                     [(and (memv final (list MOUSE-EVENT MOUSE-RELEASE))
                           (>= (length ps) 3))
                      (change-noblock)
                      (values 'mouse (parse-mouse-event ps final) #f)]
-                    ;; 普通 CSI 序列
                     [else
                      (change-noblock)
                      (define mods (extract-modifiers ps))
@@ -239,8 +230,8 @@
                          (values (csi-params-final->type ps final) seq #f))]))]
                [(<= ASCII-PRINTABLE-START b2 ASCII-PRINTABLE-END)
                 (change-noblock)
-                (values 'alt (bytes (bytes-ref ESC 0) b2) #f)]
-               [else (change-noblock) (values 'seq (bytes (bytes-ref ESC 0) b2) #f)])]
+                (values 'alt (bytes first b2) #f)]
+               [else (change-noblock) (values 'seq (bytes first b2) #f)])]
         [(utf8-multi-start? first)
          (change-block)
          (define rest (read-n-bytes (sub1 (utf8-length first))))
@@ -249,6 +240,7 @@
         [else (values 'key (bytes first) #f)]))
 
 ;; resize 监控
+
 (define resize-channel (make-channel))
 
 (define (resize-monitor-start)
@@ -269,7 +261,8 @@
   (let ([ri (check-resize!)])
     (if ri (values 'resize ri #f) (read-event-impl))))
 
-;; 底层事件类型判断（基于事件类型符号）
+;; 底层事件类型判断
+
 (define (event-null? t)     (eq? t 'null))
 (define (event-key? t)      (eq? t 'key))
 (define (event-utf8? t)     (eq? t 'utf8))
@@ -292,26 +285,28 @@
 (define (event-mouse? t)    (eq? t 'mouse))
 (define (event-paste? t)    (eq? t 'paste))
 
-;; 高层语义化事件判断（基于事件类型和数据）
+;; 高层语义化事件判断
 ;; 注意：这些判断应该放在 event-key? 之前使用
+
 (define (event-tab? t d)
-  (and (eq? t 'key) (bytes? d) (equal? d TAB)))
+  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) TAB)))
 
 (define (event-space? t d)
-  (and (eq? t 'key) (bytes? d) (equal? d SPACE)))
+  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) SPACE)))
 
 (define (event-backspace? t d)
   (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1)
-       (memv (bytes-ref d 0) (list BACKSPACE DELETE-CHAR))))
+       (memv (bytes-ref d 0) (list 8 DELETE))))
 
 (define (event-enter? t d)
   (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1)
-       (memv (bytes-ref d 0) (list (bytes-ref LF 0) (bytes-ref CR 0)))))
+       (memv (bytes-ref d 0) (list LF CR))))
 
 (define (event-escape? t d)
-  (and (eq? t 'key) (bytes? d) (equal? d ESC)))
+  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) ESC)))
 
 ;; 鼠标事件子类型判断
+
 (define (mouse-press? detail)   (eq? (car detail) 'press))
 (define (mouse-release? detail) (eq? (car detail) 'release))
 (define (mouse-move? detail)    (eq? (car detail) 'move))
@@ -338,15 +333,14 @@
 (define (mouse-modifiers d) (last d))
 
 ;; 数据提取辅助函数
+
 (define (ctrl->char d)
   (and (bytes? d) (= (bytes-length d) 1)
        (let ([b (bytes-ref d 0)])
          (and (<= 1 b 26) (integer->char (+ b 64))))))
 
 (define (alt->char d)
-  (and (bytes? d) (= (bytes-length d) 2)
-       (= (bytes-ref d 0) (bytes-ref ESC 0))
-       (bytes-ref d 1)))
+  (and (bytes? d) (= (bytes-length d) 2) (bytes-ref d 1)))
 
 (define (mod-seq->char d)
   (and (bytes? d) (> (bytes-length d) 2)
@@ -362,6 +356,8 @@
 
 (define (event->byte d)
   (and (= (bytes-length d) 1) (bytes-ref d 0)))
+
+;; 导出
 
 (provide read-event
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
