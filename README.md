@@ -305,5 +305,5 @@ set-immediate-mode! set-buffered-mode!
 (flush)手动触发刷新
 
 ```racket
-(waring: with ai wrote)
+(waring: code with Deepseek V4)
 ```
