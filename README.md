@@ -307,3 +307,5 @@ set-immediate-mode! set-buffered-mode!
 ```racket
 (waring: code with Deepseek V4)
 ```
+
+only test in xterm qterminal
