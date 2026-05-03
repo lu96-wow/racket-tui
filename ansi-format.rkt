@@ -1,8 +1,6 @@
 #lang racket
 
-;; ============================================================
 ;; ANSI 转义序列生成器（纯函数，返回字节串，不输出）
-;; ============================================================
 
 (provide format-content
          format-cursor-move format-cursor-up format-cursor-down
