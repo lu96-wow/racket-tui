@@ -1,4 +1,3 @@
-;; tui.rkt
 #lang racket
 
 (require "base.rkt"

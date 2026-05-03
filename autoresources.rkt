@@ -1,4 +1,3 @@
-;; autoresources.rkt
 #lang racket
 
 (define registry (make-hash))

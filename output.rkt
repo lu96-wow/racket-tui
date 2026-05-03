@@ -1,4 +1,3 @@
-;; output.rkt - 输出函数（带副作用）
 #lang racket
 
 (require racket/bytes
@@ -12,11 +11,34 @@
   (set! current-cursor-row row)
   (set! current-cursor-col col))
 
-;; 基础输出
-(define (put-byte b)        (write-byte b)  (flush-output))
-(define (put-bytes bs)      (write-bytes bs) (flush-output))
-(define (put-char c)        (write-char c)  (flush-output))
-(define (put-string s)      (display s)     (flush-output))
+;; 核心输出函数（可变）
+(define current-write-bytes (λ (bs) (write-bytes bs) (flush-output)))
+(define current-write-byte  (λ (b) (write-byte b) (flush-output)))
+(define current-write-char  (λ (c) (write-char c) (flush-output)))
+(define current-display     (λ (s) (display s) (flush-output)))
+
+;; 切换模式
+(define (set-immediate-mode!)
+  (set! current-write-bytes (λ (bs) (write-bytes bs) (flush-output)))
+  (set! current-write-byte  (λ (b) (write-byte b) (flush-output)))
+  (set! current-write-char  (λ (c) (write-char c) (flush-output)))
+  (set! current-display     (λ (s) (display s) (flush-output))))
+
+(define (set-buffered-mode!)
+  (set! current-write-bytes (λ (bs) (write-bytes bs)))
+  (set! current-write-byte  (λ (b) (write-byte b)))
+  (set! current-write-char  (λ (c) (write-char c)))
+  (set! current-display     (λ (s) (display s))))
+
+;; 手动刷新
+(define (flush!)
+  (flush-output))
+
+;; 基础输出（使用可切换函数）
+(define (put-byte b)        (current-write-byte b))
+(define (put-bytes bs)      (current-write-bytes bs))
+(define (put-char c)        (current-write-char c))
+(define (put-string s)      (current-display s))
 
 (define (put v)
   (cond [(string? v) (put-string v)]
@@ -95,4 +117,5 @@
          screen-clear screen-clear-below screen-clear-above
          line-clear line-clear-right line-clear-left
          buffer-alt-enable buffer-alt-disable
-         current-cursor-row current-cursor-col)
+         current-cursor-row current-cursor-col
+         set-immediate-mode! set-buffered-mode! flush!)

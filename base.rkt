@@ -1,4 +1,3 @@
-;; base.rkt
 #lang racket
 
 (require ffi/unsafe racket/bytes "autoresources.rkt")

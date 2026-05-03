@@ -1,4 +1,3 @@
-;; info.rkt
 #lang info
 
 (define name "tui")

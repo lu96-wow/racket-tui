@@ -1,4 +1,3 @@
-;; output-color.rkt - 颜色输出（带副作用）
 #lang racket
 
 (require "output.rkt"
@@ -19,7 +18,7 @@
 
 (define (style-reset) (put-bytes format-reset))
 
-;; 输出函数（复用 format-styled）
+;; 输出函数
 (define (put-styled name v)
   (define style-proc (hash-ref style-registry name #f))
   (if style-proc

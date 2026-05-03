@@ -1,4 +1,3 @@
-;; input.rkt
 #lang racket
 (require "base.rkt" "resize.rkt" "autoresources.rkt")
 
@@ -195,20 +194,55 @@
 (define (read-event)
   (let ([ri (check-resize!)]) (if ri (values 'resize ri #f) (read-event-impl))))
 
-;; 事件判断
-(define (event-null? t)     (eq? t 'null))     (define (event-key? t)      (eq? t 'key))
-(define (event-utf8? t)     (eq? t 'utf8))     (define (event-seq? t)      (eq? t 'seq))
-(define (event-ctrl? t)     (eq? t 'ctrl))     (define (event-alt? t)      (eq? t 'alt))
-(define (event-mod-seq? t)  (eq? t 'mod-seq))  (define (event-resize? t)   (eq? t 'resize))
-(define (event-up? t)       (eq? t 'up))       (define (event-down? t)     (eq? t 'down))
-(define (event-left? t)     (eq? t 'left))     (define (event-right? t)    (eq? t 'right))
-(define (event-del? t)      (eq? t 'del))      (define (event-insert? t)   (eq? t 'insert))
-(define (event-home? t)     (eq? t 'home))     (define (event-end? t)      (eq? t 'end))
-(define (event-pageup? t)   (eq? t 'pageup))   (define (event-pagedown? t) (eq? t 'pagedown))
+;; 底层事件类型判断（基于事件类型符号）
+(define (event-null? t)     (eq? t 'null))
+(define (event-key? t)      (eq? t 'key))
+(define (event-utf8? t)     (eq? t 'utf8))
+(define (event-seq? t)      (eq? t 'seq))
+(define (event-ctrl? t)     (eq? t 'ctrl))
+(define (event-alt? t)      (eq? t 'alt))
+(define (event-mod-seq? t)  (eq? t 'mod-seq))
+(define (event-resize? t)   (eq? t 'resize))
+(define (event-up? t)       (eq? t 'up))
+(define (event-down? t)     (eq? t 'down))
+(define (event-left? t)     (eq? t 'left))
+(define (event-right? t)    (eq? t 'right))
+(define (event-del? t)      (eq? t 'del))
+(define (event-insert? t)   (eq? t 'insert))
+(define (event-home? t)     (eq? t 'home))
+(define (event-end? t)      (eq? t 'end))
+(define (event-pageup? t)   (eq? t 'pageup))
+(define (event-pagedown? t) (eq? t 'pagedown))
 
 ;; 鼠标事件判断 - 统一接口
 (define (event-touch? t)  (eq? t 'mouse))
 (define (event-mouse? t)  (eq? t 'mouse))
+
+;; 粘贴事件判断
+(define (event-paste? t) (eq? t 'paste))
+
+;; 高层语义化事件判断（基于事件类型和数据）
+;; 注意：这些判断应该放在 event-key? 之前使用
+
+;; Tab 键判断（ASCII 9）
+(define (event-tab? t d)
+  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) 9)))
+
+;; 空格键判断（ASCII 32）
+(define (event-space? t d)
+  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) 32)))
+
+;; 退格键判断（ASCII 8 或 127）
+(define (event-backspace? t d)
+  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (memv (bytes-ref d 0) '(8 127))))
+
+;; Enter 键判断（ASCII 10 或 13）
+(define (event-enter? t d)
+  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (memv (bytes-ref d 0) '(10 13))))
+
+;; Escape 键判断（ASCII 27）
+(define (event-escape? t d)
+  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) 27)))
 
 ;; 鼠标事件子类型判断
 (define (mouse-press? detail)   (eq? (car detail) 'press))
@@ -241,13 +275,7 @@
 ;; 提取鼠标修饰键
 (define (mouse-modifiers d) (last d))
 
-;; 粘贴事件判断
-(define (event-paste? t) (eq? t 'paste))
-
-(define (event-tab? t d)       (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) 9)))
-(define (event-backspace? t d) (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (memv (bytes-ref d 0) '(8 127))))
-
-;; 数据提取
+;; 数据提取辅助函数
 (define (ctrl->char d)     (and (bytes? d) (= (bytes-length d) 1) (let ([b (bytes-ref d 0)]) (and (<= 1 b 26) (integer->char (+ b 64))))))
 (define (alt->char d)      (and (bytes? d) (= (bytes-length d) 2) (bytes-ref d 1)))
 (define (mod-seq->char d)  (and (bytes? d) (> (bytes-length d) 2) (bytes-ref d (sub1 (bytes-length d)))))
@@ -257,21 +285,21 @@
 (define (event->string d)  (with-handlers ([exn:fail? (const "")]) (bytes->string/utf-8 d)))
 (define (event->byte d)    (and (= (bytes-length d) 1) (bytes-ref d 0)))
 
+;; 导出
 (provide read-event
-         ;; 键盘事件
+         ;; 底层事件类型判断
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?
          event-del? event-insert? event-home? event-end? event-pageup? event-pagedown?
-         event-tab? event-backspace?
-         ;; 鼠标事件 - 统一接口
-         event-touch? event-mouse?
+         event-touch? event-mouse? event-paste?
+         ;; 高层语义化事件判断(在cond判断中要写在底层判断前，否则不会触发)
+         event-tab? event-space? event-backspace? event-enter? event-escape?
+         ;; 鼠标事件子类型判断
          mouse-press? mouse-release? mouse-move? mouse-scroll?
          mouse-left? mouse-middle? mouse-right?
          scroll-up? scroll-down?
          mouse-x mouse-y get-mouse-pos
          mouse-modifiers
-         ;; 粘贴事件
-         event-paste?
          ;; 数据提取
          ctrl->char alt->char mod-seq->char
          get-resize-rows get-resize-cols get-resize-size event->string event->byte)

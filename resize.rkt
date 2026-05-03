@@ -1,4 +1,3 @@
-;; resize.rkt
 #lang racket
 (require ffi/unsafe)
 

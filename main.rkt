@@ -1,4 +1,3 @@
-;; main.rkt
 #lang racket
 
 (require "tui.rkt"

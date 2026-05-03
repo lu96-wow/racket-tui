@@ -1,4 +1,3 @@
-;; ansi-format.rkt - 核心 ANSI 序列生成（纯函数，无副作用）
 #lang racket
 
 (provide format-cursor-move format-cursor-up format-cursor-down
