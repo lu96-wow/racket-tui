@@ -51,8 +51,7 @@
     [(bytes? v) v]
     [(string? v) (string->bytes/utf-8 v)]
     [(char? v) (string->bytes/utf-8 (string v))]
-    [(integer? v) (bytes v)]
-    [else #""]))
+    [else (string->bytes/utf-8 (format "~a" v))]))
 
 ;; RGB 颜色格式化
 (define (format-rgb-fg r g b v)
