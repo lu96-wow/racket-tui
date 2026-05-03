@@ -176,7 +176,7 @@
                    [(= b 13)                     (put-string " → Enter")]
                    [(= b 27)                     (put-string " → ESC")]
                    [(= b 32)                     (put-string " → Space")]
-                   [(= b (char->integer #\q))    (put-string " → 退出") (set! running? #f)]
+                   [(= b (char->integer #\q))    (put-string " → q退出") (set! running? #f)]
                    [(<= 32 b 126)                (put-string (format " → '~a'" (integer->char b)))]
                    [else (void)])]
 
@@ -186,10 +186,10 @@
             [(event-alt? type)
              (put-string (format " → Alt+~a" (integer->char (alt->char data))))]
 
-            [(event-up? type)    (put-string " → ↑")]
-            [(event-down? type)  (put-string " → ↓")]
-            [(event-left? type)  (put-string " → ←")]
-            [(event-right? type) (put-string " → →")]
+            [(event-up? type)    (put-string " ↑")]
+            [(event-down? type)  (put-string " ↓")]
+            [(event-left? type)  (put-string " ←")]
+            [(event-right? type) (put-string " →")]
 
             [(event-del? type)    (put-string " → Delete")]
             [(event-insert? type) (put-string " → Insert")]
