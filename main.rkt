@@ -6,11 +6,13 @@
          "base.rkt"
          "input.rkt"
          "output.rkt"
-         "output-color.rkt")
+         "output-color.rkt"
+         "ansi-format.rkt")
 
 (provide (all-from-out "tui.rkt")
          (all-from-out "resize.rkt")
          (all-from-out "base.rkt")
          (all-from-out "input.rkt")
          (all-from-out "output.rkt")
-         (all-from-out "output-color.rkt"))
+         (all-from-out "output-color.rkt")
+         (all-from-out "ansi-format.rkt"))

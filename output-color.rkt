@@ -1,10 +1,10 @@
-;; output-color.rkt - 合并颜色输出函数
+;; output-color.rkt - 颜色输出（带副作用）
 #lang racket
 
-(require "output.rkt")
+(require "output.rkt"
+         "ansi-format.rkt")
 
 ;; 样式系统
-
 (define (make-style . specs)
   (λ () (for-each (λ (s) (s)) specs)))
 
@@ -17,10 +17,18 @@
   (define s (hash-ref style-registry name #f))
   (when s (s)))
 
+(define (style-reset) (put-bytes format-reset))
+
+;; 输出函数（复用 format-styled）
 (define (put-styled name v)
-  (style-apply! name)
-  (put v)
-  (style-reset))
+  (define style-proc (hash-ref style-registry name #f))
+  (if style-proc
+      (let ([style-bytes (call-with-output-bytes
+                          (λ (out)
+                            (parameterize ([current-output-port out])
+                              (style-proc))))])
+        (put-bytes (format-styled style-bytes v)))
+      (put v)))
 
 (define (put-styled-at row col name v)
   (define old-r current-cursor-row)
@@ -33,13 +41,9 @@
   (cursor-move row col)
   (put-styled name v))
 
-;; 颜色快捷输出
-
-;; 真彩色前景
+;; RGB 颜色输出
 (define (put-rgb-fg r g b v)
-  (put-string (format "\e[38;2;~a;~a;~am" r g b))
-  (put v)
-  (put-string "\e[0m"))
+  (put-bytes (format-rgb-fg r g b v)))
 
 (define (put-rgb-fg-at row col r g b v)
   (define old-r current-cursor-row)
@@ -52,11 +56,8 @@
   (cursor-move row col)
   (put-rgb-fg r g b v))
 
-;; 真彩色背景
 (define (put-rgb-bg r g b v)
-  (put-string (format "\e[48;2;~a;~a;~am" r g b))
-  (put v)
-  (put-string "\e[0m"))
+  (put-bytes (format-rgb-bg r g b v)))
 
 (define (put-rgb-bg-at row col r g b v)
   (define old-r current-cursor-row)
@@ -69,11 +70,8 @@
   (cursor-move row col)
   (put-rgb-bg r g b v))
 
-;; 真彩色前景+背景
 (define (put-rgb-fg-bg fr fg fb br bg bb v)
-  (put-string (format "\e[38;2;~a;~a;~a;48;2;~a;~a;~am" fr fg fb br bg bb))
-  (put v)
-  (put-string "\e[0m"))
+  (put-bytes (format-rgb-fg-bg fr fg fb br bg bb v)))
 
 (define (put-rgb-fg-bg-at row col fr fg fb br bg bb v)
   (define old-r current-cursor-row)
@@ -86,11 +84,9 @@
   (cursor-move row col)
   (put-rgb-fg-bg fr fg fb br bg bb v))
 
-;; 256 色前景
+;; 256 色输出
 (define (put-256-fg n v)
-  (put-string (format "\e[38;5;~am" n))
-  (put v)
-  (put-string "\e[0m"))
+  (put-bytes (format-256-fg n v)))
 
 (define (put-256-fg-at row col n v)
   (define old-r current-cursor-row)
@@ -103,11 +99,8 @@
   (cursor-move row col)
   (put-256-fg n v))
 
-;; 256 色背景
 (define (put-256-bg n v)
-  (put-string (format "\e[48;5;~am" n))
-  (put v)
-  (put-string "\e[0m"))
+  (put-bytes (format-256-bg n v)))
 
 (define (put-256-bg-at row col n v)
   (define old-r current-cursor-row)
@@ -120,8 +113,7 @@
   (cursor-move row col)
   (put-256-bg n v))
 
-;; 颜色构造器（样式系统用）
-
+;; 颜色构造器（样式系统用，直接输出）
 (define (color-fg n)
   (unless (<= 0 n 15) (error 'color-fg "ANSI color must be 0-15, got ~a" n))
   (λ () (put-string (format "\e[~am" (+ n (if (< n 8) 30 82))))))
@@ -157,7 +149,6 @@
 (define attr-underline (λ () (put-string "\e[4m")))
 (define attr-blink     (λ () (put-string "\e[5m")))
 (define attr-reverse   (λ () (put-string "\e[7m")))
-(define (style-reset)  (put-string "\e[0m"))
 
 ;; 颜色别名
 (define clr-black    (color-fg 0))  (define clr-red     (color-fg 1))
