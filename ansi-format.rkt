@@ -105,18 +105,24 @@
 (define format-blink #"\e[5m")
 (define format-reverse #"\e[7m")
 
-;; format-at 系列 - 组合光标移动和格式化（返回字节串）
+;; format-at 系列 - 组合光标移动和格式化（返回字节串，管理光标状态）
 (require "cursor-state.rkt")
 
 ;; 辅助函数：带颜色的 format-at 通用实现
 (define (format-color-at row col color-bytes v)
-  (bytes-append (format-cursor-move row col)
-                color-bytes
-                (format-content v)
-                format-reset
-                (format-cursor-move current-cursor-row current-cursor-col)))
+  (define old-r current-cursor-row)
+  (define old-c current-cursor-col)
+  (set-cursor! row col)                              ; 更新到目标位置
+  (let ([bs (bytes-append (format-cursor-move row col)
+                          color-bytes
+                          (format-content v)
+                          format-reset
+                          (format-cursor-move old-r old-c))])
+    (set-cursor! old-r old-c)                        ; 恢复到旧位置
+    bs))
 
 (define (format-color-at! row col color-bytes v)
+  (set-cursor! row col)                              ; 更新到目标位置
   (bytes-append (format-cursor-move row col)
                 color-bytes
                 (format-content v)
@@ -124,11 +130,17 @@
 
 ;; content（无颜色，不需 reset）
 (define (format-content-at row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-content v)
-                (format-cursor-move current-cursor-row current-cursor-col)))
+  (define old-r current-cursor-row)
+  (define old-c current-cursor-col)
+  (set-cursor! row col)
+  (let ([bs (bytes-append (format-cursor-move row col)
+                          (format-content v)
+                          (format-cursor-move old-r old-c))])
+    (set-cursor! old-r old-c)
+    bs))
 
 (define (format-content-at! row col v)
+  (set-cursor! row col)
   (bytes-append (format-cursor-move row col)
                 (format-content v)))
 

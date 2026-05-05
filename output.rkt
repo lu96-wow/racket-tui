@@ -82,15 +82,10 @@
 
 ;; 绝对位置输出
 (define (put-at row col v)
-  (define old-r current-cursor-row)
-  (define old-c current-cursor-col)
-  (cursor-move row col)
-  (put v)
-  (cursor-move old-r old-c))
+  (put-bytes (format-content-at row col v)))
 
 (define (put-at! row col v)
-  (cursor-move row col)
-  (put v))
+  (put-bytes (format-content-at! row col v)))
 
 ;; 导出
 (provide put put-byte put-bytes put-char put-string put-newline

@@ -37,7 +37,8 @@
   (put-bytes (bytes-append style-bytes (format-content v) format-reset)))
 
 (define (put-styled-at row col name v)
-  (define-values (old-r old-c) (get-cursor))
+  (define old-r current-cursor-row)
+  (define old-c current-cursor-col)
   (cursor-move row col)
   (put-styled name v)
   (cursor-move old-r old-c))
@@ -46,18 +47,24 @@
   (cursor-move row col)
   (put-styled name v))
 
-;; 格式化样式函数（返回字节串，用于批量输出）
+;; 格式化样式函数（返回字节串，同时管理光标状态）
 
 (define (format-styled name v)
   (define style-bytes (style->bytes name))
   (bytes-append style-bytes (format-content v) format-reset))
 
 (define (format-styled-at row col name v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled name v)
-                (format-cursor-move current-cursor-row current-cursor-col)))
+  (define old-r current-cursor-row)
+  (define old-c current-cursor-col)
+  (set-cursor! row col)
+  (let ([bs (bytes-append (format-cursor-move row col)
+                          (format-styled name v)
+                          (format-cursor-move old-r old-c))])
+    (set-cursor! old-r old-c)
+    bs))
 
 (define (format-styled-at! row col name v)
+  (set-cursor! row col)
   (bytes-append (format-cursor-move row col)
                 (format-styled name v)))
 
@@ -104,7 +111,7 @@
 (define attr-blink     (λ () (put-bytes format-blink)))
 (define attr-reverse   (λ () (put-bytes format-reverse)))
 
-;; 格式化属性函数（返回字节串，用于批量输出）
+;; 格式化属性函数（返回字节串，同时管理光标状态）
 
 ;; 基础格式化
 (define (format-styled-bold v)
@@ -125,13 +132,19 @@
 (define (format-styled-reverse v)
   (bytes-append format-reverse (format-content v) format-reset))
 
-;; 辅助函数：带属性的 at 通用实现
+;; 辅助函数：带属性的 at 通用实现（同时管理光标状态）
 (define (format-styled-attr-at row col fmt-fn v)
-  (bytes-append (format-cursor-move row col)
-                (fmt-fn v)
-                (format-cursor-move current-cursor-row current-cursor-col)))
+  (define old-r current-cursor-row)
+  (define old-c current-cursor-col)
+  (set-cursor! row col)
+  (let ([bs (bytes-append (format-cursor-move row col)
+                          (fmt-fn v)
+                          (format-cursor-move old-r old-c))])
+    (set-cursor! old-r old-c)
+    bs))
 
 (define (format-styled-attr-at! row col fmt-fn v)
+  (set-cursor! row col)
   (bytes-append (format-cursor-move row col)
                 (fmt-fn v)))
 
