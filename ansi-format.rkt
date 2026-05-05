@@ -32,7 +32,6 @@
         [(char? v) (string->bytes/utf-8 (string v))]
         [else (string->bytes/utf-8 (format "~a" v))]))
 
-
 ;; 基础 ANSI 序列（直接返回字节串）
 (define format-cursor-home #"\e[H")
 (define format-cursor-hide #"\e[?25l")
@@ -66,23 +65,18 @@
 (define (format-cursor-col n)
   (string->bytes/utf-8 (format "\e[~aG" n)))
 
-;; 16色前景/背景 - 完整表（16个标准色+默认）
-(define fg-table
-  #(30 31 32 33 34 35 36 37   ; 0-7
-       90 91 92 93 94 95 96 97   ; 8-15
-       39))
-
+;; 16色前景/背景
 (define (format-fg n)
   (unless (<= 0 n 15) (error 'format-fg "ANSI color must be 0-15, got ~a" n))
-  (define codes #(30 31 32 33 34 35 36 37    ; 0-7
-                     90 91 92 93 94 95 96 97)) ; 8-15
+  (define codes #(30 31 32 33 34 35 36 37
+                     90 91 92 93 94 95 96 97))
   (define code (if (= n 9) 39 (vector-ref codes n)))
   (string->bytes/utf-8 (format "\e[~am" code)))
 
 (define (format-bg n)
   (unless (<= 0 n 15) (error 'format-bg "ANSI color must be 0-15, got ~a" n))
-  (define codes #(40 41 42 43 44 45 46 47     ; 0-7
-                     100 101 102 103 104 105 106 107)) ; 8-15
+  (define codes #(40 41 42 43 44 45 46 47
+                     100 101 102 103 104 105 106 107))
   (define code (if (= n 9) 49 (vector-ref codes n)))
   (string->bytes/utf-8 (format "\e[~am" code)))
 
@@ -114,7 +108,21 @@
 ;; format-at 系列 - 组合光标移动和格式化（返回字节串）
 (require "cursor-state.rkt")
 
-;; content
+;; 辅助函数：带颜色的 format-at 通用实现
+(define (format-color-at row col color-bytes v)
+  (bytes-append (format-cursor-move row col)
+                color-bytes
+                (format-content v)
+                format-reset
+                (format-cursor-move current-cursor-row current-cursor-col)))
+
+(define (format-color-at! row col color-bytes v)
+  (bytes-append (format-cursor-move row col)
+                color-bytes
+                (format-content v)
+                format-reset))
+
+;; content（无颜色，不需 reset）
 (define (format-content-at row col v)
   (bytes-append (format-cursor-move row col)
                 (format-content v)
@@ -124,99 +132,41 @@
   (bytes-append (format-cursor-move row col)
                 (format-content v)))
 
-;; 16色前景
+;; 16色
 (define (format-fg-at row col n v)
-  (bytes-append (format-cursor-move row col)
-                (format-fg n)
-                (format-content v)
-                format-reset
-                (format-cursor-move current-cursor-row current-cursor-col)))
-
+  (format-color-at row col (format-fg n) v))
 (define (format-fg-at! row col n v)
-  (bytes-append (format-cursor-move row col)
-                (format-fg n)
-                (format-content v)
-                format-reset))
+  (format-color-at! row col (format-fg n) v))
 
-;; 16色背景
 (define (format-bg-at row col n v)
-  (bytes-append (format-cursor-move row col)
-                (format-bg n)
-                (format-content v)
-                format-reset
-                (format-cursor-move current-cursor-row current-cursor-col)))
-
+  (format-color-at row col (format-bg n) v))
 (define (format-bg-at! row col n v)
-  (bytes-append (format-cursor-move row col)
-                (format-bg n)
-                (format-content v)
-                format-reset))
+  (format-color-at! row col (format-bg n) v))
 
-;; RGB前景
+;; RGB
 (define (format-rgb-fg-at row col r g b v)
-  (bytes-append (format-cursor-move row col)
-                (format-rgb-fg r g b)
-                (format-content v)
-                format-reset
-                (format-cursor-move current-cursor-row current-cursor-col)))
-
+  (format-color-at row col (format-rgb-fg r g b) v))
 (define (format-rgb-fg-at! row col r g b v)
-  (bytes-append (format-cursor-move row col)
-                (format-rgb-fg r g b)
-                (format-content v)
-                format-reset))
+  (format-color-at! row col (format-rgb-fg r g b) v))
 
-;; RGB背景
 (define (format-rgb-bg-at row col r g b v)
-  (bytes-append (format-cursor-move row col)
-                (format-rgb-bg r g b)
-                (format-content v)
-                format-reset
-                (format-cursor-move current-cursor-row current-cursor-col)))
-
+  (format-color-at row col (format-rgb-bg r g b) v))
 (define (format-rgb-bg-at! row col r g b v)
-  (bytes-append (format-cursor-move row col)
-                (format-rgb-bg r g b)
-                (format-content v)
-                format-reset))
+  (format-color-at! row col (format-rgb-bg r g b) v))
 
-;; 256色前景
+;; 256色
 (define (format-256-fg-at row col n v)
-  (bytes-append (format-cursor-move row col)
-                (format-256-fg n)
-                (format-content v)
-                format-reset
-                (format-cursor-move current-cursor-row current-cursor-col)))
-
+  (format-color-at row col (format-256-fg n) v))
 (define (format-256-fg-at! row col n v)
-  (bytes-append (format-cursor-move row col)
-                (format-256-fg n)
-                (format-content v)
-                format-reset))
+  (format-color-at! row col (format-256-fg n) v))
 
-;; 256色背景
 (define (format-256-bg-at row col n v)
-  (bytes-append (format-cursor-move row col)
-                (format-256-bg n)
-                (format-content v)
-                format-reset
-                (format-cursor-move current-cursor-row current-cursor-col)))
-
+  (format-color-at row col (format-256-bg n) v))
 (define (format-256-bg-at! row col n v)
-  (bytes-append (format-cursor-move row col)
-                (format-256-bg n)
-                (format-content v)
-                format-reset))
+  (format-color-at! row col (format-256-bg n) v))
 
+;; RGB前景+背景
 (define (format-rgb-fg-bg-at row col fr fg fb br bg bb v)
-  (bytes-append (format-cursor-move row col)
-                (format-rgb-fg-bg fr fg fb br bg bb)
-                (format-content v)
-                format-reset
-                (format-cursor-move current-cursor-row current-cursor-col)))
-
+  (format-color-at row col (format-rgb-fg-bg fr fg fb br bg bb) v))
 (define (format-rgb-fg-bg-at! row col fr fg fb br bg bb v)
-  (bytes-append (format-cursor-move row col)
-                (format-rgb-fg-bg fr fg fb br bg bb)
-                (format-content v)
-                format-reset))
+  (format-color-at! row col (format-rgb-fg-bg fr fg fb br bg bb) v))

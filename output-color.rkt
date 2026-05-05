@@ -37,8 +37,7 @@
   (put-bytes (bytes-append style-bytes (format-content v) format-reset)))
 
 (define (put-styled-at row col name v)
-  (define old-r current-cursor-row)
-  (define old-c current-cursor-col)
+  (define-values (old-r old-c) (get-cursor))
   (cursor-move row col)
   (put-styled name v)
   (cursor-move old-r old-c))
@@ -47,7 +46,7 @@
   (cursor-move row col)
   (put-styled name v))
 
-;; 格式化样式函数（用于批量输出，返回字节串）
+;; 格式化样式函数（返回字节串，用于批量输出）
 
 (define (format-styled name v)
   (define style-bytes (style->bytes name))
@@ -58,7 +57,10 @@
                 (format-styled name v)
                 (format-cursor-move current-cursor-row current-cursor-col)))
 
-;;不自动重置的样式格式化，用于连续样式
+(define (format-styled-at! row col name v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled name v)))
+
 (define (format-styled* name v)
   (define style-bytes (style->bytes name))
   (bytes-append style-bytes (format-content v)))
@@ -104,6 +106,7 @@
 
 ;; 格式化属性函数（返回字节串，用于批量输出）
 
+;; 基础格式化
 (define (format-styled-bold v)
   (bytes-append format-bold (format-content v) format-reset))
 
@@ -122,62 +125,55 @@
 (define (format-styled-reverse v)
   (bytes-append format-reverse (format-content v) format-reset))
 
-(define (format-styled-bold-at row col v)
-  (bytes-append (format-cursor-move row col) (format-styled-bold v)))
-
-(define (format-styled-underline-at row col v)
-  (bytes-append (format-cursor-move row col) (format-styled-underline v)))
-
-;; format-styled-at! - 不恢复光标
-(define (format-styled-at! row col name v)
+;; 辅助函数：带属性的 at 通用实现
+(define (format-styled-attr-at row col fmt-fn v)
   (bytes-append (format-cursor-move row col)
-                (format-styled name v)))
-
-;; 所有属性的 at 变体（恢复光标）
-(define (format-styled-dim-at row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-dim v)
+                (fmt-fn v)
                 (format-cursor-move current-cursor-row current-cursor-col)))
+
+(define (format-styled-attr-at! row col fmt-fn v)
+  (bytes-append (format-cursor-move row col)
+                (fmt-fn v)))
+
+;; at 变体（恢复光标）
+(define (format-styled-bold-at row col v)
+  (format-styled-attr-at row col format-styled-bold v))
+
+(define (format-styled-dim-at row col v)
+  (format-styled-attr-at row col format-styled-dim v))
 
 (define (format-styled-italic-at row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-italic v)
-                (format-cursor-move current-cursor-row current-cursor-col)))
+  (format-styled-attr-at row col format-styled-italic v))
+
+(define (format-styled-underline-at row col v)
+  (format-styled-attr-at row col format-styled-underline v))
 
 (define (format-styled-blink-at row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-blink v)
-                (format-cursor-move current-cursor-row current-cursor-col)))
+  (format-styled-attr-at row col format-styled-blink v))
 
 (define (format-styled-reverse-at row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-reverse v)
-                (format-cursor-move current-cursor-row current-cursor-col)))
+  (format-styled-attr-at row col format-styled-reverse v))
 
-;; 所有属性的 at! 变体（不恢复光标）
+;; at! 变体（不恢复光标）
 (define (format-styled-bold-at! row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-bold v)))
+  (format-styled-attr-at! row col format-styled-bold v))
 
 (define (format-styled-dim-at! row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-dim v)))
+  (format-styled-attr-at! row col format-styled-dim v))
 
 (define (format-styled-italic-at! row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-italic v)))
+  (format-styled-attr-at! row col format-styled-italic v))
 
 (define (format-styled-underline-at! row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-underline v)))
+  (format-styled-attr-at! row col format-styled-underline v))
 
 (define (format-styled-blink-at! row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-blink v)))
+  (format-styled-attr-at! row col format-styled-blink v))
 
 (define (format-styled-reverse-at! row col v)
-  (bytes-append (format-cursor-move row col)
-                (format-styled-reverse v)))
+  (format-styled-attr-at! row col format-styled-reverse v))
+
+;; 导出
 
 (provide
  ;; 样式管理
@@ -185,19 +181,15 @@
  ;; 立即输出样式
  put-styled put-styled-at put-styled-at!
  ;; 格式化样式（批量输出）
- format-styled format-styled-at format-styled*
+ format-styled format-styled-at format-styled-at! format-styled*
  ;; 颜色构造器
  color-fg color-bg color256-fg color256-bg color-rgb-fg color-rgb-bg
  ;; 属性构造器
  attr-bold attr-dim attr-italic attr-underline attr-blink attr-reverse
- ;; 格式化属性（批量输出）- 新名称
- format-styled-bold format-styled-dim format-styled-italic
- format-styled-underline format-styled-blink format-styled-reverse
- format-styled-bold-at format-styled-underline-at
- ;; 格式化样式 at 系列
- format-styled-at!
- format-styled-dim-at format-styled-dim-at!
- format-styled-italic-at format-styled-italic-at!
- format-styled-blink-at format-styled-blink-at!
- format-styled-reverse-at format-styled-reverse-at!
- format-styled-bold-at! format-styled-underline-at!)
+ ;; 格式化属性（批量输出）
+ format-styled-bold format-styled-bold-at format-styled-bold-at!
+ format-styled-dim format-styled-dim-at format-styled-dim-at!
+ format-styled-italic format-styled-italic-at format-styled-italic-at!
+ format-styled-underline format-styled-underline-at format-styled-underline-at!
+ format-styled-blink format-styled-blink-at format-styled-blink-at!
+ format-styled-reverse format-styled-reverse-at format-styled-reverse-at!)

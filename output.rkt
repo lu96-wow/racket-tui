@@ -61,13 +61,24 @@
 (define (buffer-alt-enable)   (put-bytes format-buffer-alt-enable))
 (define (buffer-alt-disable)  (put-bytes format-buffer-alt-disable))
 
-;; 颜色输出（直接封装 format 函数）
-(define (put-fg n v)          (put-bytes (bytes-append (format-fg n) (format-content v) format-reset)))
-(define (put-bg n v)          (put-bytes (bytes-append (format-bg n) (format-content v) format-reset)))
-(define (put-rgb-fg r g b v)  (put-bytes (bytes-append (format-rgb-fg r g b) (format-content v) format-reset)))
-(define (put-rgb-bg r g b v)  (put-bytes (bytes-append (format-rgb-bg r g b) (format-content v) format-reset)))
-(define (put-256-fg n v)      (put-bytes (bytes-append (format-256-fg n) (format-content v) format-reset)))
-(define (put-256-bg n v)      (put-bytes (bytes-append (format-256-bg n) (format-content v) format-reset)))
+;; 颜色输出
+(define (put-fg n v)
+  (put-bytes (bytes-append (format-fg n) (format-content v) format-reset)))
+
+(define (put-bg n v)
+  (put-bytes (bytes-append (format-bg n) (format-content v) format-reset)))
+
+(define (put-rgb-fg r g b v)
+  (put-bytes (bytes-append (format-rgb-fg r g b) (format-content v) format-reset)))
+
+(define (put-rgb-bg r g b v)
+  (put-bytes (bytes-append (format-rgb-bg r g b) (format-content v) format-reset)))
+
+(define (put-256-fg n v)
+  (put-bytes (bytes-append (format-256-fg n) (format-content v) format-reset)))
+
+(define (put-256-bg n v)
+  (put-bytes (bytes-append (format-256-bg n) (format-content v) format-reset)))
 
 ;; 绝对位置输出
 (define (put-at row col v)
@@ -80,7 +91,6 @@
 (define (put-at! row col v)
   (cursor-move row col)
   (put v))
-
 
 ;; 导出
 (provide put put-byte put-bytes put-char put-string put-newline
