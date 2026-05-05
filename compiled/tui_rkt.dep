@@ -1,0 +1,1 @@
+("9.1" ta6le ("c67f0eb6a14d0cacab756a1526e3c9514927ecd1" . "48713d266fa9f42b08e68bac91b2ed7156011ec1") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt") (collects #"tui" #"autoresources.rkt") (collects #"tui" #"base.rkt") (collects #"tui" #"output-color.rkt") (collects #"tui" #"output.rkt"))

@@ -22,8 +22,8 @@
 (with-tui-nobuffer
     (screen-clear)
   (put-string "╔══════════════════════════════════════╗") (put-newline)
-  (put-string "║     输入 API 测试 (含鼠标+粘贴)    ║") (put-newline)
-  (put-string "║   按 q 退出 | 中键/右键粘贴测试     ║") (put-newline)
+  (put-string "║     输入 API 测试 (含鼠标+粘贴)         ║") (put-newline)
+  (put-string "║   按 q 退出                           ║") (put-newline)
   (put-string "╚══════════════════════════════════════╝") (put-newline)
   (put-newline)
   (put-string "按下任意键、移动鼠标或粘贴内容查看事件...") (put-newline)
@@ -46,8 +46,8 @@
   (put-newline)
 
   (define running? #t)
-  (define mouse-events-count 0)
-  (define paste-events-count 0)
+  (define mouse-events-count 1)
+  (define paste-events-count 1)
   ;; 保存主日志区域的起始行
   (define log-start-line current-cursor-row)
 
@@ -66,9 +66,9 @@
               (define saved-col current-cursor-col)
 
               ;; 更新鼠标状态行
-              (cursor-move mouse-status-line 0)
+              (cursor-move mouse-status-line 1)
               (put-string "                                        ")  ; 清除旧内容
-              (cursor-move mouse-status-line 0)
+              (cursor-move mouse-status-line 1)
               (put-string (format "鼠标事件 #~a: " mouse-events-count))
               (cond [(mouse-press? data)
                      (put-string "按下 ")]
@@ -99,9 +99,9 @@
             (define saved-col current-cursor-col)
 
             ;; 更新粘贴状态行
-            (cursor-move paste-status-line 0)
+            (cursor-move paste-status-line 1)
             (put-string "                                        ")  ; 清除旧内容
-            (cursor-move paste-status-line 0)
+            (cursor-move paste-status-line 1)
             (define content (bytes-length data))
             (define preview (event->string data))
             (put-string (format "粘贴事件 #~a: " paste-events-count))

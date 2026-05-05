@@ -1,15 +1,7 @@
 #lang racket
 
-(require racket/bytes
-         "ansi-format.rkt")
-
-;; 光标追踪
-(define current-cursor-row 0)
-(define current-cursor-col 0)
-
-(define (set-cursor! row col)
-  (set! current-cursor-row row)
-  (set! current-cursor-col col))
+(require "ansi-format.rkt"
+         "cursor-state.rkt")
 
 ;; 核心输出函数（可切换缓冲模式）
 (define current-write-bytes (λ (bs) (write-bytes bs) (flush-output)))

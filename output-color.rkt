@@ -1,6 +1,7 @@
 #lang racket
 
 (require "output.rkt"
+         "cursor-state.rkt"
          "ansi-format.rkt")
 
 ;; 样式系统（高层抽象）
@@ -54,7 +55,8 @@
 
 (define (format-styled-at row col name v)
   (bytes-append (format-cursor-move row col)
-                (format-styled name v)))
+                (format-styled name v)
+                (format-cursor-move current-cursor-row current-cursor-col)))
 
 ;;不自动重置的样式格式化，用于连续样式
 (define (format-styled* name v)
@@ -126,6 +128,57 @@
 (define (format-styled-underline-at row col v)
   (bytes-append (format-cursor-move row col) (format-styled-underline v)))
 
+;; format-styled-at! - 不恢复光标
+(define (format-styled-at! row col name v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled name v)))
+
+;; 所有属性的 at 变体（恢复光标）
+(define (format-styled-dim-at row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-dim v)
+                (format-cursor-move current-cursor-row current-cursor-col)))
+
+(define (format-styled-italic-at row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-italic v)
+                (format-cursor-move current-cursor-row current-cursor-col)))
+
+(define (format-styled-blink-at row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-blink v)
+                (format-cursor-move current-cursor-row current-cursor-col)))
+
+(define (format-styled-reverse-at row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-reverse v)
+                (format-cursor-move current-cursor-row current-cursor-col)))
+
+;; 所有属性的 at! 变体（不恢复光标）
+(define (format-styled-bold-at! row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-bold v)))
+
+(define (format-styled-dim-at! row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-dim v)))
+
+(define (format-styled-italic-at! row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-italic v)))
+
+(define (format-styled-underline-at! row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-underline v)))
+
+(define (format-styled-blink-at! row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-blink v)))
+
+(define (format-styled-reverse-at! row col v)
+  (bytes-append (format-cursor-move row col)
+                (format-styled-reverse v)))
+
 (provide
  ;; 样式管理
  style-define! style-apply! style-reset style->bytes
@@ -140,4 +193,11 @@
  ;; 格式化属性（批量输出）- 新名称
  format-styled-bold format-styled-dim format-styled-italic
  format-styled-underline format-styled-blink format-styled-reverse
- format-styled-bold-at format-styled-underline-at)
+ format-styled-bold-at format-styled-underline-at
+ ;; 格式化样式 at 系列
+ format-styled-at!
+ format-styled-dim-at format-styled-dim-at!
+ format-styled-italic-at format-styled-italic-at!
+ format-styled-blink-at format-styled-blink-at!
+ format-styled-reverse-at format-styled-reverse-at!
+ format-styled-bold-at! format-styled-underline-at!)
