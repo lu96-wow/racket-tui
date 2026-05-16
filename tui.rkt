@@ -65,6 +65,7 @@
   (display "\x1b[?2004l")
   (flush-output))
 
+;;切换到命令行的备份缓冲区
 (define-syntax-rule (with-tui body ...)
   (let ([exn #f])
     (dynamic-wind
@@ -78,6 +79,7 @@
          (eprintf "Error: ~a\n" (exn-message exn))
          (raise exn))))))
 
+;;这个nobuffer是不切换命令行的输出缓冲区，而不是输出不缓冲
 (define-syntax-rule (with-tui-nobuffer body ...)
   (let ([exn #f])
     (dynamic-wind
