@@ -210,8 +210,8 @@
                 (define seq (read-csi-seq b2))
                 (let-values ([(ps final) (parse-csi-params seq)])
                   (cond
-                    [(and (null? ps) (= final TILDE)
-                          (= (bytes-length seq) 5)
+                    [(and (= final TILDE)
+                          (= (bytes-length seq) 6)
                           (= (bytes-ref seq 2) BRACKETED-PASTE-START-1)
                           (= (bytes-ref seq 3) BRACKETED-PASTE-START-2)
                           (= (bytes-ref seq 4) BRACKETED-PASTE-START-3))

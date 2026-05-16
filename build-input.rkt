@@ -81,105 +81,89 @@
          #:any        [on-any        #f]
          #:null       [on-null       #f])
 
+  ;; 辅助：处理 'key 类型的子分发（特殊键 vs 普通字符）
+  (define (dispatch-key b)
+    (cond [(and on-tab       (= b 9))         (on-tab)]
+          [(and on-space     (= b 32))        (on-space)]
+          [(and on-enter     (memv b '(10 13))) (on-enter)]
+          [(and on-backspace (memv b '(8 127))) (on-backspace)]
+          [(and on-escape    (= b 27))        (on-escape)]
+          [on-char
+           (on-char b)]
+          [on-any
+           (on-any 'key (bytes b) #f)]
+          [else (void)]))
+
+  ;; 辅助：处理 'mouse 类型的子分发
+  (define (dispatch-mouse detail)
+    (match (car detail)
+      ['press
+       (if on-mouse-press
+           (on-mouse-press (cadr detail) (caddr detail)
+                           (cadddr detail) (last detail))
+           (on-any-and-null 'mouse detail #f))]
+      ['release
+       (if on-mouse-release
+           (on-mouse-release (cadr detail) (caddr detail)
+                             (cadddr detail) (last detail))
+           (on-any-and-null 'mouse detail #f))]
+      ['move
+       (if on-mouse-move
+           (on-mouse-move (caddr detail) (cadddr detail) (last detail))
+           (on-any-and-null 'mouse detail #f))]
+      ['scroll
+       (if on-mouse-scroll
+           (on-mouse-scroll (caddr detail) (cadddr detail)
+                            (car (cddddr detail)) (last detail))
+           (on-any-and-null 'mouse detail #f))]
+      [_ (on-any-and-null 'mouse detail #f)]))
+
+  ;; 兜底：any 或静默
+  (define (on-any-and-null t d m)
+    (when on-any (on-any t d m)))
+
+  ;; ─── 主分发：case 做 O(1) type → handler 映射 ───
   (lambda (type data mods)
-    (cond
-      [(and on-null (eq? type 'null))
-       (on-null)]
-
-      [(and on-resize (eq? type 'resize))
-       (on-resize (car data) (cdr data))]
-
-      [(and on-paste (eq? type 'paste))
-       (on-paste data)]
-
-      [(and (or on-mouse-press on-mouse-release on-mouse-move on-mouse-scroll)
-            (eq? type 'mouse))
-       (let* ([detail data]
-              [action (car detail)])
-         (match action
-           ['press
-            (when on-mouse-press
-              (on-mouse-press (cadr detail)
-                              (caddr detail)
-                              (cadddr detail)
-                              (last detail)))]
-           ['release
-            (when on-mouse-release
-              (on-mouse-release (cadr detail)
-                                (caddr detail)
-                                (cadddr detail)
-                                (last detail)))]
-           ['move
-            (when on-mouse-move
-              (on-mouse-move (caddr detail)
-                             (cadddr detail)
-                             (last detail)))]
-           ['scroll
-            (when on-mouse-scroll
-              (on-mouse-scroll (caddr detail)
-                               (cadddr detail)
-                               (car (cddddr detail))
-                               (last detail)))]
-           [_ (void)]))]
-
-      [(and on-tab (eq? type 'key) (bytes? data)
-            (= (bytes-length data) 1) (= (bytes-ref data 0) 9))
-       (on-tab)]
-
-      [(and on-space (eq? type 'key) (bytes? data)
-            (= (bytes-length data) 1) (= (bytes-ref data 0) 32))
-       (on-space)]
-
-      [(and on-enter (eq? type 'key) (bytes? data)
-            (= (bytes-length data) 1)
-            (memv (bytes-ref data 0) (list 10 13)))
-       (on-enter)]
-
-      [(and on-backspace (eq? type 'key) (bytes? data)
-            (= (bytes-length data) 1)
-            (memv (bytes-ref data 0) (list 8 127)))
-       (on-backspace)]
-
-      [(and on-escape (eq? type 'key) (bytes? data)
-            (= (bytes-length data) 1) (= (bytes-ref data 0) 27))
-       (on-escape)]
-
-      [(and on-up    (eq? type 'up))    (on-up)]
-      [(and on-down  (eq? type 'down))  (on-down)]
-      [(and on-left  (eq? type 'left))  (on-left)]
-      [(and on-right (eq? type 'right)) (on-right)]
-
-      [(and on-delete   (eq? type 'del))     (on-delete)]
-      [(and on-insert   (eq? type 'insert))  (on-insert)]
-      [(and on-home     (eq? type 'home))    (on-home)]
-      [(and on-end      (eq? type 'end))     (on-end)]
-      [(and on-pageup   (eq? type 'pageup))  (on-pageup)]
-      [(and on-pagedown (eq? type 'pagedown)) (on-pagedown)]
-
-      [(and on-ctrl (eq? type 'ctrl))
-       (define ch (ctrl->char data))
-       (when ch (on-ctrl ch))]
-
-      [(and on-alt (eq? type 'alt))
-       (define b (alt->char data))
-       (when b (on-alt (integer->char b)))]
-
-      [(and on-mod (eq? type 'mod-seq))
-       (define ch (mod-seq->char data))
-       (when ch
-         (on-mod (integer->char ch) (car mods) (cdr mods)))]
-
-      [(and on-utf-char (eq? type 'utf8))
-       (define str (event->string data))
-       (when (positive? (string-length str))
-         (on-utf-char str))]
-
-      [(and on-char (eq? type 'key) (bytes? data)
-            (= (bytes-length data) 1))
-       (define b (bytes-ref data 0))
-       (unless (memv b (list 8 9 10 13 27 32 127))
-         (on-char b))]
-
-      [on-any (on-any type data mods)]
-
-      [else (void)])))
+    (case type
+      [(null)   (if on-null   (on-null)   (on-any-and-null type data mods))]
+      [(resize) (if on-resize (on-resize (car data) (cdr data))
+                    (on-any-and-null type data mods))]
+      [(paste)  (if on-paste  (on-paste data)
+                    (on-any-and-null type data mods))]
+      [(mouse)  (dispatch-mouse data)]
+      [(key)
+       (if (and (bytes? data) (= (bytes-length data) 1))
+           (dispatch-key (bytes-ref data 0))
+           (on-any-and-null 'key data #f))]
+      [(up)        (if on-up        (on-up)        (on-any-and-null type data mods))]
+      [(down)      (if on-down      (on-down)      (on-any-and-null type data mods))]
+      [(left)      (if on-left      (on-left)      (on-any-and-null type data mods))]
+      [(right)     (if on-right     (on-right)     (on-any-and-null type data mods))]
+      [(del)       (if on-delete    (on-delete)    (on-any-and-null type data mods))]
+      [(insert)    (if on-insert    (on-insert)    (on-any-and-null type data mods))]
+      [(home)      (if on-home      (on-home)      (on-any-and-null type data mods))]
+      [(end)       (if on-end       (on-end)       (on-any-and-null type data mods))]
+      [(pageup)    (if on-pageup    (on-pageup)    (on-any-and-null type data mods))]
+      [(pagedown)  (if on-pagedown  (on-pagedown)  (on-any-and-null type data mods))]
+      [(ctrl)
+       (let ([ch (ctrl->char data)])
+         (if ch
+             (if on-ctrl (on-ctrl ch) (on-any-and-null type data mods))
+             (on-any-and-null 'ctrl data #f)))]
+      [(alt)
+       (let ([b (alt->char data)])
+         (if b
+             (if on-alt (on-alt (integer->char b)) (on-any-and-null type data mods))
+             (on-any-and-null 'alt data #f)))]
+      [(mod-seq)
+       (let ([ch (mod-seq->char data)])
+         (if ch
+             (if on-mod (on-mod (integer->char ch) (car mods) (cdr mods))
+                 (on-any-and-null type data mods))
+             (on-any-and-null 'mod-seq data mods)))]
+      [(utf8)
+       (let ([str (event->string data)])
+         (if (positive? (string-length str))
+             (if on-utf-char (on-utf-char str) (on-any-and-null type data mods))
+             (on-any-and-null 'utf8 data #f)))]
+      [else (on-any-and-null type data mods)])))
