@@ -118,8 +118,6 @@
   (for ([r (in-range rows)])
     (render-row-diff buf prev-cells r cols out))
 
-  (write-bytes format-cursor-show out)
-
   ;; 第二阶段：一次性写入终端
   (define frame-bytes (get-output-bytes out))
   (close-output-port out)
