@@ -27,7 +27,8 @@
                                (λ () (error 'style->bytes "Undefined style: ~a" name))))
   (call-with-output-bytes
    (λ (out)
-     (parameterize ([current-output-port out])
+     (parameterize ([current-output-port out]
+                    [current-screen #f])
        (style-proc)))))
 
 ;; 立即输出样式函数
