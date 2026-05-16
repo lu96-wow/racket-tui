@@ -1,33 +1,84 @@
 #lang racket
 
 (require "ansi-format.rkt"
-         "cursor-state.rkt")
+         "cursor-state.rkt"
+         "screen-buffer.rkt"
+         "resize.rkt")
 
-;; 核心输出函数（可切换缓冲模式）
-(define current-write-bytes (λ (bs) (write-bytes bs) (flush-output)))
-(define current-write-byte  (λ (b) (write-byte b) (flush-output)))
-(define current-write-char  (λ (c) (write-char c) (flush-output)))
-(define current-display     (λ (s) (display s) (flush-output)))
+(define current-screen (make-parameter #f))
 
-(define (set-immediate-mode!)
-  (set! current-write-bytes (λ (bs) (write-bytes bs) (flush-output)))
-  (set! current-write-byte  (λ (b) (write-byte b) (flush-output)))
-  (set! current-write-char  (λ (c) (write-char c) (flush-output)))
-  (set! current-display     (λ (s) (display s) (flush-output))))
+(define (screen-mode?) (current-screen))
 
-(define (set-buffered-mode!)
-  (set! current-write-bytes (λ (bs) (write-bytes bs)))
-  (set! current-write-byte  (λ (b) (write-byte b)))
-  (set! current-write-char  (λ (c) (write-char c)))
-  (set! current-display     (λ (s) (display s))))
+(define (with-screen-buffer thunk)
+  (define buf (make-screen-buffer))
+  (parameterize ([current-screen buf])
+    (let-values ([(r c) (get-window-size)])
+      (sb-ensure! buf r c)
+      (sb-clear! buf))
+    (thunk)
+    (sb-flush! buf)
+    buf))
 
-(define (flush!) (flush-output))
+(define (screen-put-bytes bs)
+  (define buf (current-screen))
+  (sb-put! buf current-cursor-row current-cursor-col bs)
+  (set-cursor! current-cursor-row (+ current-cursor-col (bytes-length bs))))
+
+;; 光标控制 - screen-mode 下只更新状态
+(define (cursor-up n)
+  (unless (screen-mode?) (write-bytes (format-cursor-up n)) (flush-output))
+  (set-cursor! (max 0 (- current-cursor-row n)) current-cursor-col))
+
+(define (cursor-down n)
+  (unless (screen-mode?) (write-bytes (format-cursor-down n)) (flush-output))
+  (set-cursor! (+ current-cursor-row n) current-cursor-col))
+
+(define (cursor-right n)
+  (unless (screen-mode?) (write-bytes (format-cursor-right n)) (flush-output))
+  (set-cursor! current-cursor-row (+ current-cursor-col n)))
+
+(define (cursor-left n)
+  (unless (screen-mode?) (write-bytes (format-cursor-left n)) (flush-output))
+  (set-cursor! current-cursor-row (max 0 (- current-cursor-col n))))
+
+(define (cursor-move row col)
+  (unless (screen-mode?) (write-bytes (format-cursor-move row col)) (flush-output))
+  (set-cursor! row col))
+
+(define (cursor-col n)
+  (unless (screen-mode?) (write-bytes (format-cursor-col n)) (flush-output))
+  (set-cursor! current-cursor-row n))
+
+(define (cursor-home)
+  (unless (screen-mode?) (write-bytes format-cursor-home) (flush-output))
+  (set-cursor! 0 0))
+
+(define (cursor-hide)
+  (unless (screen-mode?) (write-bytes format-cursor-hide) (flush-output)))
+
+(define (cursor-show)
+  (unless (screen-mode?) (write-bytes format-cursor-show) (flush-output)))
 
 ;; 基础输出
-(define (put-byte b) (current-write-byte b))
-(define (put-bytes bs) (current-write-bytes bs))
-(define (put-char c) (current-write-char c))
-(define (put-string s) (current-display s))
+(define (put-byte b)
+  (if (screen-mode?)
+      (screen-put-bytes (bytes b))
+      (begin (write-byte b) (flush-output))))
+
+(define (put-bytes bs)
+  (if (screen-mode?)
+      (screen-put-bytes bs)
+      (begin (write-bytes bs) (flush-output))))
+
+(define (put-char c)
+  (if (screen-mode?)
+      (screen-put-bytes (string->bytes/utf-8 (string c)))
+      (begin (write-char c) (flush-output))))
+
+(define (put-string s)
+  (if (screen-mode?)
+      (screen-put-bytes (string->bytes/utf-8 s))
+      (begin (display s) (flush-output))))
 
 (define (put v)
   (cond [(string? v) (put-string v)]
@@ -37,29 +88,46 @@
         [else (void)]))
 
 (define (put-newline)
-  (put-string "\r\n")
-  (set-cursor! (+ current-cursor-row 1) 0))
+  (if (screen-mode?)
+      (set-cursor! (+ current-cursor-row 1) 0)
+      (begin (display "\r\n") (flush-output)
+             (set-cursor! (+ current-cursor-row 1) 0))))
 
-;; 光标控制
-(define (cursor-up n)   (put-bytes (format-cursor-up n))   (set-cursor! (max 0 (- current-cursor-row n)) current-cursor-col))
-(define (cursor-down n) (put-bytes (format-cursor-down n)) (set-cursor! (+ current-cursor-row n) current-cursor-col))
-(define (cursor-right n)(put-bytes (format-cursor-right n))(set-cursor! current-cursor-row (+ current-cursor-col n)))
-(define (cursor-left n) (put-bytes (format-cursor-left n)) (set-cursor! current-cursor-row (max 0 (- current-cursor-col n))))
-(define (cursor-move row col) (put-bytes (format-cursor-move row col)) (set-cursor! row col))
-(define (cursor-col n)  (put-bytes (format-cursor-col n)) (set-cursor! current-cursor-row n))
-(define (cursor-home)   (put-bytes format-cursor-home) (set-cursor! 0 0))
-(define (cursor-hide)   (put-bytes format-cursor-hide))
-(define (cursor-show)   (put-bytes format-cursor-show))
+;; flush: screen-mode 下 diff+输出，否则直接 flush
+(define (flush!)
+  (if (screen-mode?)
+      (sb-flush! (current-screen))
+      (flush-output)))
 
 ;; 屏幕控制
-(define (screen-clear)        (put-bytes format-screen-clear) (set-cursor! 0 0))
-(define (screen-clear-below)  (put-bytes format-screen-clear-below))
-(define (screen-clear-above)  (put-bytes format-screen-clear-above))
-(define (line-clear)          (put-bytes format-line-clear))
-(define (line-clear-right)    (put-bytes format-line-clear-right))
-(define (line-clear-left)     (put-bytes format-line-clear-left))
-(define (buffer-alt-enable)   (put-bytes format-buffer-alt-enable))
-(define (buffer-alt-disable)  (put-bytes format-buffer-alt-disable))
+(define (screen-clear)
+  (if (screen-mode?)
+      (let ([buf (current-screen)])
+        (sb-clear! buf)
+        (set-cursor! 0 0))
+      (begin (write-bytes format-screen-clear) (flush-output)
+             (set-cursor! 0 0))))
+
+(define (screen-clear-below)
+  (unless (screen-mode?) (write-bytes format-screen-clear-below) (flush-output)))
+
+(define (screen-clear-above)
+  (unless (screen-mode?) (write-bytes format-screen-clear-above) (flush-output)))
+
+(define (line-clear)
+  (unless (screen-mode?) (write-bytes format-line-clear) (flush-output)))
+
+(define (line-clear-right)
+  (unless (screen-mode?) (write-bytes format-line-clear-right) (flush-output)))
+
+(define (line-clear-left)
+  (unless (screen-mode?) (write-bytes format-line-clear-left) (flush-output)))
+
+(define (buffer-alt-enable)
+  (write-bytes format-buffer-alt-enable) (flush-output))
+
+(define (buffer-alt-disable)
+  (write-bytes format-buffer-alt-disable) (flush-output))
 
 ;; 颜色输出
 (define (put-fg n v)
@@ -82,12 +150,19 @@
 
 ;; 绝对位置输出
 (define (put-at row col v)
-  (put-bytes (format-content-at row col v)))
+  (if (screen-mode?)
+      (begin (set-cursor! row col) (put v))
+      (put-bytes (format-content-at row col v))))
 
 (define (put-at! row col v)
-  (put-bytes (format-content-at! row col v)))
+  (if (screen-mode?)
+      (begin (set-cursor! row col) (put v))
+      (put-bytes (format-content-at! row col v))))
 
-;; 导出
+;; 兼容旧的 immediate/buffered API（screen-mode 下忽略）
+(define (set-immediate-mode!) (void))
+(define (set-buffered-mode!) (void))
+
 (provide put put-byte put-bytes put-char put-string put-newline
          put-at put-at!
          cursor-up cursor-down cursor-right cursor-left
@@ -98,4 +173,5 @@
          buffer-alt-enable buffer-alt-disable
          current-cursor-row current-cursor-col
          set-immediate-mode! set-buffered-mode! flush!
-         put-fg put-bg put-rgb-fg put-rgb-bg put-256-fg put-256-bg)
+         put-fg put-bg put-rgb-fg put-rgb-bg put-256-fg put-256-bg
+         with-screen-buffer screen-mode? current-screen)
