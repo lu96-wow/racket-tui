@@ -12,7 +12,8 @@
 (define (get-style-bytes style-name)
   (call-with-output-bytes
    (λ (out)
-     (parameterize ([current-output-port out])
+     (parameterize ([current-output-port out]
+                    [current-screen #f])
        (style-apply! style-name)))))
 
 (with-tui
