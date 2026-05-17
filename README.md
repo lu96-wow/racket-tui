@@ -173,63 +173,23 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 (define styled-text (format-styled fancy-bytes "Styled text"))
 ```
 
-## 输入系统
-
-### build-input（推荐）
-
-用声明式关键字替代手动事件判断，内置正确的优先级顺序：
-
-```racket
-(require tui)  ; build-input 已包含在 tui 中
-
-(define handler
-  (build-input
-    #:char      (lambda (ch) (printf "按键: ~a\n" (integer->char ch)))
-    #:up        (lambda ()  (cursor-up 1))
-    #:ctrl      (lambda (ch) (printf "Ctrl+~a\n" ch))
-    #:resize    (lambda (rows cols) (printf "~a×~a\n" rows cols))
-    #:paste     (lambda (data) (printf "粘贴: ~a 字节\n" (bytes-length data)))
-    #:any       (lambda (type data mods) (printf "[~a]\n" type))))
-
-(let loop ()
-  (let-values ([(type data mods) (read-event)])
-    (handler type data mods)
-    (loop)))
-```
-
-全部关键字参数：
-
-| 关键字 | handler 签名 | 说明 |
-|--------|-------------|------|
-| `#:char` | `(lambda (ch) ...)` | ASCII 字节值 |
-| `#:utf-char` | `(lambda (str) ...)` | UTF-8 字符串 |
-| `#:ctrl` | `(lambda (ch) ...)` | Ctrl+字母，ch 是 char |
-| `#:alt` | `(lambda (ch) ...)` | Alt+字母 |
-| `#:mod` | `(lambda (ch ctrl? alt?) ...)` | Ctrl+Alt+字母 |
-| `#:tab` `#:space` `#:enter` `#:backspace` `#:escape` | `(lambda () ...)` | 特殊键 |
-| `#:up` `#:down` `#:left` `#:right` | `(lambda () ...)` | 方向键 |
-| `#:delete` `#:insert` `#:home` `#:end` `#:pageup` `#:pagedown` | `(lambda () ...)` | 编辑键 |
-| `#:mouse-press` | `(lambda (button x y mods) ...)` | 鼠标按下 |
-| `#:mouse-release` | `(lambda (button x y mods) ...)` | 鼠标释放 |
-| `#:mouse-move` | `(lambda (x y mods) ...)` | 鼠标移动 |
-| `#:mouse-scroll` | `(lambda (dir x y mods) ...)` | 滚轮，dir='up/'down |
-| `#:paste` | `(lambda (data) ...)` | 粘贴内容(bytes) |
-| `#:resize` | `(lambda (rows cols) ...)` | 窗口大小变化 |
-| `#:null` | `(lambda () ...)` | 无输入事件 |
-| `#:any` | `(lambda (type data mods) ...)` | 兜底，未匹配的事件 |
-
-### 底层 API
-
-如需直接使用 `read-event`，返回 `(type data mods)` 三值。判断函数见 `input.rkt`：
+## 输入设计
 
 ```racket
 (let-values ([(type data mods) (read-event)])
-  (cond [(event-up? type)    ...]
-        [(event-ctrl? type)  (ctrl->char data) ...]
-        [(event-utf8? type)  (event->string data) ...]
-        [(event-mouse? type) (get-mouse-pos data) ...]
-        [(event-paste? type) (bytes-length data) ...]
-        ...))
+  (cond
+    [(event-touch? type)
+     (let-values ([(x y) (get-mouse-pos data)])
+       (printf "鼠标 ~a,~a" x y))]
+    [(event-up? type) (cursor-up 1)]
+    [(event-ctrl? type) (printf "Ctrl+~a" (ctrl->char data))]
+    [(event-utf8? type) (printf "UTF-8: ~a" (event->string data))]
+    [(event-resize? type)
+     (printf "~a×~a"
+             (get-resize-rows data)
+             (get-resize-cols data))]
+    [(event-paste? type)
+     (printf "粘贴: ~a 字节" (bytes-length data))]))
 ```
 
 ## 生命周期管理
@@ -280,92 +240,85 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 
 (require tui)
 
+(define (draw-ui)
+  (define buffer
+    (bytes-append
+     format-screen-clear
+     (format-cursor-move 0 0)
+     (format-rgb-fg 255 255 0 "=== TUI Demo ===")
+     (format-cursor-move 2 0)
+     (format-rgb-fg 0 255 0 "Press 'q' to quit")
+     (format-cursor-move 4 0)
+     (format-rgb-fg 255 0 0 "Hello, TUI!")
+     (format-cursor-move 6 0)
+     (format-256-fg 46 "UTF-8 support: 你好世界")))
+  (put-bytes buffer))
+
 (with-tui
     (cursor-hide)
-  (define running? #t)
-  (define handler
-    (build-input
-      #:char (lambda (ch)
-               (when (= ch (char->integer #\q))
-                 (set! running? #f)))
-      #:any (lambda (t d m) (void))))
-
   (let loop ()
-    (when running?
-      (with-screen-buffer
-        (λ ()
-          (put-at 0 0 (format-rgb-fg 255 255 0 "=== TUI Demo ==="))
-          (put-at 2 0 (format-rgb-fg 0 255 0 "Press 'q' to quit"))
-          (put-at 4 0 (format-rgb-fg 255 0 0 "Hello, TUI!"))
-          (put-at 6 0 (format-256-fg 46 "UTF-8: 你好世界"))))
-
-      (change-noblock)
-      (let-values ([(type data mods) (read-event)])
-        (handler type data mods))
-      (sleep 0.01)
-      (loop))))
+    (draw-ui)
+    (let-values ([(type data mods) (read-event)])
+      (cond [(and (event-key? type)
+                  (let ([b (event->byte data)])
+                    (and b (= b (char->integer #\q)))))
+             (void)]  ;; 退出
+            [else (loop)]))))
 ```
 
-更多示例在 `test/` 目录下：
-- `test/input.rkt` — 输入事件测试
-- `test/matrix.rkt` — 字符雨（全量输出）
-- `test/matrix-buffer.rkt` — 字符雨（双缓冲 diff 版本）
-- `test/output.rkt` — 样式系统示例
-- `test/color.rkt` / `test/color-256.rkt` / `test/color-rgb.rkt` — 颜色测试
+其他示例在test文件下
 
-## 双缓冲渲染 (Screen Buffer)
+输入系统补充说明
+ 高层事件判断必须优先于底层事件
 
-逐帧只输出变化格子，大幅减少终端 I/O。
+input.rkt 提供了两类事件判断函数：
 
-### 快速开始
+    高层语义化判断：event-tab?、event-space?、event-enter?、event-backspace?、event-escape?
+
+    底层类型判断：event-key?、event-ctrl?、event-alt?、event-up?、event-down? 等
+
+重要：高层判断必须写在底层判断之前，否则会被底层判断先捕获而无法触发。
 
 ```racket
-(with-screen-buffer
-  (λ ()
-    (put-at 0 0 "Hello")
-    (put-fg 1 "Red")))
-```
 
-### 跨帧复用（真正 diff）
+;; ✓ 正确写法 - 高层优先
+(let-values ([(type data mods) (read-event)])
+  (cond
+    [(event-tab? type data)     (printf "Tab键\n")]
+    [(event-space? type data)   (printf "空格键\n")]
+    [(event-enter? type data)   (printf "回车键\n")]
+    [(event-key? type)          (printf "普通键: ~a\n" (event->byte data))]
+    [else (void)]))
+
+;; ✗ 错误写法 - event-key? 会先捕获所有按键
+(let-values ([(type data mods) (read-event)])
+  (cond
+    [(event-key? type)          (printf "键: ~a\n" (event->byte data))]  ; 这里会捕获 Tab/空格等
+    [(event-tab? type data)     (printf "Tab键\n")]  ; 永远不会执行
+    [else (void)]))
+
+```
+原因：Tab 键（ASCII 9）、空格键（ASCII 32）、Enter 键（10/13）、Escape（27）在底层都属于 'key 类型，如果 event-key? 写在前面会无条件匹配，导致后续的高层判断失效。
+
+set-immediate-mode! set-buffered-mode!
+用于控制put-函数的刷新行为
+(flush)手动触发刷新
 
 ```racket
-(define buf (make-screen-buffer))
-
-(let loop ()
-  (parameterize ([current-screen buf])
-    (sb-ensure! buf rows cols)
-    (sb-clear! buf)
-    (put-at 0 0 "frame content")
-    (sb-flush! buf))
-  (loop))
+(waring: code with Deepseek V4)
 ```
 
-设置 `(current-screen buf)` 后所有 `put-*`/`put-fg`/`put-styled` 自动写入 buffer。
+only test in xterm qterminal
 
-### API
+前缀约定
+format- 返回字符串或bytes
+不立即输出，配合put 一次性输出
+put接受任意参数自动转换
 
-| 函数 | 说明 |
-|------|------|
-| `(make-screen-buffer)` | 创建空 buffer |
-| `(sb-ensure! buf rows cols)` | 扩容（只增不减，应对 resize） |
-| `(sb-put! buf row col bytes)` | 指定位置写内容 |
-| `(sb-clear! buf)` | 全填空格 |
-| `(sb-flush! buf)` | diff + 一次性输出 |
-| `(current-screen)` | parameter，设 buffer 即开启 screen-mode |
-| `(with-screen-buffer thunk)` | 创建 buffer → 执行 → flush |
-
-## 前缀/后缀约定
-
-| 前缀 | 含义 |
-|------|------|
-| `format-` | 返回 bytes，不输出，配合 `put-bytes` 批量输出 |
-| `put-` | 立即输出（screen-mode 下写入 buffer） |
-
+后缀约定
 | 后缀 | 含义 | 示例 |
-|------|------|------|
-| `!` | 有副作用（改变光标位置） | `put-at!`, `style-define!` |
-| `?` | 谓词，返回布尔值 | `terminal?` |
-| `-at` | 带位置参数 | `put-at`, `cursor-move` |
-| `-at!` | 带位置参数 + 有副作用 | `put-at!` |
-
-测试环境：xterm / qterminal
+|----|------------------|-----------|
+| !	| 有副作用（改变光标位置） | 	put-at!, style-define!|
+| ?	| 谓词，返回布尔值 |	event-key?, terminal? |
+| -at |	带位置参数 | put-at, cursor-move |
+| -at!	| 带位置参数 + 有副作用	| put-at! |
