@@ -104,9 +104,9 @@
   (if (screen-mode?)
       (let ([buf (current-screen)])
         (sb-clear! buf)
-        (set-cursor! 1 1))
+        (set-cursor! 0 0))
       (begin (write-bytes format-screen-clear) (flush-output)
-             (set-cursor! 1 1))))
+             (set-cursor! 0 0))))
 
 (define (screen-clear-below)
   (unless (screen-mode?) (write-bytes format-screen-clear-below) (flush-output)))

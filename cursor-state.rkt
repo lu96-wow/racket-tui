@@ -3,8 +3,8 @@
 (provide current-cursor-row current-cursor-col
          set-cursor! get-cursor)
 
-(define current-cursor-row 1)
-(define current-cursor-col 1)
+(define current-cursor-row 0)
+(define current-cursor-col 0)
 
 (define (set-cursor! row col)
   (set! current-cursor-row row)
