@@ -181,7 +181,7 @@
                            (= b3 BRACKETED-PASTE-END-1)
                            (= b4 BRACKETED-PASTE-END-2)
                            (= b5 BRACKETED-PASTE-END-3))
-                      acc
+                      (begin (getc) acc)  ; consume the final ~
                       (loop (bytes-append acc
                                           (bytes ESC)
                                           (bytes b2)
