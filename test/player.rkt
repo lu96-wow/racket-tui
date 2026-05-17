@@ -115,4 +115,4 @@ pad=~a:~a:(ow-iw)/2:(oh-ih)/2\" \
     (cursor-show)))
 
 (module+ main
-  (main "/home/debian/下载/test.mp4"))
+  (main "/home/debian/下载/test.mp4.test"))
