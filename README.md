@@ -2,10 +2,29 @@
 
 A terminal user interface library supporting mouse, touchpad, true color, bracketed paste, and window resize events.
 
-## Remote Install
+## Install
+
+### Remote Install (from GitHub)
 
 ```bash
 raco pkg install https://github.com/lu96-wow/racket-tui.git
+```
+
+### Local Install (development mode)
+
+Clone and link-install for development — changes to source files take effect immediately without reinstallation:
+
+```bash
+git clone https://github.com/lu96-wow/racket-tui.git
+cd racket-tui
+raco pkg install --link .
+```
+
+### Uninstall
+
+```bash
+cd racket-tui
+raco pkg remove tui
 ```
 
 ![Demo](a.gif)
