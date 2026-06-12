@@ -1,8 +1,8 @@
 # Racket TUI Library
 
-终端用户界面库，支持鼠标、触摸板、真彩色、括号粘贴和窗口大小变化事件。
+A terminal user interface library supporting mouse, touchpad, true color, bracketed paste, and window resize events.
 
-## 远程安装
+## Remote Install
 
 ```bash
 raco pkg install https://github.com/lu96-wow/racket-tui.git
@@ -10,14 +10,14 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 
 ![Demo](a.gif)
 
-## 快速开始
+## Quick Start
 
 ```racket
 #lang racket
 
 (require tui)
 
-;; 方式1：直接输出（立即显示）
+;; Method 1: Direct output (immediately displayed)
 (with-tui
   (screen-clear)
   (cursor-hide)
@@ -25,7 +25,7 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
   (put-at 5 10 "Direct output")
   (sleep 2))
 
-;; 方式2：批量输出（收集后一次性显示）
+;; Method 2: Batch output (collect then flush at once)
 (with-tui
   (screen-clear)
   (define buffer
@@ -34,18 +34,18 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
      (format-rgb-fg 0 255 0 "Green text")
      (format-cursor-move 6 10)
      (format-256-fg 46 "Bright green")))
-  (put-bytes buffer)  ;; 一次性输出
+  (put-bytes buffer)  ;; flush once
   (sleep 2))
 ```
 
-## 输出系统
+## Output System
 
-### 立即输出函数（put- 前缀）
+### Immediate Output Functions (put- prefix)
 
-直接输出到终端，立即显示：
+Output directly to the terminal, displayed immediately:
 
 ```racket
-;; 基础输出
+;; Basic output
 (put "Hello")
 (put-string "text")
 (put-bytes #"bytes")
@@ -53,7 +53,7 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 (put-byte 65)
 (put-newline)
 
-;; 光标控制
+;; Cursor control
 (cursor-up 1)
 (cursor-down 1)
 (cursor-left 1)
@@ -64,7 +64,7 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 (cursor-hide)
 (cursor-show)
 
-;; 屏幕控制
+;; Screen control
 (screen-clear)
 (screen-clear-below)
 (screen-clear-above)
@@ -74,35 +74,35 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 (buffer-alt-enable)
 (buffer-alt-disable)
 
-;; 位置输出
+;; Positioned output
 (put-at 5 10 "Text")
 (put-at! 5 10 "Text")
 ```
 
-### 颜色输出（立即）
+### Color Output (Immediate)
 
 ```racket
-;; 16色
+;; 16-color
 (fg-red) (bg-blue)
-(put-styled 'error "错误信息")
+(put-styled 'error "Error message")
 
-;; 真彩色（RGB）
-(put-rgb-fg 255 100 0 "橙色文字")
-(put-rgb-bg 0 0 255 "蓝色背景")
-(put-rgb-fg-bg 255 255 0 0 0 255 "黄字蓝底")
+;; True color (RGB)
+(put-rgb-fg 255 100 0 "Orange text")
+(put-rgb-bg 0 0 255 "Blue background")
+(put-rgb-fg-bg 255 255 0 0 0 255 "Yellow text on blue background")
 
-;; 256色
-(put-256-fg 46 "亮绿色")
-(put-256-bg 124 "暗红色背景")
+;; 256-color
+(put-256-fg 46 "Bright green")
+(put-256-bg 124 "Dark red background")
 
-;; 位置颜色输出
-(put-rgb-fg-at 5 10 255 128 0 "橙色文字")
-(put-rgb-fg-at! 5 10 255 128 0 "橙色文字")
+;; Positioned color output
+(put-rgb-fg-at 5 10 255 128 0 "Orange text")
+(put-rgb-fg-at! 5 10 255 128 0 "Orange text")
 ```
 
-## 格式化函数（format- 前缀）
+## Format Functions (format- prefix)
 
-返回字节串而不输出，用于批量收集：
+Return byte strings without outputting, used for batch collection:
 
 ```racket
 (define my-buffer (bytes))
@@ -128,41 +128,41 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 (put-bytes my-buffer)
 ```
 
-## 可用格式化函数列表
+## Available Format Functions
 
-| 函数 | 说明 | 对应输出函数 |
+| Function | Description | Equivalent Output Function |
 |------|------|--------------|
-| (format-cursor-move row col) | 移动光标 | cursor-move |
-| (format-cursor-up n) | 光标上移 | cursor-up |
-| (format-cursor-down n) | 光标下移 | cursor-down |
-| (format-cursor-left n) | 光标左移 | cursor-left |
-| (format-cursor-right n) | 光标右移 | cursor-right |
-| (format-cursor-col n) | 移动到列 | cursor-col |
-| format-cursor-home | 原点 | cursor-home |
-| format-cursor-hide | 隐藏光标 | cursor-hide |
-| format-cursor-show | 显示光标 | cursor-show |
-| format-screen-clear | 清屏 | screen-clear |
-| format-screen-clear-below | 清下方 | screen-clear-below |
-| format-screen-clear-above | 清上方 | screen-clear-above |
-| format-line-clear | 清行 | line-clear |
-| format-line-clear-right | 清右 | line-clear-right |
-| format-line-clear-left | 清左 | line-clear-left |
-| format-buffer-alt-enable | 备用屏开 | buffer-alt-enable |
-| format-buffer-alt-disable | 备用屏关 | buffer-alt-disable |
-| format-reset | 重置 | style-reset |
-| (format-rgb-fg r g b v) | RGB前景 | put-rgb-fg |
-| (format-rgb-bg r g b v) | RGB背景 | put-rgb-bg |
-| (format-rgb-fg-bg fr fg fb br bg bb v) | RGB前后景 | put-rgb-fg-bg |
-| (format-256-fg n v) | 256前景 | put-256-fg |
-| (format-256-bg n v) | 256背景 | put-256-bg |
-| (format-styled style-bytes v) | 样式 | put-styled |
+| (format-cursor-move row col) | Move cursor | cursor-move |
+| (format-cursor-up n) | Cursor up | cursor-up |
+| (format-cursor-down n) | Cursor down | cursor-down |
+| (format-cursor-left n) | Cursor left | cursor-left |
+| (format-cursor-right n) | Cursor right | cursor-right |
+| (format-cursor-col n) | Move to column | cursor-col |
+| format-cursor-home | Home position | cursor-home |
+| format-cursor-hide | Hide cursor | cursor-hide |
+| format-cursor-show | Show cursor | cursor-show |
+| format-screen-clear | Clear screen | screen-clear |
+| format-screen-clear-below | Clear below | screen-clear-below |
+| format-screen-clear-above | Clear above | screen-clear-above |
+| format-line-clear | Clear line | line-clear |
+| format-line-clear-right | Clear right | line-clear-right |
+| format-line-clear-left | Clear left | line-clear-left |
+| format-buffer-alt-enable | Enable alt buffer | buffer-alt-enable |
+| format-buffer-alt-disable | Disable alt buffer | buffer-alt-disable |
+| format-reset | Reset styling | style-reset |
+| (format-rgb-fg r g b v) | RGB foreground | put-rgb-fg |
+| (format-rgb-bg r g b v) | RGB background | put-rgb-bg |
+| (format-rgb-fg-bg fr fg fb br bg bb v) | RGB foreground & background | put-rgb-fg-bg |
+| (format-256-fg n v) | 256 foreground | put-256-fg |
+| (format-256-bg n v) | 256 background | put-256-bg |
+| (format-styled style-bytes v) | Styled text | put-styled |
 
-## 样式系统
+## Style System
 
 ```racket
 (style-define! 'fancy clr-yellow bclr-blue attr-bold attr-underline)
 
-(put-styled 'fancy "组合样式")
+(put-styled 'fancy "Combined style")
 
 (define fancy-bytes
   (call-with-output-bytes
@@ -173,62 +173,62 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 (define styled-text (format-styled fancy-bytes "Styled text"))
 ```
 
-## 输入设计
+## Input Design
 
-`build-input` 是本库推荐的高层输入事件分发 API，通过回调函数方式简化事件处理。
-它封装了底层 `read-event` 的事件判断逻辑，用户只需声明"当 X 事件发生时调用什么函数"即可。
+`build-input` is the recommended high-level event dispatch API, simplifying event handling via callback functions.
+It encapsulates the event classification logic of the underlying `read-event`, so you only need to declare "what function to call when event X occurs".
 
-### 推荐方式：build-input
+### Recommended: build-input
 
-`require tui` 后即可直接使用 `build-input`，无需额外加载：
+Use `build-input` directly after `(require tui)` — no extra require needed:
 
 ```racket
 (require tui)
 
 (define handler
   (build-input
-    #:char      (lambda (ch) (printf "按键: ~a\n" (integer->char ch)))
+    #:char      (lambda (ch) (printf "Key: ~a\n" (integer->char ch)))
     #:up        (lambda ()  (cursor-up 1))
     #:down      (lambda ()  (cursor-down 1))
     #:left      (lambda ()  (cursor-left 1))
     #:right     (lambda ()  (cursor-right 1))
-    #:resize    (lambda (rows cols) (printf "窗口: ~ax~a\n" rows cols))
-    #:mouse-press (lambda (btn x y mods) (printf "鼠标按下 ~a (~a,~a)\n" btn x y))
-    #:any       (lambda (type data mods) (printf "未处理: ~a\n" type))))
+    #:resize    (lambda (rows cols) (printf "Window: ~ax~a\n" rows cols))
+    #:mouse-press (lambda (btn x y mods) (printf "Mouse press ~a (~a,~a)\n" btn x y))
+    #:any       (lambda (type data mods) (printf "Unhandled: ~a\n" type))))
 
-;; 在事件循环中使用
+;; Use in event loop
 (let loop ()
   (let-values ([(type data mods) (read-event)])
     (handler type data mods)
     (loop)))
 ```
 
-所有关键字参数均为可选，支持以下事件：
+All keyword arguments are optional. Supported events:
 
-| 参数 | 回调签名 | 说明 |
-|------|----------|------|
-| `#:char` | `(lambda (ch) ...)` | 普通按键，ch 为 ASCII 值 |
-| `#:utf-char` | `(lambda (str) ...)` | UTF-8 字符 |
-| `#:ctrl` | `(lambda (ch) ...)` | Ctrl+字母，ch 为 `#\A`-`#\Z` |
-| `#:alt` | `(lambda (ch) ...)` | Alt+字母 |
-| `#:mod` | `(lambda (ch ctrl? alt?) ...)` | Ctrl+Alt+组合 |
-| `#:tab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | 特殊键 |
-| `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | 方向键 |
-| `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | 功能键 |
-| `#:mouse-press` | `(lambda (button x y modifiers) ...)` | 鼠标按下，button 为 `'left`/`'middle`/`'right` |
-| `#:mouse-release` | `(lambda (button x y modifiers) ...)` | 鼠标释放 |
-| `#:mouse-move` | `(lambda (x y modifiers) ...)` | 鼠标移动 |
-| `#:mouse-scroll` | `(lambda (dir x y modifiers) ...)` | 滚轮，dir 为 `'up`/`'down` |
-| `#:paste` | `(lambda (data) ...)` | 括号粘贴，data 为 bytes |
-| `#:resize` | `(lambda (rows cols) ...)` | 窗口大小变化 |
-| `#:null` | `(lambda () ...)` | 无输入事件 |
-| `#:any` | `(lambda (type data mods) ...)` | 兜底回调 |
+| Argument | Callback Signature | Description |
+|----------|-------------------|-------------|
+| `#:char` | `(lambda (ch) ...)` | Regular key, ch is the ASCII value |
+| `#:utf-char` | `(lambda (str) ...)` | UTF-8 character |
+| `#:ctrl` | `(lambda (ch) ...)` | Ctrl+letter, ch is `#\A`-`#\Z` |
+| `#:alt` | `(lambda (ch) ...)` | Alt+letter |
+| `#:mod` | `(lambda (ch ctrl? alt?) ...)` | Ctrl+Alt+combination |
+| `#:tab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | Special keys |
+| `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | Arrow keys |
+| `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | Function keys |
+| `#:mouse-press` | `(lambda (button x y modifiers) ...)` | Mouse press, button is `'left`/`'middle`/`'right` |
+| `#:mouse-release` | `(lambda (button x y modifiers) ...)` | Mouse release |
+| `#:mouse-move` | `(lambda (x y modifiers) ...)` | Mouse move |
+| `#:mouse-scroll` | `(lambda (dir x y modifiers) ...)` | Scroll wheel, dir is `'up`/`'down` |
+| `#:paste` | `(lambda (data) ...)` | Bracketed paste, data is bytes |
+| `#:resize` | `(lambda (rows cols) ...)` | Window resize |
+| `#:null` | `(lambda () ...)` | No input event |
+| `#:any` | `(lambda (type data mods) ...)` | Fallback callback |
 
-优先级顺序（内置保证，用户无需关心）：`null > resize > paste > mouse > tab/space/enter/backspace/escape > 方向键 > 功能键 > ctrl > alt > mod > utf8 > char > any`
+Priority order (built-in, users don't need to worry): `null > resize > paste > mouse > tab/space/enter/backspace/escape > arrow keys > function keys > ctrl > alt > mod > utf8 > char > any`
 
-### 底层 API（input.rkt）
+### Low-level API (input.rkt)
 
-如果需要对事件类型做更精细的控制，也可直接使用底层 `read-event` 和事件判断函数：
+If you need finer-grained control over event types, you can also use the low-level `read-event` and event predicate functions directly:
 
 ```racket
 (require tui)
@@ -237,17 +237,17 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
   (cond
     [(event-touch? type)
      (let-values ([(x y) (get-mouse-pos data)])
-       (printf "鼠标 ~a,~a" x y))]
+       (printf "Mouse ~a,~a" x y))]
     [(event-up? type) (cursor-up 1)]
     [(event-ctrl? type) (printf "Ctrl+~a" (ctrl->char data))]
     [(event-utf8? type) (printf "UTF-8: ~a" (event->string data))]
     [(event-resize? type)
      (printf "~a×~a" (get-resize-rows data) (get-resize-cols data))]
     [(event-paste? type)
-     (printf "粘贴: ~a 字节" (bytes-length data))]))
+     (printf "Pasted: ~a bytes" (bytes-length data))]))
 ```
 
-## 生命周期管理
+## Lifecycle Management
 
 ```racket
 (with-tui
@@ -281,14 +281,14 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
        (format-cursor-move 4 0)
        (format-rgb-fg 0 255 0 "Line 3")))
 
-  ;; 拼接所有字节串
+  ;; Concatenate all byte strings
   (define screen (apply bytes-append buffer-content))
 
-  ;; 一次性输出
+  ;; Output all at once
   (put-bytes screen))
 ```
 
-## 完整示例
+## Complete Example
 
 ```racket
 #lang racket
@@ -315,7 +315,7 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
     (build-input
       #:char (lambda (ch)
                (when (= ch (char->integer #\q))
-                 (exit)))))  ;; 按 q 退出
+                 (exit)))))  ;; press q to quit
   (let loop ()
     (draw-ui)
     (let-values ([(type data mods) (read-event)])
@@ -323,30 +323,30 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
       (loop))))
 ```
 
-其他示例在 test 目录下。
+More examples can be found in the `test/` directory.
 
-## 刷新模式
+## Flush Mode
 
 ```racket
-(set-immediate-mode!)    ;; put- 函数立即刷新（默认）
-(set-buffered-mode!)     ;; put- 函数缓冲输出
-(flush)                  ;; 手动触发刷新
+(set-immediate-mode!)    ;; put- functions flush immediately (default)
+(set-buffered-mode!)     ;; put- functions buffer output
+(flush)                  ;; Manual flush
 ```
 
-## 前缀/后缀约定
+## Prefix / Suffix Conventions
 
-| 前缀 | 含义 | 示例 |
-|------|------|------|
-| `put-` | 立即输出到终端 | `put`, `put-string` |
-| `format-` | 返回字节串，配合 `put-bytes` 批量输出 | `format-cursor-move` |
-| `clr-` | 颜色设置（16色） | `clr-red` |
-| `attr-` | 属性设置 | `attr-bold` |
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `put-` | Immediate terminal output | `put`, `put-string` |
+| `format-` | Return byte string, for use with `put-bytes` | `format-cursor-move` |
+| `clr-` | Color setting (16-color) | `clr-red` |
+| `attr-` | Attribute setting | `attr-bold` |
 
-| 后缀 | 含义 | 示例 |
-|------|------|------|
-| `!` | 有副作用（改变光标位置） | `put-at!`, `style-define!` |
-| `?` | 谓词，返回布尔值 | `event-key?`, `terminal?` |
-| `-at` | 带位置参数 | `put-at`, `cursor-move` |
-| `-at!` | 带位置参数 + 有副作用 | `put-at!` |
+| Suffix | Meaning | Example |
+|--------|---------|---------|
+| `!` | Has side effects (changes cursor position) | `put-at!`, `style-define!` |
+| `?` | Predicate, returns boolean | `event-key?`, `terminal?` |
+| `-at` | Positioned parameter | `put-at`, `cursor-move` |
+| `-at!` | Positioned parameter + side effects | `put-at!` |
 
-> waring: only test in xterm/qterminal
+> Note: Only tested in xterm / qterminal.
