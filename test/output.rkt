@@ -3,7 +3,7 @@
 
 (with-tui-nobuffer
     (set-buffered-mode!)
-   (cursor-hide)
+  (cursor-hide)
   ;; 批量构建整个界面
   (define screen
     (bytes-append

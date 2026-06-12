@@ -175,7 +175,64 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 
 ## 输入设计
 
+`build-input` 是本库推荐的高层输入事件分发 API，通过回调函数方式简化事件处理。
+它封装了底层 `read-event` 的事件判断逻辑，用户只需声明"当 X 事件发生时调用什么函数"即可。
+
+### 推荐方式：build-input
+
+`require tui` 后即可直接使用 `build-input`，无需额外加载：
+
 ```racket
+(require tui)
+
+(define handler
+  (build-input
+    #:char      (lambda (ch) (printf "按键: ~a\n" (integer->char ch)))
+    #:up        (lambda ()  (cursor-up 1))
+    #:down      (lambda ()  (cursor-down 1))
+    #:left      (lambda ()  (cursor-left 1))
+    #:right     (lambda ()  (cursor-right 1))
+    #:resize    (lambda (rows cols) (printf "窗口: ~ax~a\n" rows cols))
+    #:mouse-press (lambda (btn x y mods) (printf "鼠标按下 ~a (~a,~a)\n" btn x y))
+    #:any       (lambda (type data mods) (printf "未处理: ~a\n" type))))
+
+;; 在事件循环中使用
+(let loop ()
+  (let-values ([(type data mods) (read-event)])
+    (handler type data mods)
+    (loop)))
+```
+
+所有关键字参数均为可选，支持以下事件：
+
+| 参数 | 回调签名 | 说明 |
+|------|----------|------|
+| `#:char` | `(lambda (ch) ...)` | 普通按键，ch 为 ASCII 值 |
+| `#:utf-char` | `(lambda (str) ...)` | UTF-8 字符 |
+| `#:ctrl` | `(lambda (ch) ...)` | Ctrl+字母，ch 为 `#\A`-`#\Z` |
+| `#:alt` | `(lambda (ch) ...)` | Alt+字母 |
+| `#:mod` | `(lambda (ch ctrl? alt?) ...)` | Ctrl+Alt+组合 |
+| `#:tab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | 特殊键 |
+| `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | 方向键 |
+| `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | 功能键 |
+| `#:mouse-press` | `(lambda (button x y modifiers) ...)` | 鼠标按下，button 为 `'left`/`'middle`/`'right` |
+| `#:mouse-release` | `(lambda (button x y modifiers) ...)` | 鼠标释放 |
+| `#:mouse-move` | `(lambda (x y modifiers) ...)` | 鼠标移动 |
+| `#:mouse-scroll` | `(lambda (dir x y modifiers) ...)` | 滚轮，dir 为 `'up`/`'down` |
+| `#:paste` | `(lambda (data) ...)` | 括号粘贴，data 为 bytes |
+| `#:resize` | `(lambda (rows cols) ...)` | 窗口大小变化 |
+| `#:null` | `(lambda () ...)` | 无输入事件 |
+| `#:any` | `(lambda (type data mods) ...)` | 兜底回调 |
+
+优先级顺序（内置保证，用户无需关心）：`null > resize > paste > mouse > tab/space/enter/backspace/escape > 方向键 > 功能键 > ctrl > alt > mod > utf8 > char > any`
+
+### 底层 API（input.rkt）
+
+如果需要对事件类型做更精细的控制，也可直接使用底层 `read-event` 和事件判断函数：
+
+```racket
+(require tui)
+
 (let-values ([(type data mods) (read-event)])
   (cond
     [(event-touch? type)
@@ -185,9 +242,7 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
     [(event-ctrl? type) (printf "Ctrl+~a" (ctrl->char data))]
     [(event-utf8? type) (printf "UTF-8: ~a" (event->string data))]
     [(event-resize? type)
-     (printf "~a×~a"
-             (get-resize-rows data)
-             (get-resize-cols data))]
+     (printf "~a×~a" (get-resize-rows data) (get-resize-cols data))]
     [(event-paste? type)
      (printf "粘贴: ~a 字节" (bytes-length data))]))
 ```
@@ -256,69 +311,42 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 
 (with-tui
     (cursor-hide)
+  (define handler
+    (build-input
+      #:char (lambda (ch)
+               (when (= ch (char->integer #\q))
+                 (exit)))))  ;; 按 q 退出
   (let loop ()
     (draw-ui)
     (let-values ([(type data mods) (read-event)])
-      (cond [(and (event-key? type)
-                  (let ([b (event->byte data)])
-                    (and b (= b (char->integer #\q)))))
-             (void)]  ;; 退出
-            [else (loop)]))))
+      (handler type data mods)
+      (loop))))
 ```
 
-其他示例在test文件下
+其他示例在 test 目录下。
 
-输入系统补充说明
- 高层事件判断必须优先于底层事件
-
-input.rkt 提供了两类事件判断函数：
-
-    高层语义化判断：event-tab?、event-space?、event-enter?、event-backspace?、event-escape?
-
-    底层类型判断：event-key?、event-ctrl?、event-alt?、event-up?、event-down? 等
-
-重要：高层判断必须写在底层判断之前，否则会被底层判断先捕获而无法触发。
+## 刷新模式
 
 ```racket
-
-;; ✓ 正确写法 - 高层优先
-(let-values ([(type data mods) (read-event)])
-  (cond
-    [(event-tab? type data)     (printf "Tab键\n")]
-    [(event-space? type data)   (printf "空格键\n")]
-    [(event-enter? type data)   (printf "回车键\n")]
-    [(event-key? type)          (printf "普通键: ~a\n" (event->byte data))]
-    [else (void)]))
-
-;; ✗ 错误写法 - event-key? 会先捕获所有按键
-(let-values ([(type data mods) (read-event)])
-  (cond
-    [(event-key? type)          (printf "键: ~a\n" (event->byte data))]  ; 这里会捕获 Tab/空格等
-    [(event-tab? type data)     (printf "Tab键\n")]  ; 永远不会执行
-    [else (void)]))
-
-```
-原因：Tab 键（ASCII 9）、空格键（ASCII 32）、Enter 键（10/13）、Escape（27）在底层都属于 'key 类型，如果 event-key? 写在前面会无条件匹配，导致后续的高层判断失效。
-
-set-immediate-mode! set-buffered-mode!
-用于控制put-函数的刷新行为
-(flush)手动触发刷新
-
-```racket
-(waring: code with Deepseek V4)
+(set-immediate-mode!)    ;; put- 函数立即刷新（默认）
+(set-buffered-mode!)     ;; put- 函数缓冲输出
+(flush)                  ;; 手动触发刷新
 ```
 
-only test in xterm qterminal
+## 前缀/后缀约定
 
-前缀约定
-format- 返回字符串或bytes
-不立即输出，配合put 一次性输出
-put接受任意参数自动转换
+| 前缀 | 含义 | 示例 |
+|------|------|------|
+| `put-` | 立即输出到终端 | `put`, `put-string` |
+| `format-` | 返回字节串，配合 `put-bytes` 批量输出 | `format-cursor-move` |
+| `clr-` | 颜色设置（16色） | `clr-red` |
+| `attr-` | 属性设置 | `attr-bold` |
 
-后缀约定
 | 后缀 | 含义 | 示例 |
-|----|------------------|-----------|
-| !	| 有副作用（改变光标位置） | 	put-at!, style-define!|
-| ?	| 谓词，返回布尔值 |	event-key?, terminal? |
-| -at |	带位置参数 | put-at, cursor-move |
-| -at!	| 带位置参数 + 有副作用	| put-at! |
+|------|------|------|
+| `!` | 有副作用（改变光标位置） | `put-at!`, `style-define!` |
+| `?` | 谓词，返回布尔值 | `event-key?`, `terminal?` |
+| `-at` | 带位置参数 | `put-at`, `cursor-move` |
+| `-at!` | 带位置参数 + 有副作用 | `put-at!` |
+
+> waring: only test in xterm/qterminal
