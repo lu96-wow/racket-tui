@@ -243,8 +243,6 @@
 ;; resize 监控 — green thread 100ms 轮询, 变化时写 resize-channel 唤醒 sync
 ;; sync 统一等 stdin-evt + resize-channel, 调度器协作, 零 CPU
 
-(define resize-thread #f)
-
 (define (resize-monitor-start)
   (let-values ([(r c) (get-window-size)])
     (thread (λ () (let loop ([pr r] [pc c])
@@ -253,9 +251,6 @@
                       (when (and nr nc (or (not (= nr pr)) (not (= nc pc))))
                         (resize-notify! (cons nr nc)))
                       (loop (or nr pr) (or nc pc))))))))
-
-(define (resize-monitor-stop t)
-  (when t (kill-thread t)))
 
 ;; read-event — sync 统一等 stdin 和 resize channel
 ;; 阻塞模式, 零 CPU, 等价于 ncurses getch()
@@ -375,18 +370,9 @@
 (define (event->byte d)
   (and (= (bytes-length d) 1) (bytes-ref d 0)))
 
-;; 初始化和清理 — tui.rkt 调用
-
-(define (input-init!)
-  (set! resize-thread (resize-monitor-start)))
-
-(define (input-cleanup!)
-  (resize-monitor-stop resize-thread)
-  (set! resize-thread #f))
-
 ;; 导出
 
-(provide input-init! input-cleanup!
+(provide resize-monitor-start
          read-event read-event-nonblock
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?

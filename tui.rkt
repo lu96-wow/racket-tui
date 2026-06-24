@@ -8,37 +8,32 @@
 (define (tui-init)
   (unless (terminal?) (error "tui-init: not a terminal"))
   (enter-raw-mode!)
-  (input-init!)
+  (resize-monitor-start)
   (buffer-alt-enable)
-  ;; 初始化鼠标和括号粘贴支持
   (enable-mouse!)
   (enable-bracketed-paste!))
 
 (define (tui-init-no-buffer)
   (unless (terminal?) (error "tui-init: not a terminal"))
   (enter-raw-mode!)
-  (input-init!)
-  ;; 初始化鼠标和括号粘贴支持
+  (resize-monitor-start)
   (enable-mouse!)
   (enable-bracketed-paste!))
 
+;; dynamic-wind 保证 tui-exit 必定执行, resize 线程随进程退出自然回收
 (define (tui-exit)
-  ;; 先禁用鼠标和括号粘贴
   (disable-bracketed-paste!)
   (disable-mouse!)
   (cursor-show)
   (style-reset)
   (buffer-alt-disable)
-  (input-cleanup!)
   (exit-raw-mode!))
 
 (define (tui-exit-no-buffer)
-  ;; 先禁用鼠标和括号粘贴
   (disable-bracketed-paste!)
   (disable-mouse!)
   (cursor-show)
   (style-reset)
-  (input-cleanup!)
   (exit-raw-mode!))
 
 ;; 鼠标支持
