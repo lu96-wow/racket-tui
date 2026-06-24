@@ -59,12 +59,13 @@
   (put-styled-at 25 6 'success "样式+绝对位置")
 
 
+  ;; read-event 内部使用 select() 阻塞等待, 零 CPU
   (let loop ()
-    (change-block)
-    (define b (getc))
-    (cond
-      [(= b (char->integer #\q)) (void)]
-      [(= b (char->integer #\t))
-       (screen-clear)
-       (loop)]
-      [else (loop)])))
+    (let-values ([(type data mods) (read-event)])
+      (cond [(and (event-key? type)
+                  (= (event->byte data) (char->integer #\q))) (void)]
+            [(and (event-key? type)
+                  (= (event->byte data) (char->integer #\t)))
+             (screen-clear)
+             (loop)]
+            [else (loop)]))))

@@ -1,5 +1,5 @@
 #lang racket
-(require "base.rkt" "resize.rkt" "autoresources.rkt")
+(require "base.rkt" "resize.rkt")
 
 ;; 常量定义 - 全部使用数字
 
@@ -146,20 +146,20 @@
         (list action 'scroll scroll-direction (- x 1) (- y 1) modifiers)
         (list action button (- x 1) (- y 1) modifiers))))
 
-;; 内部读取函数
+;; 内部读取函数 — 使用 select-based 阻塞读取, 零 CPU 轮询
 
 (define (read-n-bytes count)
   (let loop ([n 0] [acc (bytes)])
     (if (>= n count) acc
-        (let ([b (getc)])
-          (if (integer? b)
+        (let ([b (read-byte-stdin)])
+          (if b
               (loop (+ n 1) (bytes-append acc (bytes b)))
               acc)))))
 
 (define (read-csi-seq b2)
   (let loop ([acc (list ESC b2)])
-    (let ([b (getc)])
-      (if (integer? b)
+    (let ([b (read-byte-stdin)])
+      (if b
           (let ([acc (append acc (list b))])
             (if (csi-done? b) (list->bytes acc) (loop acc)))
           (list->bytes acc)))))
@@ -167,45 +167,43 @@
 ;; 读取粘贴内容
 (define (read-paste-content)
   (let loop ([acc (bytes)])
-    (define b (getc))
-    (cond [(eq? b 'null) acc]
+    (define b (read-byte-stdin))
+    (cond [(not b) acc]
           [(= b ESC)
-           (define b2 (getc))
-           (cond [(eq? b2 'null)
+           (define b2 (read-byte-stdin))
+           (cond [(not b2)
                   (bytes-append acc (bytes ESC))]
                  [(= b2 CSI-OPEN)
-                  (define b3 (getc))
-                  (define b4 (getc))
-                  (define b5 (getc))
-                  (if (and (integer? b3) (integer? b4) (integer? b5)
+                  (define b3 (read-byte-stdin))
+                  (define b4 (read-byte-stdin))
+                  (define b5 (read-byte-stdin))
+                  (if (and b3 b4 b5
                            (= b3 BRACKETED-PASTE-END-1)
                            (= b4 BRACKETED-PASTE-END-2)
                            (= b5 BRACKETED-PASTE-END-3))
-                      (begin (getc) acc)  ; consume the final ~
+                      (begin (read-byte-stdin) acc)  ; consume final ~
                       (loop (bytes-append acc
-                                          (bytes ESC)
-                                          (bytes b2)
-                                          (if (integer? b3) (bytes b3) (bytes))
-                                          (if (integer? b4) (bytes b4) (bytes))
-                                          (if (integer? b5) (bytes b5) (bytes)))))]
+                                          (bytes ESC) (bytes b2)
+                                          (if b3 (bytes b3) (bytes))
+                                          (if b4 (bytes b4) (bytes))
+                                          (if b5 (bytes b5) (bytes)))))]
                  [else
                   (loop (bytes-append acc (bytes ESC) (bytes b2)))])]
           [else
            (loop (bytes-append acc (bytes b)))])))
 
-;; read-event 核心实现
+;; read-event 核心实现 — 解析首个字节, 后续字节用 read-byte-stdin
+;; 不再需要 change-block / change-noblock, select 本身就是阻塞的
 
-(define (read-event-impl)
-  (define first (getc))
-  (cond [(eq? first 'null) (values 'null (bytes) #f)]
-        [(ctrl-char? first) (values 'ctrl (bytes first) #f)]
+(define (read-event-impl first)
+  (cond [(ctrl-char? first) (values 'ctrl (bytes first) #f)]
         [(= first ESC)
-         (change-block)
-         (define b2 (getc))
-         (cond [(eq? b2 'null) (change-noblock) (values 'key (bytes first) #f)]
+         ;; select 保证了后续字节可用, 直接阻塞读
+         (define b2 (read-byte-stdin))
+         (cond [(not b2) (values 'key (bytes first) #f)]
                [(= b2 CSI-SS3)
-                (define b3 (getc)) (change-noblock)
-                (values 'seq (bytes first b2 (if (eq? b3 'null) '() b3)) #f)]
+                (define b3 (read-byte-stdin))
+                (values 'seq (bytes first b2 (if b3 b3 '())) #f)]
                [(= b2 CSI-OPEN)
                 (define seq (read-csi-seq b2))
                 (let-values ([(ps final) (parse-csi-params seq)])
@@ -216,32 +214,27 @@
                           (= (bytes-ref seq 3) BRACKETED-PASTE-START-2)
                           (= (bytes-ref seq 4) BRACKETED-PASTE-START-3))
                      (define content (read-paste-content))
-                     (change-noblock)
                      (values 'paste content #f)]
                     [(and (memv final (list MOUSE-EVENT MOUSE-RELEASE))
                           (>= (length ps) 3))
-                     (change-noblock)
                      (values 'mouse (parse-mouse-event ps final) #f)]
                     [else
-                     (change-noblock)
                      (define mods (extract-modifiers ps))
                      (if (or (car mods) (cdr mods))
                          (values 'mod-seq seq mods)
                          (values (csi-params-final->type ps final) seq #f))]))]
                [(<= ASCII-PRINTABLE-START b2 ASCII-PRINTABLE-END)
-                (change-noblock)
                 (values 'alt (bytes first b2) #f)]
-               [else (change-noblock) (values 'seq (bytes first b2) #f)])]
+               [else (values 'seq (bytes first b2) #f)])]
         [(utf8-multi-start? first)
-         (change-block)
          (define rest (read-n-bytes (sub1 (utf8-length first))))
-         (change-noblock)
          (values 'utf8 (bytes-append (bytes first) rest) #f)]
         [else (values 'key (bytes first) #f)]))
 
-;; resize 监控
+;; resize 监控 — ncurses 风格: 独立线程 100ms 轮询, 变化时写 self-pipe 唤醒 select
+;; select 统一等 stdin + resize fd, 主线程零 CPU 空转
 
-(define resize-channel (make-channel))
+(define resize-thread #f)
 
 (define (resize-monitor-start)
   (let-values ([(r c) (get-window-size)])
@@ -249,17 +242,35 @@
                     (sleep 0.1)
                     (let-values ([(nr nc) (get-window-size)])
                       (when (and nr nc (or (not (= nr pr)) (not (= nc pc))))
-                        (channel-put resize-channel (cons nr nc)))
+                        (resize-notify!))
                       (loop (or nr pr) (or nc pc))))))))
 
-(define (resize-monitor-stop t) (kill-thread t))
-(register-thread! 'resize resize-monitor-start resize-monitor-stop)
+(define (resize-monitor-stop t)
+  (when t (kill-thread t)))
 
-(define (check-resize!) (channel-try-get resize-channel))
-
+;; read-event — ncurses 风格: select() 统一等待 stdin 和 resize
+;; 阻塞模式, 零 CPU 占用, 类似 ncurses getch()
 (define (read-event)
-  (let ([ri (check-resize!)])
-    (if ri (values 'resize ri #f) (read-event-impl))))
+  (let-values ([(kind val) (select-read)])
+    (case kind
+      [(resize)
+       (let-values ([(rows cols) (get-window-size)])
+         (values 'resize (cons rows cols) #f))]
+      [(byte) (read-event-impl val)]
+      [(eof)  (values 'null (bytes) #f)]
+      [else   (values 'null (bytes) #f)])))
+
+;; 非阻塞版本, 类似 ncurses timeout(0) 后的 getch()
+;; 无事件时返回 'null, 用于动画帧循环
+(define (read-event-nonblock)
+  (let-values ([(kind val) (select-read-nonblock)])
+    (case kind
+      [(resize)
+       (let-values ([(rows cols) (get-window-size)])
+         (values 'resize (cons rows cols) #f))]
+      [(byte) (read-event-impl val)]
+      [(timeout) (values 'null (bytes) #f)]
+      [else      (values 'null (bytes) #f)])))
 
 ;; 底层事件类型判断
 
@@ -357,9 +368,19 @@
 (define (event->byte d)
   (and (= (bytes-length d) 1) (bytes-ref d 0)))
 
+;; 初始化和清理 — tui.rkt 调用
+
+(define (input-init!)
+  (set! resize-thread (resize-monitor-start)))
+
+(define (input-cleanup!)
+  (resize-monitor-stop resize-thread)
+  (set! resize-thread #f))
+
 ;; 导出
 
-(provide read-event
+(provide input-init! input-cleanup!
+         read-event read-event-nonblock
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?
          event-del? event-insert? event-home? event-end? event-pageup? event-pagedown?

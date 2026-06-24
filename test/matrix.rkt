@@ -70,31 +70,30 @@
 
     (let loop ()
       (when running?
-        (change-noblock)
+        ;; read-event-nonblock 内部使用 select(timeout=0), 不阻塞
         (let drain ()
-          (let-values ([(type data mods) (read-event)])
+          (let-values ([(type data mods) (read-event-nonblock)])
             (cond [(event-null? type) (void)]
+                  [(event-resize? type)
+                   (let-values ([(nr nc) (get-resize-size data)])
+                     (set! rows nr)
+                     (set! cols nc)
+                     (set! active-cols (for/list ([c (in-range 0 nc 3)]) c))
+                     (define new-drops (make-vector nc -10))
+                     (define new-tails (make-vector nc 0))
+                     (for ([c (in-range 0 (min nc (vector-length drops)))])
+                       (vector-set! new-drops c (vector-ref drops c))
+                       (vector-set! new-tails c (vector-ref tails c)))
+                     (for ([c active-cols])
+                       (when (>= c (vector-length drops))
+                         (vector-set! new-drops c (- (random nr)))
+                         (vector-set! new-tails c (+ 4 (random 6)))))
+                     (set! drops new-drops)
+                     (set! tails new-tails))
+                   (drain)]
                   [(and (event-key? type) (= (event->byte data) (char->integer #\q)))
                    (set! running? #f)]
                   [else (drain)])))
-
-        (let-values ([(new-rows new-cols) (get-window-size)])
-          (when (and new-rows new-cols
-                     (or (not (= new-rows rows)) (not (= new-cols cols))))
-            (set! rows new-rows)
-            (set! cols new-cols)
-            (set! active-cols (for/list ([c (in-range 0 cols 3)]) c))
-            (define new-drops (make-vector cols -10))
-            (define new-tails (make-vector cols 0))
-            (for ([c (in-range 0 (min cols (vector-length drops)))])
-              (vector-set! new-drops c (vector-ref drops c))
-              (vector-set! new-tails c (vector-ref tails c)))
-            (for ([c active-cols])
-              (when (>= c (vector-length drops))
-                (vector-set! new-drops c (- (random rows)))
-                (vector-set! new-tails c (+ 4 (random 6)))))
-            (set! drops new-drops)
-            (set! tails new-tails)))
 
         (define frame (generate-frame rows cols drops tails active-cols))
         (put-bytes frame)

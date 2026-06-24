@@ -1,15 +1,16 @@
 #lang racket
 
 (require "base.rkt"
-         "autoresources.rkt"
+         "input.rkt"
          "output.rkt"
          "output-color.rkt")
 
 (define (tui-init)
   (unless (terminal?) (error "tui-init: not a terminal"))
   (enter-raw-mode!)
-  (start-thread! 'input)
-  (start-thread! 'resize)
+  ;; 初始化 select-based I/O: pipe + resize 监控线程
+  (resize-pipe-init!)
+  (input-init!)
   (buffer-alt-enable)
   ;; 初始化鼠标和括号粘贴支持
   (enable-mouse!)
@@ -18,8 +19,9 @@
 (define (tui-init-no-buffer)
   (unless (terminal?) (error "tui-init: not a terminal"))
   (enter-raw-mode!)
-  (start-thread! 'input)
-  (start-thread! 'resize)
+  ;; 初始化 select-based I/O: pipe + resize 监控线程
+  (resize-pipe-init!)
+  (input-init!)
   ;; 初始化鼠标和括号粘贴支持
   (enable-mouse!)
   (enable-bracketed-paste!))
@@ -31,7 +33,8 @@
   (cursor-show)
   (style-reset)
   (buffer-alt-disable)
-  (stop-all!)
+  (input-cleanup!)
+  (resize-pipe-cleanup!)
   (exit-raw-mode!))
 
 (define (tui-exit-no-buffer)
@@ -40,7 +43,8 @@
   (disable-mouse!)
   (cursor-show)
   (style-reset)
-  (stop-all!)
+  (input-cleanup!)
+  (resize-pipe-cleanup!)
   (exit-raw-mode!))
 
 ;; 鼠标支持
