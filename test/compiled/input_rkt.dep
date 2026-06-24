@@ -1,1 +1,0 @@
-("9.2" ta6le ("828daa15e37f4ac83a9baaf989c80091ac986cc7" . "14437976161a235f5a8491feaf6b36bc9a5ebf6b") #"/home/debian/work/tui/test/../build-input.rkt" #"/home/debian/work/tui/test/../main.rkt" (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt") (indirect collects #"racket" #"match" #"gen-match.rkt") (indirect collects #"racket" #"match" #"parse.rkt"))
