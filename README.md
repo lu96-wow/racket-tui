@@ -17,7 +17,7 @@ Clone and link-install for development — changes to source files take effect i
 ```bash
 git clone https://github.com/lu96-wow/racket-tui.git
 cd racket-tui
-raco pkg install --link .
+raco pkg install --link
 ```
 
 ### Uninstall
