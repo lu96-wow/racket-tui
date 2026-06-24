@@ -3,11 +3,21 @@
 (require "base.rkt"
          "input.rkt"
          "output.rkt"
-         "output-color.rkt")
+         "output-color.rkt"
+         "ansi-var.rkt")
+
+;; 进入 raw 模式后 OPOST/ONLCR 被关闭，换行需手动 \r\n
+(define (init-newline-var)
+  (set-box! newline-var "\r\n"))
+
+;; 退出 raw 模式后恢复普通换行（终端 ONLCR 会自动补 \r）
+(define (reset-newline-var)
+  (set-box! newline-var "\n"))
 
 (define (tui-init)
   (unless (terminal?) (error "tui-init: not a terminal"))
   (enter-raw-mode!)
+  (init-newline-var)
   (resize-monitor-start)
   (buffer-alt-enable)
   (enable-mouse!)
@@ -16,6 +26,7 @@
 (define (tui-init-no-buffer)
   (unless (terminal?) (error "tui-init: not a terminal"))
   (enter-raw-mode!)
+  (init-newline-var)
   (resize-monitor-start)
   (enable-mouse!)
   (enable-bracketed-paste!))
@@ -27,14 +38,16 @@
   (cursor-show)
   (style-reset)
   (buffer-alt-disable)
-  (exit-raw-mode!))
+  (exit-raw-mode!)
+  (reset-newline-var))
 
 (define (tui-exit-no-buffer)
   (disable-bracketed-paste!)
   (disable-mouse!)
   (cursor-show)
   (style-reset)
-  (exit-raw-mode!))
+  (exit-raw-mode!)
+  (reset-newline-var))
 
 ;; 鼠标支持
 (define (enable-mouse!)
@@ -86,6 +99,7 @@
 
 (provide tui-init tui-exit
          tui-init-no-buffer tui-exit-no-buffer
+         init-newline-var reset-newline-var
          with-tui with-tui-nobuffer
          enable-mouse! disable-mouse!
          enable-bracketed-paste! disable-bracketed-paste!)

@@ -1,7 +1,8 @@
 #lang racket
 
 (require "ansi-format.rkt"
-         "cursor-state.rkt")
+         "cursor-state.rkt"
+         "ansi-var.rkt")
 
 ;; 核心输出函数（可切换缓冲模式）
 (define current-write-bytes (λ (bs) (write-bytes bs) (flush-output)))
@@ -37,7 +38,7 @@
         [else (void)]))
 
 (define (put-newline)
-  (put-string "\r\n")
+  (put-string (unbox newline-var))
   (set-cursor! (+ current-cursor-row 1) 0))
 
 ;; 光标控制
