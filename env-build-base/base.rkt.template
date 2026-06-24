@@ -13,16 +13,16 @@
 (define isatty    (get-ffi-obj 'isatty    libc (_fun _int -> _int)))
 
 (define STDIN_FILENO 0)
-(define TCSAFLUSH 2)
-(define TERMIOS-SIZE 60)
-(define ICANON 2) (define ECHO   8)
-(define ISIG   1)   (define IEXTEN 32768)
-(define IXON   1024)   (define OPOST  1)
-(define ICRNL  256)  (define INLCR  64)
-(define IGNCR  128)  (define OCRNL  8)
-(define ONLCR  4)
-(define VMIN 6)     (define VTIME 5)
-(define LFLAG-OFFSET 12) (define IFLAG-OFFSET 0) (define OFLAG-OFFSET 4)
+(define TCSAFLUSH @TCSAFLUSH@)
+(define TERMIOS-SIZE @TERMIOS-SIZE@)
+(define ICANON @ICANON@) (define ECHO   @ECHO@)
+(define ISIG   @ISIG@)   (define IEXTEN @IEXTEN@)
+(define IXON   @IXON@)   (define OPOST  @OPOST@)
+(define ICRNL  @ICRNL@)  (define INLCR  @INLCR@)
+(define IGNCR  @IGNCR@)  (define OCRNL  @OCRNL@)
+(define ONLCR  @ONLCR@)
+(define VMIN @VMIN@)     (define VTIME @VTIME@)
+(define LFLAG-OFFSET @LFLAG-OFFSET@) (define IFLAG-OFFSET @IFLAG-OFFSET@) (define OFLAG-OFFSET @OFLAG-OFFSET@)
 
 (define (make-termios) (make-bytes TERMIOS-SIZE 0))
 (define (copy-termios src) (define dst (make-termios)) (bytes-copy! dst 0 src 0 TERMIOS-SIZE) dst)
@@ -41,7 +41,7 @@
 (define (oflag-set! t v) (flag-set! t OFLAG-OFFSET v))
 
 (define (set-vmin-vtime! t vmin vtime)
-  (bytes-set! t (+ 17 VMIN) vmin) (bytes-set! t (+ 17 VTIME) vtime) t)
+  (bytes-set! t (+ @CC-OFFSET@ VMIN) vmin) (bytes-set! t (+ @CC-OFFSET@ VTIME) vtime) t)
 
 ;; ════════════════════════════════════════════════════════════════
 ;; sync 多路复用 — Racket 等价于 select(STDIN, resize_fd)
