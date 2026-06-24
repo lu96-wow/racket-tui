@@ -1,0 +1,1 @@
+("9.2" ta6le ("23cd8e09a87bbe5b1e2f5ecf017c8d7660dc56d6" . "415915cec128fb869c294d50fcd5efa749872f65") #"/home/debian/work/tui/test/../main.rkt" #"/home/debian/work/tui/test/../output-styles.rkt" (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))

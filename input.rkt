@@ -1,5 +1,5 @@
 #lang racket
-(require "base.rkt" "resize.rkt")
+(require "base.rkt" "resize.rkt" "config.rkt")
 
 ;; 常量定义 - 全部使用数字
 
@@ -146,52 +146,73 @@
         (list action 'scroll scroll-direction (- x 1) (- y 1) modifiers)
         (list action button (- x 1) (- y 1) modifiers))))
 
-;; 内部读取函数 — read-byte 与 Racket 调度器协作
+;; ════════════════════════════════════════════════════════════════
+;; ncurses ESCDELAY 超时机制 — 解决独立 ESC 空转 + 防御性上限
+;; ════════════════════════════════════════════════════════════════
+
+;; ESCDELAY / CSI-MAX-BYTES / PASTE-MAX-BYTES 见 config.rkt
+
+;; 带超时的单字节读取, 绝不空转 (sync/timeout 与调度器协作)
+;; 返回 byte 或 #f (超时/EOF)
+(define (read-byte/timeout timeout-sec)
+  (define evt (sync/timeout timeout-sec (make-stdin-evt)))
+  (and (bytes? evt) (= (bytes-length evt) 1) (bytes-ref evt 0)))
+
+;; 内部解析函数
 
 (define (read-n-bytes count)
   (let loop ([n 0] [acc (bytes)])
     (if (>= n count) acc
-        (let ([b (read-byte)])
-          (loop (+ n 1) (bytes-append acc (bytes b)))))))
+        (let ([b (read-byte/timeout UTF8-READ-TIMEOUT)])
+          (if b
+              (loop (+ n 1) (bytes-append acc (bytes b)))
+              acc)))))
 
 (define (read-csi-seq b2)
-  (let loop ([acc (list ESC b2)])
-    (let ([b (read-byte)])
-      (let ([acc (append acc (list b))])
-        (if (csi-done? b) (list->bytes acc) (loop acc))))))
+  (let loop ([acc (list ESC b2)] [left CSI-MAX-BYTES])
+    (if (zero? left)
+        (list->bytes acc)
+        (let ([b (read-byte/timeout ESCDELAY)])
+          (cond [(not b) (list->bytes acc)]
+                [(csi-done? b) (list->bytes (append acc (list b)))]
+                [else (loop (append acc (list b)) (sub1 left))])))))
 
-;; 读取粘贴内容
 (define (read-paste-content)
-  (let loop ([acc (bytes)])
-    (define b (read-byte))
-    (cond [(= b ESC)
-           (define b2 (read-byte))
-           (cond [(= b2 CSI-OPEN)
-                  (define b3 (read-byte))
-                  (define b4 (read-byte))
-                  (define b5 (read-byte))
-                  (if (and (= b3 BRACKETED-PASTE-END-1)
-                           (= b4 BRACKETED-PASTE-END-2)
-                           (= b5 BRACKETED-PASTE-END-3))
-                      (begin (read-byte) acc)  ; consume final ~
-                      (loop (bytes-append acc
-                                          (bytes ESC) (bytes b2)
-                                          (bytes b3) (bytes b4) (bytes b5))))]
-                 [else
-                  (loop (bytes-append acc (bytes ESC) (bytes b2)))])]
-          [else
-           (loop (bytes-append acc (bytes b)))])))
+  (let loop ([acc (bytes)] [left PASTE-MAX-BYTES])
+    (if (zero? left) acc
+        (let ([b (read-byte/timeout PASTE-READ-TIMEOUT)])
+          (cond [(not b) acc]
+              [(= b ESC)
+               (define b2 (read-byte/timeout ESCDELAY))
+               (cond [(not b2) (bytes-append acc (bytes ESC))]
+                     [(= b2 CSI-OPEN)
+                      (define b3 (read-byte/timeout ESCDELAY))
+                      (define b4 (read-byte/timeout ESCDELAY))
+                      (define b5 (read-byte/timeout ESCDELAY))
+                      (if (and b3 b4 b5
+                               (= b3 BRACKETED-PASTE-END-1)
+                               (= b4 BRACKETED-PASTE-END-2)
+                               (= b5 BRACKETED-PASTE-END-3))
+                          (begin (read-byte/timeout ESCDELAY) acc)
+                          (loop (bytes-append acc
+                                   (bytes ESC) (bytes b2)
+                                   (bytes b3) (bytes b4) (bytes b5))
+                                (sub1 left)))]
+                     [else (loop (bytes-append acc (bytes ESC) (bytes b2))
+                                 (sub1 left))])]
+              [else (loop (bytes-append acc (bytes b))
+                          (sub1 left))])))))
 
-;; read-event 核心实现 — 解析首个字节, 后续字节用 read-byte
-;; sync 已确保 stdin 有数据, 后续 read-byte 不会饥饿
+;; read-event 核心 — ESC 后用 ESCDELAY 超时区分独立 ESC vs 序列
 
 (define (read-event-impl first)
   (cond [(ctrl-char? first) (values 'ctrl (bytes first) #f)]
         [(= first ESC)
-         (define b2 (read-byte))
-         (cond [(= b2 CSI-SS3)
-                (define b3 (read-byte))
-                (values 'seq (bytes first b2 b3) #f)]
+         (define b2 (read-byte/timeout ESCDELAY))
+         (cond [(not b2) (values 'key (bytes first) #f)]    ; 独立 ESC
+               [(= b2 CSI-SS3)
+                (define b3 (read-byte/timeout ESCDELAY))
+                (values 'seq (bytes first b2 (if b3 b3 '())) #f)]
                [(= b2 CSI-OPEN)
                 (define seq (read-csi-seq b2))
                 (let-values ([(ps final) (parse-csi-params seq)])
@@ -227,7 +248,7 @@
 (define (resize-monitor-start)
   (let-values ([(r c) (get-window-size)])
     (thread (λ () (let loop ([pr r] [pc c])
-                    (sleep 0.1)
+                    (sleep RESIZE-POLL-INTERVAL)
                     (let-values ([(nr nc) (get-window-size)])
                       (when (and nr nc (or (not (= nr pr)) (not (= nc pc))))
                         (resize-notify! (cons nr nc)))

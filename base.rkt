@@ -75,10 +75,11 @@
     (tcsetattr STDIN_FILENO TCSAFLUSH saved-terminal)
     (set! saved-terminal #f)))
 
-(provide terminal? enter-raw-mode! exit-raw-mode!
-         make-stdin-evt resize-channel resize-notify!
-         STDIN_FILENO)
 (define (oflag-set! t v) (flag-set! t OFLAG-OFFSET v))
 
 (define (set-vmin-vtime! t vmin vtime)
   (bytes-set! t (+ 17 VMIN) vmin) (bytes-set! t (+ 17 VTIME) vtime) t)
+
+(provide terminal? enter-raw-mode! exit-raw-mode!
+         make-stdin-evt resize-channel resize-notify!
+         STDIN_FILENO)
