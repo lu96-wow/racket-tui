@@ -66,23 +66,10 @@ read-event → sync(stdin, resize-channel) → 返回首字节
 
 ---
 
-## 🟢 6. `make-stdin-evt` 每次调用创建新对象
+## ❌ 6. `make-stdin-evt` 每次调用创建新对象 (不是错误)
 
-**文件**: base.rkt (47-48)
-**影响**: 每条 `read-event` 循环分配一个新 synchronizable event
-
-```racket
-(define (make-stdin-evt)
-  (read-bytes-evt 1 (current-input-port)))   ;; ← 每次调用都 new
-
-(define (read-event)
-  (define evt (sync (make-stdin-evt) resize-channel))  ;; 每条循环 new
-  ...)
-```
-
-**修复方向**:
-- [ ] 缓存 stdin-evt 到模块变量: `(define stdin-evt (make-stdin-evt))`
-- [ ] 注意: `read-bytes-evt` 一次性的，需要每次 sync 后重新创建，但当前做法是对的
+`read-bytes-evt` 设计即为一次性事件。sync 消费后失效，必须重建。
+与 Unix poll/select 每次调用必须重新填 fd_set 同理。
 
 ---
 

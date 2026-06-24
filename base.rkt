@@ -38,6 +38,10 @@
 (define (iflag-ref t) (flag-ref t IFLAG-OFFSET))
 (define (iflag-set! t v) (flag-set! t IFLAG-OFFSET v))
 (define (oflag-ref t) (flag-ref t OFLAG-OFFSET))
+(define (oflag-set! t v) (flag-set! t OFLAG-OFFSET v))
+
+(define (set-vmin-vtime! t vmin vtime)
+  (bytes-set! t (+ 17 VMIN) vmin) (bytes-set! t (+ 17 VTIME) vtime) t)
 
 ;; ════════════════════════════════════════════════════════════════
 ;; sync 多路复用 — Racket 等价于 select(STDIN, resize_fd)
@@ -74,11 +78,6 @@
   (when saved-terminal
     (tcsetattr STDIN_FILENO TCSAFLUSH saved-terminal)
     (set! saved-terminal #f)))
-
-(define (oflag-set! t v) (flag-set! t OFLAG-OFFSET v))
-
-(define (set-vmin-vtime! t vmin vtime)
-  (bytes-set! t (+ 17 VMIN) vmin) (bytes-set! t (+ 17 VTIME) vtime) t)
 
 (provide terminal? enter-raw-mode! exit-raw-mode!
          make-stdin-evt resize-channel resize-notify!

@@ -3,7 +3,7 @@
          "../build-input.rkt")
 
 (with-tui-nobuffer
-    (screen-clear)
+  (screen-clear)
   (put-string "╔══════════════════════════════════════╗") (put-newline)
   (put-string "║   输入 API 测试 (build-input 简化版)   ║") (put-newline)
   (put-string "║   按 q 退出                           ║") (put-newline)
@@ -73,12 +73,12 @@
       #:mouse-press (lambda (btn x y mods)
                       (set! mouse-count (add1 mouse-count))
                       (update-status-line
-                       mouse-status-line
-                       (format "鼠标 #~a: 按下 ~a 位置:(~a,~a)"
-                               mouse-count btn x y)
-                       (if (> mods 0)
-                           (format " 修饰键:~a" mods)
-                           ""))
+                        mouse-status-line
+                        (format "鼠标 #~a: 按下 ~a 位置:(~a,~a)"
+                                mouse-count btn x y)
+                        (if (> mods 0)
+                            (format " 修饰键:~a" mods)
+                            ""))
                       (log-event (format "mouse press ~a (~a,~a)" btn x y)
                                  (if (> mods 0)
                                      (format " mods:~a" mods)
@@ -86,12 +86,12 @@
       #:mouse-release (lambda (btn x y mods)
                         (set! mouse-count (add1 mouse-count))
                         (update-status-line
-                         mouse-status-line
-                         (format "鼠标 #~a: 释放 ~a 位置:(~a,~a)"
-                                 mouse-count btn x y)
-                         (if (> mods 0)
-                             (format " 修饰键:~a" mods)
-                             ""))
+                          mouse-status-line
+                          (format "鼠标 #~a: 释放 ~a 位置:(~a,~a)"
+                                  mouse-count btn x y)
+                          (if (> mods 0)
+                              (format " 修饰键:~a" mods)
+                              ""))
                         (log-event (format "mouse release ~a (~a,~a)" btn x y)
                                    (if (> mods 0)
                                        (format " mods:~a" mods)
@@ -99,12 +99,12 @@
       #:mouse-move (lambda (x y mods)
                      (set! mouse-count (add1 mouse-count))
                      (update-status-line
-                      mouse-status-line
-                      (format "鼠标 #~a: 移动 位置:(~a,~a)"
-                              mouse-count x y)
-                      (if (> mods 0)
-                          (format " 修饰键:~a" mods)
-                          ""))
+                       mouse-status-line
+                       (format "鼠标 #~a: 移动 位置:(~a,~a)"
+                               mouse-count x y)
+                       (if (> mods 0)
+                           (format " 修饰键:~a" mods)
+                           ""))
                      (log-event (format "mouse move (~a,~a)" x y)
                                 (if (> mods 0)
                                     (format " mods:~a" mods)
@@ -112,38 +112,38 @@
       #:mouse-scroll (lambda (dir x y mods)
                        (set! mouse-count (add1 mouse-count))
                        (update-status-line
-                        mouse-status-line
-                        (format "鼠标 #~a: 滚轮 ~a 位置:(~a,~a)"
-                                mouse-count dir x y)
-                        (if (> mods 0)
-                            (format " 修饰键:~a" mods)
-                            ""))
+                         mouse-status-line
+                         (format "鼠标 #~a: 滚轮 ~a 位置:(~a,~a)"
+                                 mouse-count dir x y)
+                         (if (> mods 0)
+                             (format " 修饰键:~a" mods)
+                             ""))
                        (log-event (format "mouse scroll ~a (~a,~a)" dir x y)
                                   (if (> mods 0)
                                       (format " mods:~a" mods)
                                       "")))
-      #:tab       (lambda () (log-event "Tab"))
-      #:space     (lambda () (log-event "Space"))
-      #:enter     (lambda () (log-event "Enter"))
+      #:tab (lambda () (log-event "Tab"))
+      #:space (lambda () (log-event "Space"))
+      #:enter (lambda () (log-event "Enter"))
       #:backspace (lambda () (log-event "Backspace"))
-      #:escape    (lambda () (log-event "ESC"))
-      #:up    (lambda () (log-event "Up"))
-      #:down  (lambda () (log-event "Down"))
-      #:left  (lambda () (log-event "Left"))
+      #:escape (lambda () (log-event "ESC"))
+      #:up (lambda () (log-event "Up"))
+      #:down (lambda () (log-event "Down"))
+      #:left (lambda () (log-event "Left"))
       #:right (lambda () (log-event "Right"))
-      #:delete     (lambda () (log-event "Delete"))
-      #:insert     (lambda () (log-event "Insert"))
-      #:home       (lambda () (log-event "Home"))
-      #:end        (lambda () (log-event "End"))
-      #:pageup     (lambda () (log-event "PgUp"))
-      #:pagedown   (lambda () (log-event "PgDn"))
+      #:delete (lambda () (log-event "Delete"))
+      #:insert (lambda () (log-event "Insert"))
+      #:home (lambda () (log-event "Home"))
+      #:end (lambda () (log-event "End"))
+      #:pageup (lambda () (log-event "PgUp"))
+      #:pagedown (lambda () (log-event "PgDn"))
       #:ctrl (lambda (ch) (log-event (format "Ctrl+~a" ch)))
-      #:alt  (lambda (ch) (log-event (format "Alt+~a" ch)))
-      #:mod  (lambda (ch ctrl? alt?)
-               (log-event (format "~a~a~a"
-                                  (if ctrl? "Ctrl+" "")
-                                  (if alt? "Alt+" "")
-                                  ch)))
+      #:alt (lambda (ch) (log-event (format "Alt+~a" ch)))
+      #:mod (lambda (ch ctrl? alt?)
+              (log-event (format "~a~a~a"
+                                 (if ctrl? "Ctrl+" "")
+                                 (if alt? "Alt+" "")
+                                 ch)))
       #:utf-char (lambda (str)
                    (log-event (format "utf8: ~a" str)))
       #:char (lambda (ch)
@@ -158,17 +158,17 @@
               (match type
                 [(quote seq)
                  (log-event
-                  (apply string-append
-                         "seq:"
-                         (for/list ([b (in-bytes data)])
-                           (format " ~a" b))))]
+                   (apply string-append
+                          "seq:"
+                          (for/list ([b (in-bytes data)])
+                            (format " ~a" b))))]
                 [(quote mod-seq)
                  (define ch (mod-seq->char data))
                  (log-event
-                  (format "mod-seq:~a~a ~a"
-                          (if (car mods) " Ctrl" "")
-                          (if (cdr mods) " Alt" "")
-                          (if ch (integer->char ch) "?")))]
+                   (format "mod-seq:~a~a ~a"
+                           (if (car mods) " Ctrl" "")
+                           (if (cdr mods) " Alt" "")
+                           (if ch (integer->char ch) "?")))]
                 [else
                  (log-event (format "~a" type))]))))
   ;; read-event 内部使用 select() 阻塞等待, 零 CPU 空转
