@@ -8,8 +8,6 @@
 (define (tui-init)
   (unless (terminal?) (error "tui-init: not a terminal"))
   (enter-raw-mode!)
-  ;; 初始化 select-based I/O: pipe + resize 监控线程
-  (resize-pipe-init!)
   (input-init!)
   (buffer-alt-enable)
   ;; 初始化鼠标和括号粘贴支持
@@ -19,8 +17,6 @@
 (define (tui-init-no-buffer)
   (unless (terminal?) (error "tui-init: not a terminal"))
   (enter-raw-mode!)
-  ;; 初始化 select-based I/O: pipe + resize 监控线程
-  (resize-pipe-init!)
   (input-init!)
   ;; 初始化鼠标和括号粘贴支持
   (enable-mouse!)
@@ -34,7 +30,6 @@
   (style-reset)
   (buffer-alt-disable)
   (input-cleanup!)
-  (resize-pipe-cleanup!)
   (exit-raw-mode!))
 
 (define (tui-exit-no-buffer)
@@ -44,7 +39,6 @@
   (cursor-show)
   (style-reset)
   (input-cleanup!)
-  (resize-pipe-cleanup!)
   (exit-raw-mode!))
 
 ;; 鼠标支持

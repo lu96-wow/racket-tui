@@ -1,1 +1,0 @@
-("9.2" ta6le ("22987762fd09206a3652d1bb5dcfb255e0f4e4b1" . "0aca2d5757932573d8707a2e85927e80400d8174") #"/home/debian/work/tui/ansi-format.rkt" #"/home/debian/work/tui/cursor-state.rkt" #"/home/debian/work/tui/output.rkt" (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))

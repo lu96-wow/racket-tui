@@ -146,64 +146,52 @@
         (list action 'scroll scroll-direction (- x 1) (- y 1) modifiers)
         (list action button (- x 1) (- y 1) modifiers))))
 
-;; 内部读取函数 — 使用 select-based 阻塞读取, 零 CPU 轮询
+;; 内部读取函数 — read-byte 与 Racket 调度器协作
 
 (define (read-n-bytes count)
   (let loop ([n 0] [acc (bytes)])
     (if (>= n count) acc
-        (let ([b (read-byte-stdin)])
-          (if b
-              (loop (+ n 1) (bytes-append acc (bytes b)))
-              acc)))))
+        (let ([b (read-byte)])
+          (loop (+ n 1) (bytes-append acc (bytes b)))))))
 
 (define (read-csi-seq b2)
   (let loop ([acc (list ESC b2)])
-    (let ([b (read-byte-stdin)])
-      (if b
-          (let ([acc (append acc (list b))])
-            (if (csi-done? b) (list->bytes acc) (loop acc)))
-          (list->bytes acc)))))
+    (let ([b (read-byte)])
+      (let ([acc (append acc (list b))])
+        (if (csi-done? b) (list->bytes acc) (loop acc))))))
 
 ;; 读取粘贴内容
 (define (read-paste-content)
   (let loop ([acc (bytes)])
-    (define b (read-byte-stdin))
-    (cond [(not b) acc]
-          [(= b ESC)
-           (define b2 (read-byte-stdin))
-           (cond [(not b2)
-                  (bytes-append acc (bytes ESC))]
-                 [(= b2 CSI-OPEN)
-                  (define b3 (read-byte-stdin))
-                  (define b4 (read-byte-stdin))
-                  (define b5 (read-byte-stdin))
-                  (if (and b3 b4 b5
-                           (= b3 BRACKETED-PASTE-END-1)
+    (define b (read-byte))
+    (cond [(= b ESC)
+           (define b2 (read-byte))
+           (cond [(= b2 CSI-OPEN)
+                  (define b3 (read-byte))
+                  (define b4 (read-byte))
+                  (define b5 (read-byte))
+                  (if (and (= b3 BRACKETED-PASTE-END-1)
                            (= b4 BRACKETED-PASTE-END-2)
                            (= b5 BRACKETED-PASTE-END-3))
-                      (begin (read-byte-stdin) acc)  ; consume final ~
+                      (begin (read-byte) acc)  ; consume final ~
                       (loop (bytes-append acc
                                           (bytes ESC) (bytes b2)
-                                          (if b3 (bytes b3) (bytes))
-                                          (if b4 (bytes b4) (bytes))
-                                          (if b5 (bytes b5) (bytes)))))]
+                                          (bytes b3) (bytes b4) (bytes b5))))]
                  [else
                   (loop (bytes-append acc (bytes ESC) (bytes b2)))])]
           [else
            (loop (bytes-append acc (bytes b)))])))
 
-;; read-event 核心实现 — 解析首个字节, 后续字节用 read-byte-stdin
-;; 不再需要 change-block / change-noblock, select 本身就是阻塞的
+;; read-event 核心实现 — 解析首个字节, 后续字节用 read-byte
+;; sync 已确保 stdin 有数据, 后续 read-byte 不会饥饿
 
 (define (read-event-impl first)
   (cond [(ctrl-char? first) (values 'ctrl (bytes first) #f)]
         [(= first ESC)
-         ;; select 保证了后续字节可用, 直接阻塞读
-         (define b2 (read-byte-stdin))
-         (cond [(not b2) (values 'key (bytes first) #f)]
-               [(= b2 CSI-SS3)
-                (define b3 (read-byte-stdin))
-                (values 'seq (bytes first b2 (if b3 b3 '())) #f)]
+         (define b2 (read-byte))
+         (cond [(= b2 CSI-SS3)
+                (define b3 (read-byte))
+                (values 'seq (bytes first b2 b3) #f)]
                [(= b2 CSI-OPEN)
                 (define seq (read-csi-seq b2))
                 (let-values ([(ps final) (parse-csi-params seq)])
@@ -231,8 +219,8 @@
          (values 'utf8 (bytes-append (bytes first) rest) #f)]
         [else (values 'key (bytes first) #f)]))
 
-;; resize 监控 — ncurses 风格: 独立线程 100ms 轮询, 变化时写 self-pipe 唤醒 select
-;; select 统一等 stdin + resize fd, 主线程零 CPU 空转
+;; resize 监控 — green thread 100ms 轮询, 变化时写 resize-channel 唤醒 sync
+;; sync 统一等 stdin-evt + resize-channel, 调度器协作, 零 CPU
 
 (define resize-thread #f)
 
@@ -242,35 +230,33 @@
                     (sleep 0.1)
                     (let-values ([(nr nc) (get-window-size)])
                       (when (and nr nc (or (not (= nr pr)) (not (= nc pc))))
-                        (resize-notify!))
+                        (resize-notify! (cons nr nc)))
                       (loop (or nr pr) (or nc pc))))))))
 
 (define (resize-monitor-stop t)
   (when t (kill-thread t)))
 
-;; read-event — ncurses 风格: select() 统一等待 stdin 和 resize
-;; 阻塞模式, 零 CPU 占用, 类似 ncurses getch()
+;; read-event — sync 统一等 stdin 和 resize channel
+;; 阻塞模式, 零 CPU, 等价于 ncurses getch()
 (define (read-event)
-  (let-values ([(kind val) (select-read)])
-    (case kind
-      [(resize)
-       (let-values ([(rows cols) (get-window-size)])
-         (values 'resize (cons rows cols) #f))]
-      [(byte) (read-event-impl val)]
-      [(eof)  (values 'null (bytes) #f)]
-      [else   (values 'null (bytes) #f)])))
+  (define evt (sync (make-stdin-evt) resize-channel))
+  (cond [(bytes? evt)
+         ;; stdin 来了 1 个字节
+         (read-event-impl (bytes-ref evt 0))]
+        [(pair? evt)
+         ;; resize channel: (rows . cols)
+         (values 'resize evt #f)]
+        [else (values 'null (bytes) #f)]))
 
-;; 非阻塞版本, 类似 ncurses timeout(0) 后的 getch()
-;; 无事件时返回 'null, 用于动画帧循环
+;; 非阻塞版本, 等价于 ncurses timeout(0) getch()
+;; 无事件时 evt 为 #f (sync/timeout 返回), 返回 'null
 (define (read-event-nonblock)
-  (let-values ([(kind val) (select-read-nonblock)])
-    (case kind
-      [(resize)
-       (let-values ([(rows cols) (get-window-size)])
-         (values 'resize (cons rows cols) #f))]
-      [(byte) (read-event-impl val)]
-      [(timeout) (values 'null (bytes) #f)]
-      [else      (values 'null (bytes) #f)])))
+  (define evt (sync/timeout 0 (make-stdin-evt) resize-channel))
+  (cond [(bytes? evt)
+         (read-event-impl (bytes-ref evt 0))]
+        [(pair? evt)
+         (values 'resize evt #f)]
+        [else (values 'null (bytes) #f)]))
 
 ;; 底层事件类型判断
 
