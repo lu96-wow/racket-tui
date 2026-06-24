@@ -73,7 +73,7 @@ read-event → sync(stdin, resize-channel) → 返回首字节
 
 ---
 
-## 🟢 7. `oflag-set!` / `set-vmin-vtime!` 定义在 `provide` 之后
+## ✅ 7. `oflag-set!` / `set-vmin-vtime!` 定义在 `provide` 之后
 
 **文件**: base.rkt (78 provide, 81-84 define)
 **影响**: 仅可读性，Racket 允许模块内前向引用
@@ -89,7 +89,7 @@ read-event → sync(stdin, resize-channel) → 返回首字节
 
 ---
 
-## 🟢 8. `TERMIOS-SIZE 60` 硬编码
+## ✅ 8. `TERMIOS-SIZE 60` 硬编码
 
 **文件**: base.rkt (17)
 **影响**: 仅在 x86_64 Linux 正确，ARM/32-bit 可能不同
