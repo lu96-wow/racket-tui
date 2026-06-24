@@ -170,10 +170,10 @@ Return byte strings without outputting, used for batch collection:
 | format-buffer-alt-enable | Enable alt buffer | buffer-alt-enable |
 | format-buffer-alt-disable | Disable alt buffer | buffer-alt-disable |
 | format-reset | Reset styling | style-reset |
-| (format-rgb-fg r g b) | RGB foreground (escape only) | put-rgb-fg |
-| (format-rgb-bg r g b) | RGB background (escape only) | put-rgb-bg |
-| (format-rgb-fg-bg fr fg fb br bg bb) | RGB fg+bg (escape only) | put-rgb-fg-bg |
-| (format-256-fg n) | 256 foreground (escape only) | put-256-fg |
+| (format-rgb-fg r g b v) | RGB foreground bytes | put-rgb-fg |
+| (format-rgb-bg r g b v) | RGB background bytes | put-rgb-bg |
+| (format-rgb-fg-bg fr fg fb br bg bb v) | RGB fg+bg bytes | put-rgb-fg-bg |
+| (format-256-fg n v) | 256 foreground bytes | put-256-fg |
 | (format-256-bg n v) | 256 background | put-256-bg |
 | (format-styled style-bytes v) | Styled text | put-styled |
 

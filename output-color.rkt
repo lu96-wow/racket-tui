@@ -76,31 +76,31 @@
 
 (define (color-fg n)
   (unless (<= 0 n 15) (error 'color-fg "ANSI color must be 0-15, got ~a" n))
-  (λ () (put-bytes (format-fg n))))
+  (λ () (put-bytes (format-fg-base n))))
 
 (define (color-bg n)
   (unless (<= 0 n 15) (error 'color-bg "ANSI color must be 0-15, got ~a" n))
-  (λ () (put-bytes (format-bg n))))
+  (λ () (put-bytes (format-bg-base n))))
 
 (define (color256-fg n)
   (unless (<= 0 n 255) (error 'color256-fg "256 color must be 0-255, got ~a" n))
-  (λ () (put-bytes (format-256-fg n))))
+  (λ () (put-bytes (format-256-fg-base n))))
 
 (define (color256-bg n)
   (unless (<= 0 n 255) (error 'color256-bg "256 color must be 0-255, got ~a" n))
-  (λ () (put-bytes (format-256-bg n))))
+  (λ () (put-bytes (format-256-bg-base n))))
 
 (define (color-rgb-fg r g b)
   (unless (<= 0 r 255) (error 'color-rgb-fg "R must be 0-255, got ~a" r))
   (unless (<= 0 g 255) (error 'color-rgb-fg "G must be 0-255, got ~a" g))
   (unless (<= 0 b 255) (error 'color-rgb-fg "B must be 0-255, got ~a" b))
-  (λ () (put-bytes (format-rgb-fg r g b))))
+  (λ () (put-bytes (format-rgb-fg-base r g b))))
 
 (define (color-rgb-bg r g b)
   (unless (<= 0 r 255) (error 'color-rgb-bg "R must be 0-255, got ~a" r))
   (unless (<= 0 g 255) (error 'color-rgb-bg "G must be 0-255, got ~a" g))
   (unless (<= 0 b 255) (error 'color-rgb-bg "B must be 0-255, got ~a" b))
-  (λ () (put-bytes (format-rgb-bg r g b))))
+  (λ () (put-bytes (format-rgb-bg-base r g b))))
 
 ;; 属性构造器（用于样式系统）
 

@@ -63,22 +63,22 @@
 
 ;; 颜色输出
 (define (put-fg n v)
-  (put-bytes (bytes-append (format-fg n) (format-content v) format-reset)))
+  (put-bytes (format-fg n v)))
 
 (define (put-bg n v)
-  (put-bytes (bytes-append (format-bg n) (format-content v) format-reset)))
+  (put-bytes (format-bg n v)))
 
 (define (put-rgb-fg r g b v)
-  (put-bytes (bytes-append (format-rgb-fg r g b) (format-content v) format-reset)))
+  (put-bytes (format-rgb-fg r g b v)))
 
 (define (put-rgb-bg r g b v)
-  (put-bytes (bytes-append (format-rgb-bg r g b) (format-content v) format-reset)))
+  (put-bytes (format-rgb-bg r g b v)))
 
 (define (put-256-fg n v)
-  (put-bytes (bytes-append (format-256-fg n) (format-content v) format-reset)))
+  (put-bytes (format-256-fg n v)))
 
 (define (put-256-bg n v)
-  (put-bytes (bytes-append (format-256-bg n) (format-content v) format-reset)))
+  (put-bytes (format-256-bg n v)))
 
 ;; 绝对位置输出
 (define (put-at row col v)

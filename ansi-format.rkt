@@ -10,9 +10,15 @@
          format-line-clear format-line-clear-right format-line-clear-left
          format-buffer-alt-enable format-buffer-alt-disable
          format-reset
+         ;; 纯转义序列 (base)
+         format-fg-base format-bg-base
+         format-rgb-fg-base format-rgb-bg-base format-rgb-fg-bg-base
+         format-256-fg-base format-256-bg-base
+         ;; 转义+内容 (与 put-* 对称)
+         format-fg format-bg
          format-rgb-fg format-rgb-bg format-rgb-fg-bg
          format-256-fg format-256-bg
-         format-fg format-bg
+         ;; 属性
          format-bold format-dim format-italic
          format-underline format-blink format-reverse
          ;; format-at
@@ -65,37 +71,60 @@
 (define (format-cursor-col n)
   (string->bytes/utf-8 (format "\e[~aG" n)))
 
-;; 16色前景/背景
-(define (format-fg n)
-  (unless (<= 0 n 15) (error 'format-fg "ANSI color must be 0-15, got ~a" n))
+;; 16色前景/背景 — 纯转义序列
+(define (format-fg-base n)
+  (unless (<= 0 n 15) (error 'format-fg-base "ANSI color must be 0-15, got ~a" n))
   (define codes #(30 31 32 33 34 35 36 37
                      90 91 92 93 94 95 96 97))
   (define code (if (= n 9) 39 (vector-ref codes n)))
   (string->bytes/utf-8 (format "\e[~am" code)))
 
-(define (format-bg n)
-  (unless (<= 0 n 15) (error 'format-bg "ANSI color must be 0-15, got ~a" n))
+(define (format-bg-base n)
+  (unless (<= 0 n 15) (error 'format-bg-base "ANSI color must be 0-15, got ~a" n))
   (define codes #(40 41 42 43 44 45 46 47
                      100 101 102 103 104 105 106 107))
   (define code (if (= n 9) 49 (vector-ref codes n)))
   (string->bytes/utf-8 (format "\e[~am" code)))
 
-;; RGB 颜色
-(define (format-rgb-fg r g b)
+;; RGB 颜色 — 纯转义序列
+(define (format-rgb-fg-base r g b)
   (string->bytes/utf-8 (format "\e[38;2;~a;~a;~am" r g b)))
 
-(define (format-rgb-bg r g b)
+(define (format-rgb-bg-base r g b)
   (string->bytes/utf-8 (format "\e[48;2;~a;~a;~am" r g b)))
 
-(define (format-rgb-fg-bg fr fg fb br bg bb)
+(define (format-rgb-fg-bg-base fr fg fb br bg bb)
   (string->bytes/utf-8 (format "\e[38;2;~a;~a;~a;48;2;~a;~a;~am" fr fg fb br bg bb)))
 
-;; 256色
-(define (format-256-fg n)
+;; 256色 — 纯转义序列
+(define (format-256-fg-base n)
   (string->bytes/utf-8 (format "\e[38;5;~am" n)))
 
-(define (format-256-bg n)
+(define (format-256-bg-base n)
   (string->bytes/utf-8 (format "\e[48;5;~am" n)))
+
+;; ── 带内容拼接的 format-* (与 put-* 对称, 但不 flush) ──
+
+(define (format-fg n v)
+  (bytes-append (format-fg-base n) (format-content v) format-reset))
+
+(define (format-bg n v)
+  (bytes-append (format-bg-base n) (format-content v) format-reset))
+
+(define (format-rgb-fg r g b v)
+  (bytes-append (format-rgb-fg-base r g b) (format-content v) format-reset))
+
+(define (format-rgb-bg r g b v)
+  (bytes-append (format-rgb-bg-base r g b) (format-content v) format-reset))
+
+(define (format-rgb-fg-bg fr fg fb br bg bb v)
+  (bytes-append (format-rgb-fg-bg-base fr fg fb br bg bb) (format-content v) format-reset))
+
+(define (format-256-fg n v)
+  (bytes-append (format-256-fg-base n) (format-content v) format-reset))
+
+(define (format-256-bg n v)
+  (bytes-append (format-256-bg-base n) (format-content v) format-reset))
 
 ;; 属性
 (define format-bold #"\e[1m")
@@ -146,39 +175,39 @@
 
 ;; 16色
 (define (format-fg-at row col n v)
-  (format-color-at row col (format-fg n) v))
+  (format-color-at row col (format-fg-base n) v))
 (define (format-fg-at! row col n v)
-  (format-color-at! row col (format-fg n) v))
+  (format-color-at! row col (format-fg-base n) v))
 
 (define (format-bg-at row col n v)
-  (format-color-at row col (format-bg n) v))
+  (format-color-at row col (format-bg-base n) v))
 (define (format-bg-at! row col n v)
-  (format-color-at! row col (format-bg n) v))
+  (format-color-at! row col (format-bg-base n) v))
 
 ;; RGB
 (define (format-rgb-fg-at row col r g b v)
-  (format-color-at row col (format-rgb-fg r g b) v))
+  (format-color-at row col (format-rgb-fg-base r g b) v))
 (define (format-rgb-fg-at! row col r g b v)
-  (format-color-at! row col (format-rgb-fg r g b) v))
+  (format-color-at! row col (format-rgb-fg-base r g b) v))
 
 (define (format-rgb-bg-at row col r g b v)
-  (format-color-at row col (format-rgb-bg r g b) v))
+  (format-color-at row col (format-rgb-bg-base r g b) v))
 (define (format-rgb-bg-at! row col r g b v)
-  (format-color-at! row col (format-rgb-bg r g b) v))
+  (format-color-at! row col (format-rgb-bg-base r g b) v))
 
 ;; 256色
 (define (format-256-fg-at row col n v)
-  (format-color-at row col (format-256-fg n) v))
+  (format-color-at row col (format-256-fg-base n) v))
 (define (format-256-fg-at! row col n v)
-  (format-color-at! row col (format-256-fg n) v))
+  (format-color-at! row col (format-256-fg-base n) v))
 
 (define (format-256-bg-at row col n v)
-  (format-color-at row col (format-256-bg n) v))
+  (format-color-at row col (format-256-bg-base n) v))
 (define (format-256-bg-at! row col n v)
-  (format-color-at! row col (format-256-bg n) v))
+  (format-color-at! row col (format-256-bg-base n) v))
 
 ;; RGB前景+背景
 (define (format-rgb-fg-bg-at row col fr fg fb br bg bb v)
-  (format-color-at row col (format-rgb-fg-bg fr fg fb br bg bb) v))
+  (format-color-at row col (format-rgb-fg-bg-base fr fg fb br bg bb) v))
 (define (format-rgb-fg-bg-at! row col fr fg fb br bg bb v)
-  (format-color-at! row col (format-rgb-fg-bg fr fg fb br bg bb) v))
+  (format-color-at! row col (format-rgb-fg-bg-base fr fg fb br bg bb) v))
