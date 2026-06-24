@@ -1,33 +1,36 @@
-# Racket TUI Library
+# racket-tui
 
-A terminal user interface library supporting mouse, touchpad, true color, bracketed paste, and window resize events.
+A terminal UI library for Racket — mouse, true color, bracketed paste, window resize.
+
+![Demo](a.gif)
 
 ## Install
-
-### Remote Install (from GitHub)
 
 ```bash
 raco pkg install https://github.com/lu96-wow/racket-tui.git
 ```
 
-### Local Install (development mode)
+包名由 `info.rkt` 指定为 `tui`，安装后：
 
-Clone and link-install for development — changes to source files take effect immediately without reinstallation:
+```racket
+(require tui)
+```
+
+## Uninstall
+
+```bash
+raco pkg remove tui
+```
+
+## Development
 
 ```bash
 git clone https://github.com/lu96-wow/racket-tui.git
 cd racket-tui
-raco pkg install --link
+raco pkg install --link .
 ```
 
-### Uninstall
-
-```bash
-cd racket-tui
-raco pkg remove tui
-```
-
-![Demo](a.gif)
+改动直接生效，无需重新安装。
 
 ## Quick Start
 
