@@ -19,7 +19,7 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
 ## Uninstall
 
 ```bash
-raco pkg remove tui
+raco pkg uninstall racket-tui
 ```
 
 ## Development
@@ -27,10 +27,8 @@ raco pkg remove tui
 ```bash
 git clone https://github.com/lu96-wow/racket-tui.git
 cd racket-tui
-raco pkg install --link .
+raco pkg install --link
 ```
-
-改动直接生效，无需重新安装。
 
 ## Quick Start
 
