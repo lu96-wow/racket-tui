@@ -22,6 +22,7 @@
 (define CR 13)           ; Carriage Return
 (define ESC 27)          ; Escape
 (define SPACE 32)        ; Space
+(define BACKSPACE 8)     ; Backspace (^H)
 (define DELETE 127)      ; Delete
 
 ;; ASCII 字符范围

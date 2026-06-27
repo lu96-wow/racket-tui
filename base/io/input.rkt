@@ -1,5 +1,6 @@
 #lang racket
-(require "../terminal/base.rkt" "../terminal/resize.rkt" "../terminal/config.rkt" "../ansi/ansi-var.rkt")
+(require "../terminal/base.rkt" "../terminal/resize.rkt" "../terminal/config.rkt"
+         "../ansi/ansi-var.rkt" "../ansi/input-var.rkt")
 
 ;; 字节分类函数
 
@@ -46,20 +47,20 @@
   (cond
     [(= final TILDE)
      (case (and (pair? ps) (car ps))
-       [(3) 'del]
-       [(2) 'insert]
-       [(5) 'pageup]
-       [(6) 'pagedown]
-       [else 'seq])]
+       [(3) KEY-DELETE]
+       [(2) KEY-INSERT]
+       [(5) KEY-PAGEUP]
+       [(6) KEY-PAGEDOWN]
+       [else EVENT-SEQ])]
     [else
      (case final
-       [(65) 'up]     ; CSI A
-       [(66) 'down]   ; CSI B
-       [(67) 'right]  ; CSI C
-       [(68) 'left]   ; CSI D
-       [(72) 'home]   ; CSI H
-       [(70) 'end]    ; CSI F
-       [else 'seq])]))
+       [(65) KEY-UP]     ; CSI A
+       [(66) KEY-DOWN]   ; CSI B
+       [(67) KEY-RIGHT]  ; CSI C
+       [(68) KEY-LEFT]   ; CSI D
+       [(72) KEY-HOME]   ; CSI H
+       [(70) KEY-END]    ; CSI F
+       [else EVENT-SEQ])]))
 
 ;; 鼠标事件解析
 
@@ -72,21 +73,21 @@
          [is-move? (bitwise-bit-set? type MOUSE-MOVE-FLAG)]
          [is-release? (and (= final MOUSE-RELEASE) (not is-move?))]
          [button (case button-code
-                   [(0) 'left]
-                   [(1) 'middle]
-                   [(2) 'right]
-                   [else 'unknown])]
+                   [(0) BUTTON-LEFT]
+                   [(1) BUTTON-MIDDLE]
+                   [(2) BUTTON-RIGHT]
+                   [else BUTTON-UNKNOWN])]
          [action (cond
-                   [(<= MOUSE-SCROLL-START type MOUSE-SCROLL-END) 'scroll]
-                   [is-release? 'release]
-                   [is-move? 'move]
-                   [else 'press])]
+                   [(<= MOUSE-SCROLL-START type MOUSE-SCROLL-END) EVENT-MOUSE-SCROLL]
+                   [is-release? EVENT-MOUSE-RELEASE]
+                   [is-move? EVENT-MOUSE-MOVE]
+                   [else EVENT-MOUSE-PRESS])]
          [scroll-direction (cond
-                             [(= type MOUSE-SCROLL-START) 'up]
-                             [(= type MOUSE-SCROLL-END) 'down]
+                             [(= type MOUSE-SCROLL-START) SCROLL-UP]
+                             [(= type MOUSE-SCROLL-END) SCROLL-DOWN]
                              [else #f])])
     (if scroll-direction
-        (list action 'scroll scroll-direction (- x 1) (- y 1) modifiers)
+        (list action EVENT-MOUSE-SCROLL scroll-direction (- x 1) (- y 1) modifiers)
         (list action button (- x 1) (- y 1) modifiers))))
 
 ;; ════════════════════════════════════════════════════════════════
@@ -149,13 +150,13 @@
 ;; read-event 核心 — ESC 后用 ESCDELAY 超时区分独立 ESC vs 序列
 
 (define (read-event-impl first)
-  (cond [(ctrl-char? first) (values 'ctrl (bytes first) #f)]
+  (cond [(ctrl-char? first) (values EVENT-CTRL (bytes first) #f)]
         [(= first ESC)
          (define b2 (read-byte/timeout ESCDELAY))
-         (cond [(not b2) (values 'key (bytes first) #f)]    ; 独立 ESC
+         (cond [(not b2) (values EVENT-KEY (bytes first) #f)]    ; 独立 ESC
                [(= b2 CSI-SS3)
                 (define b3 (read-byte/timeout ESCDELAY))
-                (values 'seq (bytes first b2 (if b3 b3 '())) #f)]
+                (values EVENT-SEQ (bytes first b2 (if b3 b3 '())) #f)]
                [(= b2 CSI-OPEN)
                 (define seq (read-csi-seq b2))
                 (let-values ([(ps final) (parse-csi-params seq)])
@@ -166,22 +167,22 @@
                           (= (bytes-ref seq 3) BRACKETED-PASTE-START-2)
                           (= (bytes-ref seq 4) BRACKETED-PASTE-START-3))
                      (define content (read-paste-content))
-                     (values 'paste content #f)]
+                     (values EVENT-PASTE content #f)]
                     [(and (memv final (list MOUSE-EVENT MOUSE-RELEASE))
                           (>= (length ps) 3))
-                     (values 'mouse (parse-mouse-event ps final) #f)]
+                     (values EVENT-MOUSE (parse-mouse-event ps final) #f)]
                     [else
                      (define mods (extract-modifiers ps))
                      (if (or (car mods) (cdr mods))
-                         (values 'mod-seq seq mods)
+                         (values EVENT-MOD seq mods)
                          (values (csi-params-final->type ps final) seq #f))]))]
                [(<= ASCII-PRINTABLE-START b2 ASCII-PRINTABLE-END)
-                (values 'alt (bytes first b2) #f)]
-               [else (values 'seq (bytes first b2) #f)])]
+                (values EVENT-ALT (bytes first b2) #f)]
+               [else (values EVENT-SEQ (bytes first b2) #f)])]
         [(utf8-multi-start? first)
          (define rest (read-n-bytes (sub1 (utf8-length first))))
-         (values 'utf8 (bytes-append (bytes first) rest) #f)]
-        [else (values 'key (bytes first) #f)]))
+         (values EVENT-UTF8 (bytes-append (bytes first) rest) #f)]
+        [else (values EVENT-KEY (bytes first) #f)]))
 
 ;; resize 监控 — green thread 100ms 轮询, 变化时写 resize-channel 唤醒 sync
 ;; sync 统一等 stdin-evt + resize-channel, 调度器协作, 零 CPU
@@ -204,84 +205,84 @@
          (read-event-impl (bytes-ref evt 0))]
         [(pair? evt)
          ;; resize channel: (rows . cols)
-         (values 'resize evt #f)]
-        [else (values 'null (bytes) #f)]))
+         (values EVENT-RESIZE evt #f)]
+        [else (values EVENT-NULL (bytes) #f)]))
 
 ;; 非阻塞版本, 等价于 ncurses timeout(0) getch()
-;; 无事件时 evt 为 #f (sync/timeout 返回), 返回 'null
+;; 无事件时 evt 为 #f (sync/timeout 返回), 返回 EVENT-NULL
 (define (read-event-nonblock)
   (define evt (sync/timeout 0 (make-stdin-evt) resize-channel))
   (cond [(bytes? evt)
          (read-event-impl (bytes-ref evt 0))]
         [(pair? evt)
-         (values 'resize evt #f)]
-        [else (values 'null (bytes) #f)]))
+         (values EVENT-RESIZE evt #f)]
+        [else (values EVENT-NULL (bytes) #f)]))
 
 ;; 底层事件类型判断
 
-(define (event-null? t)     (eq? t 'null))
-(define (event-key? t)      (eq? t 'key))
-(define (event-utf8? t)     (eq? t 'utf8))
-(define (event-seq? t)      (eq? t 'seq))
-(define (event-ctrl? t)     (eq? t 'ctrl))
-(define (event-alt? t)      (eq? t 'alt))
-(define (event-mod-seq? t)  (eq? t 'mod-seq))
-(define (event-resize? t)   (eq? t 'resize))
-(define (event-up? t)       (eq? t 'up))
-(define (event-down? t)     (eq? t 'down))
-(define (event-left? t)     (eq? t 'left))
-(define (event-right? t)    (eq? t 'right))
-(define (event-del? t)      (eq? t 'del))
-(define (event-insert? t)   (eq? t 'insert))
-(define (event-home? t)     (eq? t 'home))
-(define (event-end? t)      (eq? t 'end))
-(define (event-pageup? t)   (eq? t 'pageup))
-(define (event-pagedown? t) (eq? t 'pagedown))
-(define (event-touch? t)    (eq? t 'mouse))
-(define (event-mouse? t)    (eq? t 'mouse))
-(define (event-paste? t)    (eq? t 'paste))
+(define (event-null? t)     (eq? t EVENT-NULL))
+(define (event-key? t)      (eq? t EVENT-KEY))
+(define (event-utf8? t)     (eq? t EVENT-UTF8))
+(define (event-seq? t)      (eq? t EVENT-SEQ))
+(define (event-ctrl? t)     (eq? t EVENT-CTRL))
+(define (event-alt? t)      (eq? t EVENT-ALT))
+(define (event-mod-seq? t)  (eq? t EVENT-MOD))
+(define (event-resize? t)   (eq? t EVENT-RESIZE))
+(define (event-up? t)       (eq? t KEY-UP))
+(define (event-down? t)     (eq? t KEY-DOWN))
+(define (event-left? t)     (eq? t KEY-LEFT))
+(define (event-right? t)    (eq? t KEY-RIGHT))
+(define (event-del? t)      (eq? t KEY-DELETE))
+(define (event-insert? t)   (eq? t KEY-INSERT))
+(define (event-home? t)     (eq? t KEY-HOME))
+(define (event-end? t)      (eq? t KEY-END))
+(define (event-pageup? t)   (eq? t KEY-PAGEUP))
+(define (event-pagedown? t) (eq? t KEY-PAGEDOWN))
+(define (event-touch? t)    (eq? t EVENT-MOUSE))
+(define (event-mouse? t)    (eq? t EVENT-MOUSE))
+(define (event-paste? t)    (eq? t EVENT-PASTE))
 
 ;; 高层语义化事件判断
 ;; 注意：这些判断应该放在 event-key? 之前使用
 
 (define (event-tab? t d)
-  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) TAB)))
+  (and (eq? t EVENT-KEY) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) TAB)))
 
 (define (event-space? t d)
-  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) SPACE)))
+  (and (eq? t EVENT-KEY) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) SPACE)))
 
 (define (event-backspace? t d)
-  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1)
-       (memv (bytes-ref d 0) (list 8 DELETE))))
+  (and (eq? t EVENT-KEY) (bytes? d) (= (bytes-length d) 1)
+       (memv (bytes-ref d 0) (list BACKSPACE DELETE))))
 
 (define (event-enter? t d)
-  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1)
+  (and (eq? t EVENT-KEY) (bytes? d) (= (bytes-length d) 1)
        (memv (bytes-ref d 0) (list LF CR))))
 
 (define (event-escape? t d)
-  (and (eq? t 'key) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) ESC)))
+  (and (eq? t EVENT-KEY) (bytes? d) (= (bytes-length d) 1) (= (bytes-ref d 0) ESC)))
 
 ;; 鼠标事件子类型判断
 
-(define (mouse-press? detail)   (eq? (car detail) 'press))
-(define (mouse-release? detail) (eq? (car detail) 'release))
-(define (mouse-move? detail)    (eq? (car detail) 'move))
-(define (mouse-scroll? detail)  (eq? (car detail) 'scroll))
+(define (mouse-press? detail)   (eq? (car detail) EVENT-MOUSE-PRESS))
+(define (mouse-release? detail) (eq? (car detail) EVENT-MOUSE-RELEASE))
+(define (mouse-move? detail)    (eq? (car detail) EVENT-MOUSE-MOVE))
+(define (mouse-scroll? detail)  (eq? (car detail) EVENT-MOUSE-SCROLL))
 
-(define (mouse-left? detail)   (eq? (cadr detail) 'left))
-(define (mouse-middle? detail) (eq? (cadr detail) 'middle))
-(define (mouse-right? detail)  (eq? (cadr detail) 'right))
+(define (mouse-left? detail)   (eq? (cadr detail) BUTTON-LEFT))
+(define (mouse-middle? detail) (eq? (cadr detail) BUTTON-MIDDLE))
+(define (mouse-right? detail)  (eq? (cadr detail) BUTTON-RIGHT))
 
-(define (scroll-up? detail)   (eq? (caddr detail) 'up))
-(define (scroll-down? detail) (eq? (caddr detail) 'down))
+(define (scroll-up? detail)   (eq? (caddr detail) SCROLL-UP))
+(define (scroll-down? detail) (eq? (caddr detail) SCROLL-DOWN))
 
 (define (mouse-x d)
-  (if (eq? (car d) 'scroll)
+  (if (eq? (car d) EVENT-MOUSE-SCROLL)
       (cadddr d)
       (caddr d)))
 
 (define (mouse-y d)
-  (if (eq? (car d) 'scroll)
+  (if (eq? (car d) EVENT-MOUSE-SCROLL)
       (car (cddddr d))
       (cadddr d)))
 

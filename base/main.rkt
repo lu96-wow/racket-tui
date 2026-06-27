@@ -7,6 +7,7 @@
          "terminal/config.rkt"
          "ansi/ansi-var.rkt"
          "ansi/ansi-format.rkt"
+         "ansi/input-var.rkt"
          "io/input.rkt"
          "io/build-input.rkt"
          "io/output.rkt"
@@ -20,6 +21,7 @@
          (all-from-out "terminal/config.rkt")
          (all-from-out "ansi/ansi-var.rkt")
          (all-from-out "ansi/ansi-format.rkt")
+         (all-from-out "ansi/input-var.rkt")
          (all-from-out "io/input.rkt")
          (all-from-out "io/build-input.rkt")
          (all-from-out "io/output.rkt")

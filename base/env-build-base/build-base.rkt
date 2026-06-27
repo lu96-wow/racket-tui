@@ -2,14 +2,14 @@
 
 ;; build-base.rkt — 编译 dump-termios.c, 运行获取架构常量, 生成 base/base.rkt
 
-(define src  "dump-termios.c")
-(define exe  "dump-termios")
+(define src "dump-termios.c")
+(define exe "dump-termios")
 (define tmpl "base.rkt.template")
-(define out  "../base.rkt")
+(define out "../terminal/base.rkt")
 
 ;; 切换到脚本所在目录
 (current-directory
- (path-only (normalize-path (find-system-path 'run-file))))
+  (path-only (normalize-path (find-system-path 'run-file))))
 
 ;; 1. 编译 C 程序
 (printf "cc ~a -o ~a ...\n" src exe)
