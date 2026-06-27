@@ -318,7 +318,7 @@ If you need finer-grained control over event types, you can also use the low-lev
      (format-cursor-move 4 0)
      (format-rgb-fg 255 0 0) #"Hello, TUI!" format-reset
      (format-cursor-move 6 0)
-     (format-256-fg 46) (string->bytes/utf-8 "UTF-8 support: 你好世界") format-reset))
+     (format-256-fg 46) #"UTF-8 support: 你好世界" format-reset))
   (put-bytes buffer))
 
 (with-tui
