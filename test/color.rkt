@@ -1,6 +1,6 @@
 ;; test-color.rkt - 颜色/样式API测试与教程
 #lang racket
-(require "../main.rkt" "../base/output-styles.rkt")
+(require "../main.rkt" "../base/io/output-styles.rkt")
 
 ;; ┌─────────────────────────────────────────────┐
 ;; │ 颜色/样式 API 概览                          │

@@ -1,6 +1,6 @@
 #lang racket
 
-(require "ansi-var.rkt")
+(require "../ansi/ansi-var.rkt")
 
 (provide current-cursor-row current-cursor-col
          set-cursor! get-cursor)

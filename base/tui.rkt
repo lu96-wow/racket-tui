@@ -1,10 +1,10 @@
 #lang racket
 
-(require "base.rkt"
-         "input.rkt"
-         "output.rkt"
-         "output-color.rkt"
-         "ansi-var.rkt")
+(require "terminal/base.rkt"
+         "io/input.rkt"
+         "io/output.rkt"
+         "io/output-color.rkt"
+         "ansi/ansi-var.rkt")
 
 ;; 进入 raw 模式后 OPOST/ONLCR 被关闭，换行需手动 \r\n
 (define (init-newline-var)

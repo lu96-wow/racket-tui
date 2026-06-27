@@ -135,7 +135,7 @@
 (define format-reverse #"\e[7m")
 
 ;; format-at 系列 - 组合光标移动和格式化（返回字节串，管理光标状态）
-(require "cursor-state.rkt")
+(require "../terminal/cursor-state.rkt")
 
 ;; 辅助函数：带颜色的 format-at 通用实现
 (define (format-color-at row col color-bytes v)

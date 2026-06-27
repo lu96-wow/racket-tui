@@ -1,5 +1,5 @@
 #lang racket
-(require "base.rkt" "resize.rkt" "config.rkt" "ansi-var.rkt")
+(require "../terminal/base.rkt" "../terminal/resize.rkt" "../terminal/config.rkt" "../ansi/ansi-var.rkt")
 
 ;; 字节分类函数
 

@@ -10,7 +10,7 @@
 ;; ============================================================
 
 (require "../main.rkt"
-         "../base/cursor-state.rkt")
+         "../base/terminal/cursor-state.rkt")
 
 ;; 辅助: 显示当前光标位置
 (define (show-cursor label)

@@ -1,8 +1,8 @@
 #lang racket
 
-(require "ansi-format.rkt"
-         "cursor-state.rkt"
-         "ansi-var.rkt")
+(require "../ansi/ansi-format.rkt"
+         "../terminal/cursor-state.rkt"
+         "../ansi/ansi-var.rkt")
 
 ;; 核心输出函数（可切换缓冲模式）
 (define current-write-bytes (λ (bs) (write-bytes bs) (flush-output)))

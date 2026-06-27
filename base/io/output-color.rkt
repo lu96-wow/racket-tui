@@ -1,8 +1,8 @@
 #lang racket
 
 (require "output.rkt"
-         "cursor-state.rkt"
-         "ansi-format.rkt")
+         "../terminal/cursor-state.rkt"
+         "../ansi/ansi-format.rkt")
 
 ;; 样式系统（高层抽象）
 
