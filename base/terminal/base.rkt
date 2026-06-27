@@ -79,6 +79,21 @@
     (tcsetattr STDIN_FILENO TCSAFLUSH saved-terminal)
     (set! saved-terminal #f)))
 
+;; 通用终端请求/回复 — 发请求后阻塞等待响应
+;; 同时处理 raw 模式(VMIN=0 不等待)和非 raw 模式(行缓冲)的问题
+(define (call-with-terminal-reply thunk)
+  (define t (make-termios))
+  (tcgetattr STDIN_FILENO t)
+  (define saved (copy-termios t))
+  ;; 关行缓冲 + 回显，设 VMIN=1 阻塞等至少 1 字节
+  (lflag-set! t (bitwise-and (lflag-ref t) (bitwise-not (bitwise-ior ICANON ECHO))))
+  (set-vmin-vtime! t 1 1)
+  (tcsetattr STDIN_FILENO TCSAFLUSH t)
+  (define result (call-with-values thunk list))
+  (tcsetattr STDIN_FILENO TCSAFLUSH saved)
+  (apply values result))
+
 (provide terminal? enter-raw-mode! exit-raw-mode!
+         call-with-terminal-reply
          make-stdin-evt resize-channel resize-notify!
          STDIN_FILENO)
