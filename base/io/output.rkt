@@ -37,6 +37,10 @@
         [(integer? v) (put-byte v)]
         [else (void)]))
 
+;; 批量拼接并输出，省去手动 (bytes-append ...) + put-bytes
+(define (put-format-bytes . parts)
+  (put-bytes (apply bytes-append parts)))
+
 (define (put-newline)
   (put-string (unbox newline-var))
   (set-cursor! (+ current-cursor-row 1) 0))
@@ -89,7 +93,7 @@
   (put-bytes (format-content-at! row col v)))
 
 ;; 导出
-(provide put put-byte put-bytes put-char put-string put-newline
+(provide put put-byte put-bytes put-format-bytes put-char put-string put-newline
          put-at put-at!
          cursor-up cursor-down cursor-right cursor-left
          cursor-move cursor-col cursor-home
