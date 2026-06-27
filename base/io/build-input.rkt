@@ -44,7 +44,7 @@
 ;;   > ctrl > alt > mod > utf8 > char
 ;;   > any
 ;; =============================================================================
-(require "input.rkt")
+(require "input.rkt" "../ansi/ansi-var.rkt" "../ansi/input-var.rkt")
 
 (provide build-input loop-input)
 
@@ -78,48 +78,50 @@
          #:any        [on-any        #f]
          #:null       [on-null       #f])
 
-  ;; 辅助：处理 'key 类型的子分发（特殊键 vs 普通字符）
+  ;; 辅助：处理 EVENT-KEY 类型的子分发（特殊键 vs 普通字符）
   (define (dispatch-key b)
-    (cond [(and on-tab       (= b 9))         (on-tab)]
-          [(and on-space     (= b 32))        (on-space)]
-          [(and on-enter     (memv b '(10 13))) (on-enter)]
-          [(and on-backspace (memv b '(8 127))) (on-backspace)]
-          [(and on-escape    (= b 27))        (on-escape)]
+    (cond [(and on-tab       (= b TAB))                     (on-tab)]
+          [(and on-space     (= b SPACE))                   (on-space)]
+          [(and on-enter     (memv b (list LF CR)))         (on-enter)]
+          [(and on-backspace (memv b (list BACKSPACE DELETE))) (on-backspace)]
+          [(and on-escape    (= b ESC))                     (on-escape)]
           [on-char
            (on-char b)]
           [on-any
-           (on-any 'key (bytes b) #f)]
+           (on-any EVENT-KEY (bytes b) #f)]
           [else (void)]))
 
   ;; 辅助：处理 'mouse 类型的子分发
+  ;; 注意：match 的裸符号是变量绑定，需用 ' 引用的字面符号
   (define (dispatch-mouse detail)
     (match (car detail)
       ['press
        (if on-mouse-press
            (on-mouse-press (cadr detail) (caddr detail)
                            (cadddr detail) (last detail))
-           (on-any-and-null 'mouse detail #f))]
+           (on-any-and-null EVENT-MOUSE detail #f))]
       ['release
        (if on-mouse-release
            (on-mouse-release (cadr detail) (caddr detail)
                              (cadddr detail) (last detail))
-           (on-any-and-null 'mouse detail #f))]
+           (on-any-and-null EVENT-MOUSE detail #f))]
       ['move
        (if on-mouse-move
            (on-mouse-move (caddr detail) (cadddr detail) (last detail))
-           (on-any-and-null 'mouse detail #f))]
+           (on-any-and-null EVENT-MOUSE detail #f))]
       ['scroll
        (if on-mouse-scroll
            (on-mouse-scroll (caddr detail) (cadddr detail)
                             (car (cddddr detail)) (last detail))
-           (on-any-and-null 'mouse detail #f))]
-      [_ (on-any-and-null 'mouse detail #f)]))
+           (on-any-and-null EVENT-MOUSE detail #f))]
+      [_ (on-any-and-null EVENT-MOUSE detail #f)]))
 
   ;; 兜底：any 或静默
   (define (on-any-and-null t d m)
     (when on-any (on-any t d m)))
 
   ;; ─── 主分发：case 做 O(1) type → handler 映射 ───
+  ;; 注意：case 需用裸符号，不可用变量（case 不 evaluate 分支值）
   (lambda (type data mods)
     (case type
       [(null)   (if on-null   (on-null)   (on-any-and-null type data mods))]
@@ -131,7 +133,7 @@
       [(key)
        (if (and (bytes? data) (= (bytes-length data) 1))
            (dispatch-key (bytes-ref data 0))
-           (on-any-and-null 'key data #f))]
+           (on-any-and-null EVENT-KEY data #f))]
       [(up)        (if on-up        (on-up)        (on-any-and-null type data mods))]
       [(down)      (if on-down      (on-down)      (on-any-and-null type data mods))]
       [(left)      (if on-left      (on-left)      (on-any-and-null type data mods))]
@@ -146,23 +148,23 @@
        (let ([ch (ctrl->char data)])
          (if ch
              (if on-ctrl (on-ctrl ch) (on-any-and-null type data mods))
-             (on-any-and-null 'ctrl data #f)))]
+             (on-any-and-null EVENT-CTRL data #f)))]
       [(alt)
        (let ([b (alt->char data)])
          (if b
              (if on-alt (on-alt (integer->char b)) (on-any-and-null type data mods))
-             (on-any-and-null 'alt data #f)))]
+             (on-any-and-null EVENT-ALT data #f)))]
       [(mod-seq)
        (let ([ch (mod-seq->char data)])
          (if ch
              (if on-mod (on-mod (integer->char ch) (car mods) (cdr mods))
                  (on-any-and-null type data mods))
-             (on-any-and-null 'mod-seq data mods)))]
+             (on-any-and-null EVENT-MOD data mods)))]
       [(utf8)
        (let ([str (event->string data)])
          (if (positive? (string-length str))
              (if on-utf-char (on-utf-char str) (on-any-and-null type data mods))
-             (on-any-and-null 'utf8 data #f)))]
+             (on-any-and-null EVENT-UTF8 data #f)))]
       [else (on-any-and-null type data mods)])))
 
 ;; ─── 事件循环 ───
