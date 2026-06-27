@@ -162,7 +162,7 @@
                 (let-values ([(ps final) (parse-csi-params seq)])
                   (cond
                     [(and (= final TILDE)
-                          (= (bytes-length seq) 6)
+                          (= (bytes-length seq) CSI-PASTE-SEQ-LEN)
                           (= (bytes-ref seq 2) BRACKETED-PASTE-START-1)
                           (= (bytes-ref seq 3) BRACKETED-PASTE-START-2)
                           (= (bytes-ref seq 4) BRACKETED-PASTE-START-3))

@@ -37,6 +37,23 @@
 (define CSI-FINAL-START 64)   ; '@'
 (define CSI-FINAL-END 126)    ; '~'
 
+;; CSI final byte → 方向键/功能键
+(define CSI-FINAL-UP      65) ; A
+(define CSI-FINAL-DOWN    66) ; B
+(define CSI-FINAL-RIGHT   67) ; C
+(define CSI-FINAL-LEFT    68) ; D
+(define CSI-FINAL-END-KEY 70) ; F
+(define CSI-FINAL-HOME    72) ; H
+
+;; CSI ~ 参数 → 功能键
+(define CSI-PARAM-DELETE   3)
+(define CSI-PARAM-INSERT   2)
+(define CSI-PARAM-PAGEUP   5)
+(define CSI-PARAM-PAGEDOWN 6)
+
+;; 括号粘贴序列长度
+(define CSI-PASTE-SEQ-LEN 6)
+
 ;; 括号粘贴标记
 (define BRACKETED-PASTE-START-1 50)   ; '2'
 (define BRACKETED-PASTE-START-2 48)   ; '0'
