@@ -1,5 +1,5 @@
 #lang racket
-(require "../main.rkt" "../output-styles.rkt")
+(require "../main.rkt" "../base/output-styles.rkt")
 
 (with-tui-nobuffer
     (set-buffered-mode!)

@@ -1,6 +1,6 @@
 #lang racket
 
-;; build-base.rkt — 编译 dump-termios.c, 运行获取架构常量, 生成 ../base.rkt
+;; build-base.rkt — 编译 dump-termios.c, 运行获取架构常量, 生成 base/base.rkt
 
 (define src  "dump-termios.c")
 (define exe  "dump-termios")

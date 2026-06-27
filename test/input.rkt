@@ -1,6 +1,6 @@
 #lang racket
 (require "../main.rkt"
-         "../build-input.rkt")
+         "../base/build-input.rkt")
 
 (with-tui-nobuffer
   (screen-clear)

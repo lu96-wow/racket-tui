@@ -371,12 +371,12 @@ More examples can be found in the `test/` directory.
 
 ## Cross-Architecture
 
-`base.rkt` contains `struct termios` layout and constants obtained from the system at build time. To regenerate for a different architecture (e.g., ARM, 32-bit), run:
+`base/base.rkt` contains `struct termios` layout and constants obtained from the system at build time. To regenerate for a different architecture (e.g., ARM, 32-bit), run:
 
 ```bash
-racket env-build-base/build-base.rkt
+racket base/env-build-base/build-base.rkt
 ```
 
-This compiles a small C program (`env-build-base/dump-termios.c`) that outputs `sizeof(struct termios)`, field offsets, and flag values, then generates `base.rkt` from `env-build-base/base.rkt.template`.
+This compiles a small C program (`base/env-build-base/dump-termios.c`) that outputs `sizeof(struct termios)`, field offsets, and flag values, then generates `base/base.rkt` from `base/env-build-base/base.rkt.template`.
 
 > Note: Only tested in xterm / qterminal.
