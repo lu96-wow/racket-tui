@@ -16,10 +16,7 @@
 ;;       #:resize    (lambda (rows cols) (redraw rows cols))
 ;;       #:any       (lambda (type data mods) (printf "未处理: ~a~n" type))))
 ;;
-;;   (let loop ()
-;;     (let-values ([(type data mods) (read-event)])
-;;       (handler type data mods)
-;;       (loop)))
+;;   (loop-input handler)
 ;;
 ;; 所有关键字参数均为可选。handler 签名:
 ;;
@@ -49,7 +46,7 @@
 ;; =============================================================================
 (require "input.rkt")
 
-(provide build-input)
+(provide build-input loop-input)
 
 (define (build-input
          #:char       [on-char       #f]
@@ -167,3 +164,12 @@
              (if on-utf-char (on-utf-char str) (on-any-and-null type data mods))
              (on-any-and-null 'utf8 data #f)))]
       [else (on-any-and-null type data mods)])))
+
+;; ─── 事件循环 ───
+;; 简化用户代码：直接用 build-input 构造 handler，传入 loop-input 即可
+;; 无需手写 let loop + let-values
+(define (loop-input handler)
+  (let loop ()
+    (let-values ([(type data mods) (read-event)])
+      (handler type data mods)
+      (loop))))

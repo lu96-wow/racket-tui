@@ -216,11 +216,8 @@ Use `build-input` directly after `(require tui)` — no extra require needed:
     #:mouse-press (lambda (btn x y mods) (printf "Mouse press ~a (~a,~a)\n" btn x y))
     #:any       (lambda (type data mods) (printf "Unhandled: ~a\n" type))))
 
-;; Use in event loop
-(let loop ()
-  (let-values ([(type data mods) (read-event)])
-    (handler type data mods)
-    (loop)))
+;; One-line event loop
+(loop-input handler)
 ```
 
 All keyword arguments are optional. Supported events:
@@ -336,11 +333,11 @@ If you need finer-grained control over event types, you can also use the low-lev
       #:char (lambda (ch)
                (when (= ch (char->integer #\q))
                  (exit)))))  ;; press q to quit
-  (let loop ()
-    (draw-ui)
-    (let-values ([(type data mods) (read-event)])
-      (handler type data mods)
-      (loop))))
+  ;; Wrap handler to render before each event
+  (define (render-and-handle type data mods)
+    (handler type data mods)
+    (draw-ui))
+  (loop-input render-and-handle))
 ```
 
 More examples can be found in the `test/` directory.
