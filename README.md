@@ -45,16 +45,16 @@ raco pkg install --link
   (put-at 5 10 "Direct output")
   (sleep 2))
 
-;; Method 2: Batch output (collect then flush at once)
+;; Method 2: Batch output with put-format-bytes (auto collect + flush)
+;; format-reset only needs to be called once at the end
 (with-tui
   (screen-clear)
-  (define buffer
-    (bytes-append
-     (format-cursor-move 5 10)
-     (format-rgb-fg 0 255 0) (string->bytes/utf-8 "Green text") format-reset
-     (format-cursor-move 6 10)
-     (format-256-fg 46) (string->bytes/utf-8 "Bright green") format-reset))
-  (put-bytes buffer)  ;; flush once
+  (put-format-bytes
+   (format-cursor-move 5 10)
+   (format-rgb-fg 0 255 0) #"Green text"
+   (format-cursor-move 6 10)
+   (format-256-fg 46) #"Bright green"
+   format-reset)
   (sleep 2))
 ```
 
@@ -125,27 +125,22 @@ Output directly to the terminal, displayed immediately:
 Return byte strings without outputting, used for batch collection:
 
 ```racket
-(define my-buffer (bytes))
+;; Use put-format-bytes for one-shot collection + output
+;; format-reset only needed once at the end
+(put-format-bytes
+ format-screen-clear
+ format-cursor-hide
+ (format-cursor-move 5 10)
+ (format-cursor-up 2)
+ (format-cursor-home)
 
-(set! my-buffer (bytes-append my-buffer (format-cursor-move 5 10)))
-(set! my-buffer (bytes-append my-buffer (format-cursor-up 2)))
-(set! my-buffer (bytes-append my-buffer (format-cursor-home)))
+ (format-rgb-fg 255 0 0) #"Red"
+ (format-rgb-bg 0 0 255) #"Blue"
+ (format-256-fg 46) #"Green"
+ (format-rgb-fg-bg 255 255 0 0 0 255) #"Yellow/Blue"
 
-(set! my-buffer (bytes-append my-buffer (format-rgb-fg 255 0 0) (string->bytes/utf-8 "Red") format-reset))
-(set! my-buffer (bytes-append my-buffer (format-rgb-bg 0 0 255) (string->bytes/utf-8 "Blue") format-reset))
-(set! my-buffer (bytes-append my-buffer (format-256-fg 46) (string->bytes/utf-8 "Green") format-reset))
-(set! my-buffer (bytes-append my-buffer (format-rgb-fg-bg 255 255 0 0 0 255) (string->bytes/utf-8 "Yellow/Blue") format-reset))
-
-(set! my-buffer (bytes-append my-buffer format-screen-clear))
-(set! my-buffer (bytes-append my-buffer format-cursor-hide))
-
-(define style-bytes (call-with-output-bytes
-                     (λ (out)
-                       (parameterize ([current-output-port out])
-                         (clr-red) (attr-bold)))))
-(set! my-buffer (bytes-append my-buffer (format-styled style-bytes "Bold Red")))
-
-(put-bytes my-buffer)
+ (format-styled (style->bytes 'error) "Bold Red")
+ format-reset)
 ```
 
 ## Available Format Functions
@@ -290,13 +285,13 @@ If you need finer-grained control over event types, you can also use the low-lev
       (list
        format-screen-clear
        (format-cursor-move 0 0)
-       (format-rgb-fg 255 255 0) (string->bytes/utf-8 "=== Demo ===") format-reset
+       (format-rgb-fg 255 255 0) #"=== Demo ===" format-reset
        (format-cursor-move 2 0)
-       (format-rgb-fg 0 255 0) (string->bytes/utf-8 "Line 1") format-reset
+       (format-rgb-fg 0 255 0) #"Line 1" format-reset
        (format-cursor-move 3 0)
-       (format-rgb-fg 0 255 0) (string->bytes/utf-8 "Line 2") format-reset
+       (format-rgb-fg 0 255 0) #"Line 2" format-reset
        (format-cursor-move 4 0)
-       (format-rgb-fg 0 255 0) (string->bytes/utf-8 "Line 3") format-reset))
+       (format-rgb-fg 0 255 0) #"Line 3" format-reset))
 
   ;; Concatenate all byte strings
   (define screen (apply bytes-append buffer-content))
@@ -317,11 +312,11 @@ If you need finer-grained control over event types, you can also use the low-lev
     (bytes-append
      format-screen-clear
      (format-cursor-move 0 0)
-     (format-rgb-fg 255 255 0) (string->bytes/utf-8 "=== TUI Demo ===") format-reset
+     (format-rgb-fg 255 255 0) #"=== TUI Demo ===" format-reset
      (format-cursor-move 2 0)
-     (format-rgb-fg 0 255 0) (string->bytes/utf-8 "Press 'q' to quit") format-reset
+     (format-rgb-fg 0 255 0) #"Press 'q' to quit" format-reset
      (format-cursor-move 4 0)
-     (format-rgb-fg 255 0 0) (string->bytes/utf-8 "Hello, TUI!") format-reset
+     (format-rgb-fg 255 0 0) #"Hello, TUI!" format-reset
      (format-cursor-move 6 0)
      (format-256-fg 46) (string->bytes/utf-8 "UTF-8 support: 你好世界") format-reset))
   (put-bytes buffer))
