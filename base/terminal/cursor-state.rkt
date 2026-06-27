@@ -3,7 +3,7 @@
 (require "../ansi/ansi-var.rkt" "base.rkt")
 
 (provide current-cursor-row current-cursor-col
-         set-cursor! get-cursor query-cursor!)
+         set-cursor! get-cursor update-cursor!)
 
 (define current-cursor-row ansi-source-row)
 (define current-cursor-col ansi-source-col)
@@ -17,7 +17,7 @@
 
 ;; 发送 ANSI DSR \e[6n 查询终端实际光标位置
 ;; 终端回复 \e[row;colR，解析后更新 current-cursor-row/col
-(define (query-cursor!)
+(define (update-cursor!)
   (call-with-terminal-reply
     (λ ()
       (define in (current-input-port))
