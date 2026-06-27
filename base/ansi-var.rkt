@@ -10,4 +10,7 @@
 ;; （raw 模式关闭了 OPOST/ONLCR，需手动回车）
 (define newline-var (box "\n"))
 
-(provide newline-var)
+(define ansi-source-row 1)
+(define ansi-source-col 1)
+
+(provide (all-defined-out))
