@@ -1,8 +1,8 @@
 #lang racket
 
-(require "../main.rkt")
+(require "../main.rkt"
+         "../ui/widgets/panel.rkt")
 
-;; panel — 左右边缘都可拖拽
 (define px (box 5))
 (define py (box 2))
 (define pw (box 12))
