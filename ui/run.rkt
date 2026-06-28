@@ -1,63 +1,51 @@
 #lang racket
 ;; 调度器 — 只管三件事: 焦点(鼠标切换) / 布局(用户给定) / 绘制(组件自己画)
 (require "../base/main.rkt"
-         "../base/io/input.rkt"
-         "../base/ansi/input-var.rkt"
+         "../base/io/build-input.rkt"
          "component.rkt")
 
 (provide run-app)
 
 ;; specs : (list (list component x y w h) ...)
 ;;         x, y 是 0-based 终端坐标
-;;         调度器不干预布局, 照给定的位置绘制
 (define (run-app specs)
   (with-tui
     (cursor-hide)
+    (define focus (box (for/or ([s specs])
+                         (define comp (car s))
+                         (and (component-show? comp)
+                              (component-focusable? comp)
+                              comp))))
+    (define quit? (box #f))
 
-    ;; 初始焦点: 第一个 focusable + show? 的组件
-    (define (first-focusable)
-      (for/or ([s specs])
-        (define comp (car s))
-        (and (component-show? comp)
-             (component-focusable? comp)
-             comp)))
+    ;; 全局事件: q 退出, 鼠标左键切换焦点
+    (define global
+      (build-input
+       #:char (λ (ch) (when (= ch (char->integer #\q))
+                         (set-box! quit? #t)))
+       #:mouse-press (λ (btn x y mods)
+                       (when (eq? btn 'left)
+                         (for/or ([s specs])
+                           (match-let ([(list comp cx cy w h) s])
+                             (and (component-show? comp)
+                                  (component-focusable? comp)
+                                  (<= cx x (+ cx w -1))
+                                  (<= cy y (+ cy h -1))
+                                  (begin (set-box! focus comp) #t))))))))
 
-    (let loop ([focus (first-focusable)])
-      ;; ─── 绘制 ───
+    (let loop ()
+      ;; 绘制
       (screen-clear)
       (for ([s specs])
         (match-let ([(list comp x y w h) s])
           (when (component-show? comp)
-            ((component-render comp) (eq? comp focus) x y w h))))
+            ((component-render comp) (eq? comp (unbox focus)) x y w h))))
       (flush-output)
 
-      ;; ─── 事件 ───
-      (let-values ([(type data mods) (read-event)])
-        ;; q 退出循环
-        (define quit?
-          (and (eq? type EVENT-KEY)
-               (bytes? data)
-               (= (bytes-length data) 1)
-               (= (bytes-ref data 0) (char->integer #\q))))
-
-        (if quit?
-            (void)
-            (let* ([next-focus
-                    ;; 鼠标左键点击 → 切换焦点 (命中测试)
-                    (if (and (eq? type EVENT-MOUSE)
-                             (mouse-press? data)
-                             (mouse-left? data))
-                        (let ([mx (mouse-x data)]
-                              [my (mouse-y data)])
-                          (for/or ([s specs])
-                            (match-let ([(list comp x y w h) s])
-                              (and (component-show? comp)
-                                   (component-focusable? comp)
-                                   (<= x mx (+ x w -1))
-                                   (<= y my (+ y h -1))
-                                   comp))))
-                        focus)])
-              ;; 路由给焦点组件
-              (when next-focus
-                ((component-handler next-focus) type data mods))
-              (loop next-focus)))))))
+      ;; 事件
+      (unless (unbox quit?)
+        (let-values ([(type data mods) (read-event)])
+          (global type data mods)
+          (when (unbox focus)
+            ((component-handler (unbox focus)) type data mods))
+          (loop))))))
