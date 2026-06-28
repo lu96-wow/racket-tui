@@ -46,45 +46,45 @@
 ;; =============================================================================
 (require "input.rkt" "../ansi/ansi-var.rkt" "../ansi/input-var.rkt")
 
-(provide build-input loop-input)
+(provide build-input loop-input loop-input-block)
 
 (define (build-input
-         #:char       [on-char       #f]
-         #:utf-char   [on-utf-char   #f]
-         #:ctrl       [on-ctrl       #f]
-         #:alt        [on-alt        #f]
-         #:mod        [on-mod        #f]
-         #:tab        [on-tab        #f]
-         #:space      [on-space      #f]
-         #:enter      [on-enter      #f]
-         #:backspace  [on-backspace  #f]
-         #:escape     [on-escape     #f]
-         #:up         [on-up         #f]
-         #:down       [on-down       #f]
-         #:left       [on-left       #f]
-         #:right      [on-right      #f]
-         #:delete     [on-delete     #f]
-         #:insert     [on-insert     #f]
-         #:home       [on-home       #f]
-         #:end        [on-end        #f]
-         #:pageup     [on-pageup     #f]
-         #:pagedown   [on-pagedown   #f]
-         #:mouse-press   [on-mouse-press   #f]
-         #:mouse-release [on-mouse-release #f]
-         #:mouse-move    [on-mouse-move    #f]
-         #:mouse-scroll  [on-mouse-scroll  #f]
-         #:paste      [on-paste      #f]
-         #:resize     [on-resize     #f]
-         #:any        [on-any        #f]
-         #:null       [on-null       #f])
+          #:char [on-char #f]
+          #:utf-char [on-utf-char #f]
+          #:ctrl [on-ctrl #f]
+          #:alt [on-alt #f]
+          #:mod [on-mod #f]
+          #:tab [on-tab #f]
+          #:space [on-space #f]
+          #:enter [on-enter #f]
+          #:backspace [on-backspace #f]
+          #:escape [on-escape #f]
+          #:up [on-up #f]
+          #:down [on-down #f]
+          #:left [on-left #f]
+          #:right [on-right #f]
+          #:delete [on-delete #f]
+          #:insert [on-insert #f]
+          #:home [on-home #f]
+          #:end [on-end #f]
+          #:pageup [on-pageup #f]
+          #:pagedown [on-pagedown #f]
+          #:mouse-press [on-mouse-press #f]
+          #:mouse-release [on-mouse-release #f]
+          #:mouse-move [on-mouse-move #f]
+          #:mouse-scroll [on-mouse-scroll #f]
+          #:paste [on-paste #f]
+          #:resize [on-resize #f]
+          #:any [on-any #f]
+          #:null [on-null #f])
 
   ;; 辅助：处理 EVENT-KEY 类型的子分发（特殊键 vs 普通字符）
   (define (dispatch-key b)
-    (cond [(and on-tab       (= b TAB))                     (on-tab)]
-          [(and on-space     (= b SPACE))                   (on-space)]
-          [(and on-enter     (memv b (list LF CR)))         (on-enter)]
+    (cond [(and on-tab (= b TAB)) (on-tab)]
+          [(and on-space (= b SPACE)) (on-space)]
+          [(and on-enter (memv b (list LF CR))) (on-enter)]
           [(and on-backspace (memv b (list BACKSPACE DELETE))) (on-backspace)]
-          [(and on-escape    (= b ESC))                     (on-escape)]
+          [(and on-escape (= b ESC)) (on-escape)]
           [on-char
            (on-char b)]
           [on-any
@@ -124,26 +124,26 @@
   ;; 注意：case 需用裸符号，不可用变量（case 不 evaluate 分支值）
   (lambda (type data mods)
     (case type
-      [(null)   (if on-null   (on-null)   (on-any-and-null type data mods))]
+      [(null) (if on-null (on-null) (on-any-and-null type data mods))]
       [(resize) (if on-resize (on-resize (car data) (cdr data))
                     (on-any-and-null type data mods))]
-      [(paste)  (if on-paste  (on-paste data)
-                    (on-any-and-null type data mods))]
-      [(mouse)  (dispatch-mouse data)]
+      [(paste) (if on-paste (on-paste data)
+                   (on-any-and-null type data mods))]
+      [(mouse) (dispatch-mouse data)]
       [(key)
        (if (and (bytes? data) (= (bytes-length data) 1))
            (dispatch-key (bytes-ref data 0))
            (on-any-and-null EVENT-KEY data #f))]
-      [(up)        (if on-up        (on-up)        (on-any-and-null type data mods))]
-      [(down)      (if on-down      (on-down)      (on-any-and-null type data mods))]
-      [(left)      (if on-left      (on-left)      (on-any-and-null type data mods))]
-      [(right)     (if on-right     (on-right)     (on-any-and-null type data mods))]
-      [(del)       (if on-delete    (on-delete)    (on-any-and-null type data mods))]
-      [(insert)    (if on-insert    (on-insert)    (on-any-and-null type data mods))]
-      [(home)      (if on-home      (on-home)      (on-any-and-null type data mods))]
-      [(end)       (if on-end       (on-end)       (on-any-and-null type data mods))]
-      [(pageup)    (if on-pageup    (on-pageup)    (on-any-and-null type data mods))]
-      [(pagedown)  (if on-pagedown  (on-pagedown)  (on-any-and-null type data mods))]
+      [(up) (if on-up (on-up) (on-any-and-null type data mods))]
+      [(down) (if on-down (on-down) (on-any-and-null type data mods))]
+      [(left) (if on-left (on-left) (on-any-and-null type data mods))]
+      [(right) (if on-right (on-right) (on-any-and-null type data mods))]
+      [(del) (if on-delete (on-delete) (on-any-and-null type data mods))]
+      [(insert) (if on-insert (on-insert) (on-any-and-null type data mods))]
+      [(home) (if on-home (on-home) (on-any-and-null type data mods))]
+      [(end) (if on-end (on-end) (on-any-and-null type data mods))]
+      [(pageup) (if on-pageup (on-pageup) (on-any-and-null type data mods))]
+      [(pagedown) (if on-pagedown (on-pagedown) (on-any-and-null type data mods))]
       [(ctrl)
        (let ([ch (ctrl->char data)])
          (if ch
@@ -175,3 +175,12 @@
        (let-values ([(type data mods) (read-event)])
          (handler type data mods) ...
          (event-loop)))]))
+
+(define-syntax loop-input-block
+  (syntax-rules ()
+    [(_ handler ...)
+     (let event-loop ()
+       (let-values ([(type data mods) (read-event-block)])
+         (handler type data mods) ...
+         (event-loop)))]))
+
