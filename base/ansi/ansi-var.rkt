@@ -85,7 +85,7 @@
 
 ;; 鼠标事件类型位掩码
 (define MOUSE-BUTTON-MASK #b11)      ; 按钮掩码 (bits 0-1)
-(define MOUSE-MOVE-FLAG #b100000)    ; 移动标志 (bit 5)
+(define MOUSE-MOVE-FLAG 5)           ; 移动标志 (bit 5, bit index 供 bitwise-bit-set? 使用)
 (define MOUSE-SCROLL-START 64)       ; 滚轮向上
 (define MOUSE-SCROLL-END 65)         ; 滚轮向下
 
