@@ -2,15 +2,13 @@
 
 (require "../main.rkt")
 
-(define btn-ok
-  (make-button #:text "OK"
-               #:on-activate (λ () (printf "OK~n"))))
+;; panel — 左右边缘都可拖拽
+(define px (box 5))
+(define py (box 2))
+(define pw (box 12))
+(define ph (box 3))
+(define panel (make-panel px py pw ph #:color 'selection))
 
-(define btn-cancel
-  (make-button #:text "Cancel"
-               #:on-activate (λ () (printf "Cancel~n"))))
-
-(run-app (list (list btn-ok     2 1  4 1)
-               (list btn-cancel 8 1  8 1)))
+(run-app (list (list panel px py pw ph)))
 
 (printf "quit~n")
