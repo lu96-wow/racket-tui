@@ -167,11 +167,11 @@
              (on-any-and-null EVENT-UTF8 data #f)))]
       [else (on-any-and-null type data mods)])))
 
-;; ─── 事件循环 ───
-;; 简化用户代码：直接用 build-input 构造 handler，传入 loop-input 即可
-;; 无需手写 let loop + let-values
-(define (loop-input handler)
-  (let loop ()
-    (let-values ([(type data mods) (read-event)])
-      (handler type data mods)
-      (loop))))
+;; ─── 事件循环（宏：编译时展开，事件广播给所有 handler）───
+(define-syntax loop-input
+  (syntax-rules ()
+    [(_ handler ...)
+     (let event-loop ()
+       (let-values ([(type data mods) (read-event)])
+         (handler type data mods) ...
+         (event-loop)))]))
