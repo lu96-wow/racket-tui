@@ -79,6 +79,18 @@
     (tcsetattr STDIN_FILENO TCSAFLUSH saved-terminal)
     (set! saved-terminal #f)))
 
+;; 进入 raw 模式但保留回显 (ECHO)
+;; 适用于需要实时读取按键但希望终端同时显示输入的场景
+(define (enter-raw-mode-keep-echo!)
+  (define t (make-termios))
+  (tcgetattr STDIN_FILENO t)
+  (set! saved-terminal (copy-termios t))
+  (lflag-set! t (bitwise-and (lflag-ref t) (bitwise-not (bitwise-ior ICANON ISIG IEXTEN))))
+  (iflag-set! t (bitwise-and (iflag-ref t) (bitwise-not (bitwise-ior IXON ICRNL INLCR IGNCR))))
+  (oflag-set! t (bitwise-and (oflag-ref t) (bitwise-not (bitwise-ior OPOST OCRNL ONLCR))))
+  (set-vmin-vtime! t 0 0)
+  (tcsetattr STDIN_FILENO TCSAFLUSH t))
+
 ;; 通用终端请求/回复 — 发请求后阻塞等待响应clear
 ;; 同时处理 raw 模式(VMIN=0 不等待)和非 raw 模式(行缓冲)的问题
 (define (call-with-terminal-reply thunk #:vtime [vtime 1])
@@ -94,6 +106,7 @@
   (apply values result))
 
 (provide terminal? enter-raw-mode! exit-raw-mode!
+         enter-raw-mode-keep-echo!
          call-with-terminal-reply
          make-stdin-evt resize-channel resize-notify!
          STDIN_FILENO)

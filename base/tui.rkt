@@ -31,6 +31,15 @@
   (enable-mouse!)
   (enable-bracketed-paste!))
 
+;; 无 buffer + 保留回显：适用需要实时读取按键同时终端显示输入的场景
+(define (tui-init-no-buffer-echo)
+  (unless (terminal?) (error "tui-init: not a terminal"))
+  (enter-raw-mode-keep-echo!)
+  (init-newline-var)
+  (resize-monitor-start)
+  (enable-mouse!)
+  (enable-bracketed-paste!))
+
 ;; dynamic-wind 保证 tui-exit 必定执行, resize 线程随进程退出自然回收
 (define (tui-exit)
   (disable-bracketed-paste!)
@@ -48,6 +57,9 @@
   (style-reset)
   (exit-raw-mode!)
   (reset-newline-var))
+
+;; 退出逻辑与 tui-exit-no-buffer 相同，exit-raw-mode! 恢复保存的 termios 即可
+(define tui-exit-no-buffer-echo tui-exit-no-buffer)
 
 ;; 鼠标支持
 (define (enable-mouse!)
@@ -97,9 +109,23 @@
          (eprintf "Error: ~a\n" (exn-message exn))
          (raise exn))))))
 
+(define-syntax-rule (with-tui-nobuffer-echo body ...)
+  (let ([exn #f])
+    (dynamic-wind
+     tui-init-no-buffer-echo
+     (λ ()
+       (with-handlers ([exn:fail? (λ (e) (set! exn e))])
+         body ...))
+     (λ ()
+       (tui-exit-no-buffer-echo)
+       (when exn
+         (eprintf "Error: ~a\n" (exn-message exn))
+         (raise exn))))))
+
 (provide tui-init tui-exit
          tui-init-no-buffer tui-exit-no-buffer
+         tui-init-no-buffer-echo tui-exit-no-buffer-echo
          init-newline-var reset-newline-var
-         with-tui with-tui-nobuffer
+         with-tui with-tui-nobuffer with-tui-nobuffer-echo
          enable-mouse! disable-mouse!
          enable-bracketed-paste! disable-bracketed-paste!)
