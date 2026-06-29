@@ -63,24 +63,24 @@
 
 ;; 鼠标支持
 (define (enable-mouse!)
-  (display "\x1b[?1000h")  ; 基础鼠标跟踪
-  (display "\x1b[?1002h")  ; 按钮事件跟踪（拖拽时）
-  (display "\x1b[?1006h")  ; SGR 扩展坐标模式
+  (display MOUSE-ENABLE-BASIC)   ; 基础鼠标跟踪
+  (display MOUSE-ENABLE-BUTTON)  ; 按钮事件跟踪（拖拽时）
+  (display MOUSE-ENABLE-SGR)     ; SGR 扩展坐标模式
   (flush-output))
 
 (define (disable-mouse!)
-  (display "\x1b[?1006l")
-  (display "\x1b[?1002l")
-  (display "\x1b[?1000l")
+  (display MOUSE-DISABLE-SGR)
+  (display MOUSE-DISABLE-BUTTON)
+  (display MOUSE-DISABLE-BASIC)
   (flush-output))
 
 ;; 括号粘贴支持
 (define (enable-bracketed-paste!)
-  (display "\x1b[?2004h")
+  (display PASTE-ENABLE)
   (flush-output))
 
 (define (disable-bracketed-paste!)
-  (display "\x1b[?2004l")
+  (display PASTE-DISABLE)
   (flush-output))
 
 (define-syntax-rule (with-tui body ...)

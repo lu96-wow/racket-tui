@@ -89,4 +89,18 @@
 (define MOUSE-SCROLL-START 64)       ; 滚轮向上
 (define MOUSE-SCROLL-END 65)         ; 滚轮向下
 
+;; ─── 启用/禁用 ANSI 转义序列（输出用）───
+
+;; 鼠标
+(define MOUSE-ENABLE-BASIC   #"\e[?1000h")  ; 基础鼠标跟踪
+(define MOUSE-ENABLE-BUTTON  #"\e[?1002h")  ; 按钮事件跟踪（拖拽）
+(define MOUSE-ENABLE-SGR     #"\e[?1006h")  ; SGR 扩展坐标模式
+(define MOUSE-DISABLE-SGR    #"\e[?1006l")
+(define MOUSE-DISABLE-BUTTON #"\e[?1002l")
+(define MOUSE-DISABLE-BASIC  #"\e[?1000l")
+
+;; 括号粘贴
+(define PASTE-ENABLE  #"\e[?2004h")
+(define PASTE-DISABLE #"\e[?2004l")
+
 (provide (all-defined-out))
