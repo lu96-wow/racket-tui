@@ -172,7 +172,6 @@
                 [else
                  (log-event (format "~a" type))]))))
   ;; read-event 内部使用 select() 阻塞等待, 零 CPU 空转
-  ;; 不需要 change-noblock / sleep 轮询
   (let loop ()
     (when running?
       (let-values ([(type data mods) (read-event)])

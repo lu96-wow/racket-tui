@@ -46,7 +46,7 @@
 ;; =============================================================================
 (require "input.rkt" "../ansi/ansi-var.rkt" "../ansi/input-var.rkt")
 
-(provide build-input loop-input loop-input-block)
+(provide build-input loop-input loop-input-noblock)
 
 (define (build-input
           #:char [on-char #f]
@@ -176,11 +176,11 @@
          (handler type data mods) ...
          (event-loop)))]))
 
-(define-syntax loop-input-block
+(define-syntax loop-input-noblock
   (syntax-rules ()
     [(_ handler ...)
      (let event-loop ()
-       (let-values ([(type data mods) (read-event-block)])
+       (let-values ([(type data mods) (read-event-noblock)])
          (handler type data mods) ...
          (event-loop)))]))
 

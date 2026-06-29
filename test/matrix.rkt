@@ -70,9 +70,9 @@
 
     (let loop ()
       (when running?
-        ;; read-event-nonblock 内部使用 select(timeout=0), 不阻塞
+        ;; read-event-noblock 内部使用 select(timeout=0), 不阻塞
         (let drain ()
-          (let-values ([(type data mods) (read-event-nonblock)])
+          (let-values ([(type data mods) (read-event-noblock)])
             (cond [(event-null? type) (void)]
                   [(event-resize? type)
                    (let-values ([(nr nc) (get-resize-size data)])

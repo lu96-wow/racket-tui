@@ -210,7 +210,7 @@
 
 ;; 非阻塞版本, 等价于 ncurses timeout(0) getch()
 ;; 无事件时 evt 为 #f (sync/timeout 返回), 返回 EVENT-NULL
-(define (read-event-nonblock)
+(define (read-event-noblock)
   (define evt (sync/timeout 0 (make-stdin-evt) resize-channel))
   (cond [(bytes? evt)
          (read-event-impl (bytes-ref evt 0))]
@@ -317,7 +317,7 @@
 ;; 导出
 
 (provide resize-monitor-start
-         read-event read-event-nonblock
+         read-event read-event-noblock
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?
          event-del? event-insert? event-home? event-end? event-pageup? event-pagedown?
