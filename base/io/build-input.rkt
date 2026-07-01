@@ -46,7 +46,8 @@
 ;; =============================================================================
 (require "input.rkt" "../ansi/ansi-var.rkt" "../ansi/input-var.rkt")
 
-(provide build-input loop-input loop-input-noblock)
+(provide build-input loop-input loop-input-noblock
+         loop-input/stop loop-input-noblock/stop)
 
 (define (build-input
           #:char [on-char #f]
@@ -183,4 +184,22 @@
        (let-values ([(type data mods) (read-event-noblock)])
          (handler type data mods) ...
          (event-loop)))]))
+
+;; ─── 带停止条件的事件循环 ───
+;; stop? 是一个表达式，每次循环后求值，为 #t 时退出
+(define-syntax loop-input/stop
+  (syntax-rules ()
+    [(_ stop? handler ...)
+     (let event-loop ()
+       (let-values ([(type data mods) (read-event)])
+         (handler type data mods) ...
+         (unless stop? (event-loop))))]))
+
+(define-syntax loop-input-noblock/stop
+  (syntax-rules ()
+    [(_ stop? handler ...)
+     (let event-loop ()
+       (let-values ([(type data mods) (read-event-noblock)])
+         (handler type data mods) ...
+         (unless stop? (event-loop))))]))
 

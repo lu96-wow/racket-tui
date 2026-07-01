@@ -18,4 +18,5 @@
    (build-input #:enter on-activate #:space on-activate)
    #t #t
    (string-length label)
-   1))
+   1
+   (box #t)))

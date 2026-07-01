@@ -3,11 +3,12 @@
 (provide component component?
          component-render component-handler
          component-focusable? component-show?
-         component-w component-h)
+         component-w component-h component-dirty)
 
 ;; render    : (λ (focused? x y w h) → void)   x,y,w,h 0-based, 调度器传入
 ;; handler   : (λ (type data mods) → void)     build-input 构造
 ;; focusable?: bool
 ;; show?     : bool
 ;; w, h      : natural / box?  组件期望宽高
-(struct component (render handler focusable? show? w h) #:transparent)
+;; dirty     : box?  组件标记需要重绘（调度器每帧检查，绘后置 #f）
+(struct component (render handler focusable? show? w h dirty) #:transparent)
