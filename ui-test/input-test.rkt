@@ -62,7 +62,7 @@
 
 (define specs
   (list (list (make-status) 0 0 36 6)
-        (list name-input     2 8 4 1)
+        (list name-input     2 8 20 1)
         (list submit-btn     2 10 0 0)))  ;; button w/h 由自身决定
 
 (run-app specs)

@@ -127,27 +127,26 @@
                                (substring placeholder 0 w)
                                placeholder)))
          ;; 有内容或聚焦 → 显示文本 + 光标
-         (let* ((cursor-col (for/sum ([i (in-range ci)]) (vector-ref ws i)))
-                (total-w   (for/sum ([i (in-range total)]) (vector-ref ws i)))
+         (let* ((cw (if (< ci total) (vector-ref ws ci) 1))
+                ;; 从光标往回走，填满视口宽度（光标靠右）
                 (start
-                 (if (<= total-w w) 0
-                     (let loop ([i 0] [col 0])
-                       (cond [(>= i total) 0]
-                             [(> (+ col (vector-ref ws i))
-                                 (- cursor-col (quotient w 2))) i]
-                             [else (loop (add1 i) (+ col (vector-ref ws i)))]))))
-                (end
-                 (let loop ([i start] [col 0])
-                   (if (or (>= i total) (>= (+ col (vector-ref ws i)) w))
+                 (let loop ([i ci] [rem (- w cw)])
+                   (if (or (<= i 0) (< rem (vector-ref ws (sub1 i))))
                        i
-                       (loop (add1 i) (+ col (vector-ref ws i))))))
+                       (loop (sub1 i) (- rem (vector-ref ws (sub1 i)))))))
+                ;; 从 start 往后走，填满视口
+                (end
+                 (let loop ([i start] [rem w])
+                   (if (or (>= i total) (< rem (vector-ref ws i)))
+                       i
+                       (loop (add1 i) (- rem (vector-ref ws i))))))
                 (visible (list->string
                           (for/list ([i (in-range start end)]) (vector-ref cs i))))
+                ;; 光标在视口内的 x 偏移
                 (pre-w (for/sum ([i (in-range start ci)]) (vector-ref ws i)))
                 (cursor-x (+ x pre-w)))
            (put-styled-at! y x (if focused? 'input-focus 'input-normal) visible)
            (when (and focused? (< pre-w w))
-             (define cw (if (< ci total) (vector-ref ws ci) 1))
              (define cursor-char (if (< ci total) (string (vector-ref cs ci)) " "))
              (put-styled-at! y cursor-x 'cursor cursor-char)))))
 
@@ -169,11 +168,6 @@
     #:end  (λ () (set-box! cid (vector-length (unbox chars)))
                 (set-box! dirty #t))
     #:enter (λ () (on-submit (text-string)))
-    #:escape (λ ()
-               (set-box! chars (vector))
-               (set-box! widths (vector))
-               (set-box! cid 0)
-               (set-box! dirty #t)
-               (on-change "")))
+    #:escape void)
 
    #t #t 0 1 dirty))
