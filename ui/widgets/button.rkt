@@ -8,9 +8,7 @@
 
 (provide make-button)
 
-(define (make-button #:text text #:on-activate [on-activate void]
-                     #:on-press [on-press void]
-                     #:on-release [on-release void])
+(define (make-button #:text text #:on-activate [on-activate void])
   (define label (string-append " " text " "))
   (define pressed? (box #f))
   (define dirty    (box #t))
@@ -26,15 +24,13 @@
     #:mouse-press (λ (btn mx my mods)
                     (when (eq? btn 'left)
                       (set-box! pressed? #t)
-                      (set-box! dirty #t)
-                      (on-press)))
+                      (set-box! dirty #t)))
     #:mouse-release (λ (btn mx my mods)
                       (when (eq? btn 'left)
                         (when (unbox pressed?)
                           (on-activate))
                         (set-box! pressed? #f)
-                        (set-box! dirty #t)
-                        (on-release))))
+                        (set-box! dirty #t))))
 
    #t #t
    (string-length label)

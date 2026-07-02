@@ -17,14 +17,13 @@
     (build-input)
     #f #t 40 1 (box #t)))
 
-(define (on-press name)
-  (λ ()
-    (set-box! last-action (format "press button ~a" name))))
-
 (define specs
   (list (list (make-header) 1 1 40 1)
-        (list (make-button #:text "A" #:on-press (on-press "A")) 1 3 0 0)
-        (list (make-button #:text "B" #:on-press (on-press "B")) 1 5 0 0)
-        (list (make-button #:text "C" #:on-press (on-press "C")) 1 7 0 0)))
+        (list (make-button #:text "A"
+                           #:on-activate (λ () (set-box! last-action "clicked A"))) 1 3 0 0)
+        (list (make-button #:text "B"
+                           #:on-activate (λ () (set-box! last-action "clicked B"))) 1 5 0 0)
+        (list (make-button #:text "C"
+                           #:on-activate (λ () (set-box! last-action "clicked C"))) 1 7 0 0)))
 
 (run-app specs)
