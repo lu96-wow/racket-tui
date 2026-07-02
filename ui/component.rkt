@@ -11,4 +11,5 @@
 ;; show?     : bool
 ;; w, h      : natural / box?  组件期望宽高
 ;; dirty     : box?  组件标记需要重绘（调度器每帧检查，绘后置 #f）
-(struct component (render handler focusable? show? w h dirty) #:transparent)
+(struct component
+  (render handler focusable? show? w h dirty) #:transparent)
