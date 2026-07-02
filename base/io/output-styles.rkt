@@ -54,7 +54,7 @@
 ;; 按钮样式
 (style-define! 'button           clr-white bclr-blue attr-bold)
 (style-define! 'button-hover     clr-black bclr-cyan attr-bold)
-(style-define! 'button-pressed   clr-cyan bclr-blue attr-bold)
+(style-define! 'button-pressed   clr-black bclr-white attr-bold)
 (style-define! 'button-disabled  clr-white bclr-black)
 
 ;; 菜单样式
