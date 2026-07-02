@@ -394,10 +394,10 @@
                                (set-box! scroll-x (max 0 cur-col-x))]
                               ;; 光标超出右边界 → 窗口右移（给光标留1列）
                               [(> cur-right (+ old-hs w -1))
-                               (set-box! scroll-x (min (- total-w w) (- cur-right w -1)))]
-                              ;; 行变短后窗口可能悬空 → 拉回
-                              [(> old-hs (max 0 (- total-w w)))
-                               (set-box! scroll-x (max 0 (- total-w w)))]
+                               (set-box! scroll-x (max 0 (min cur-col-x (- cur-right w))))]
+                              ;; 窗口已越过光标 → 拉回
+                              [(> old-hs cur-col-x)
+                               (set-box! scroll-x (max 0 cur-col-x))]
                               [else old-hs])
                         (unbox scroll-x)]))
 
