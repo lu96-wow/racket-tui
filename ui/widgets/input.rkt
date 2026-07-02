@@ -167,7 +167,8 @@
 (define (make-input #:placeholder [placeholder ""]
                     #:on-submit   [on-submit void]
                     #:on-change   [on-change void]
-                    #:multiline?  [multiline? #f])
+                    #:multiline?  [multiline? #f]
+                    #:initial-text [initial-text ""])
   ;; ── 状态 ──
   (define gb           (box (make-gap-buf)))
   (define lines        (box '(0)))
@@ -179,6 +180,14 @@
   (define pos-y (box 0))
   (define pos-w (box 0))
   (define pos-h (box 0))
+
+  ;; 初始化文本
+  (unless (equal? initial-text "")
+    (define b (unbox gb))
+    (for ([ch (in-string initial-text)])
+      (gb-insert! b ch (char-display-width ch)))
+    (set-box! gb b)
+    (set-box! lines-dirty? #t))
 
   ;; ── 行缓存 ──
   (define (get-lines)
@@ -446,8 +455,8 @@
          #:down       do-move-down
          #:home       do-move-home
          #:end        do-move-end
-         #:enter      (λ () (do-insert "\n"))
-         #:escape     void
+         #:enter      (λ () (on-submit (text-string)))
+         #:escape     (λ () (do-insert "\n"))  ;; ESC → 换行
          #:paste       (λ (data) (do-insert (bytes->string/utf-8 data)))
          #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
          #:mouse-move  (λ (mx my mods)       (mouse->cursor mx my)))
