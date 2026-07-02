@@ -1,13 +1,6 @@
 #lang racket
 
-(require "../main.rkt"
-         "../ui/run.rkt"
-         "../ui/component.rkt"
-         "../ui/widgets/button.rkt"
-         "../ui/widgets/text.rkt"
-         "../base/io/build-input.rkt"
-         "../base/io/output.rkt"
-         "../base/io/output-styles.rkt")
+(require "../ui/main.rkt")
 
 (define last-action (box "none"))
 

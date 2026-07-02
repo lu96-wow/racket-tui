@@ -1,0 +1,14 @@
+#lang racket
+;; ui/main.rkt — ui 层入口，聚合所有 ui 模块
+
+(require "component.rkt"
+         "run.rkt"
+         "widgets/input.rkt"
+         "widgets/button.rkt"
+         "widgets/text.rkt")
+
+(provide (all-from-out "component.rkt")
+         (all-from-out "run.rkt")
+         (all-from-out "widgets/input.rkt")
+         (all-from-out "widgets/button.rkt")
+         (all-from-out "widgets/text.rkt"))

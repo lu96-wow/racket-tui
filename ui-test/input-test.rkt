@@ -1,14 +1,6 @@
 #lang racket
 
-(require "../main.rkt"
-         "../ui/run.rkt"
-         "../ui/component.rkt"
-         "../ui/widgets/input.rkt"
-         "../ui/widgets/button.rkt"
-         "../ui/widgets/text.rkt"
-         "../base/io/build-input.rkt"
-         "../base/io/output.rkt"
-         "../base/io/output-styles.rkt")
+(require "../ui/main.rkt")
 
 (define submitted (box "(none)"))
 
@@ -38,7 +30,7 @@
               1 5 36 1)
         (list (make-text #:text "└──────────────────────────────┘" #:style 'title)
               1 6 36 1)
-        (list name-input 2 8 20 1)
+        (list name-input 2 8 20 2)
         (list submit-btn 2 10 0 0)))
 
 (run-app specs)
