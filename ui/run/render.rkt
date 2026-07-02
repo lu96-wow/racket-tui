@@ -6,8 +6,8 @@
 ;;   - 稳定时跳过 screen-clear，只重绘脏/焦点变化组件
 ;;   - 不稳定时全量清屏 + 缓存回放
 
-(require "../base/main.rkt"
-         "component.rkt")
+(require "../../base/main.rkt"
+         "../component.rkt")
 
 (provide make-renderer)
 

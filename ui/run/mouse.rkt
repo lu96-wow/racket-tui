@@ -7,7 +7,7 @@
 ;;   - move/scroll: mouse-focus 优先, 否则 hit-test
 ;;   - 不依赖键盘 focus, 完全独立
 
-(require "component.rkt")
+(require "../component.rkt")
 
 (provide make-mouse-router)
 

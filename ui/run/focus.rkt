@@ -5,9 +5,9 @@
 ;;   - q 键退出
 ;;   - 鼠标左键点击 → hit-test → 切换到对应 focusable 组件
 
-(require "../base/main.rkt"
-         "../base/io/build-input.rkt"
-         "component.rkt")
+(require "../../base/main.rkt"
+         "../../base/io/build-input.rkt"
+         "../component.rkt")
 
 (provide make-global)
 

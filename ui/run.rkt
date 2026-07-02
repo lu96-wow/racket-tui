@@ -2,10 +2,10 @@
 ;; 调度器入口 — 组装所有模块, 启动事件循环
 ;;
 ;; 架构:
-;;   run-render.rkt   — 渲染引擎 (render-all)
-;;   run-focus.rkt    — 键盘焦点 (global handler)
-;;   run-mouse.rkt    — 鼠标路由 (mouse-router)
-;;   run-dispatch.rkt — 事件分发 (dispatch-and-render)
+;;   run/render.rkt   — 渲染引擎 (render-all)
+;;   run/focus.rkt    — 键盘焦点 (global handler)
+;;   run/mouse.rkt    — 鼠标路由 (mouse-router)
+;;   run/dispatch.rkt — 事件分发 (dispatch-and-render)
 ;;
 ;; 事件流:
 ;;   read-event → global → mouse-router → dispatch-and-render → render-all
@@ -13,10 +13,10 @@
 (require "../base/main.rkt"
          "../base/io/build-input.rkt"
          "component.rkt"
-         "run-render.rkt"
-         "run-focus.rkt"
-         "run-mouse.rkt"
-         "run-dispatch.rkt")
+         "run/render.rkt"
+         "run/focus.rkt"
+         "run/mouse.rkt"
+         "run/dispatch.rkt")
 
 (provide run-app)
 

@@ -6,7 +6,7 @@
 ;;   - mouse  → mouse-router 处理 (dispatch-and-render 跳过)
 ;;   - 其他   → 键盘焦点组件
 
-(require "component.rkt")
+(require "../component.rkt")
 
 (provide make-dispatcher)
 
