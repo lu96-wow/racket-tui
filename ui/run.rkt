@@ -40,6 +40,21 @@
     (define render-cache (make-hasheq))
     (define last-focused (make-hasheq))
 
+    ;; 鼠标暂存焦点：press 锁定, release 清除
+    (define mouse-focus (box #f))
+
+    (define (find-component-at mx my)
+      (for/or ([s (reverse specs)])
+        (match-let ([(list comp xb yb wb hb) s])
+          (define cx (unbox* xb))
+          (define cy (unbox* yb))
+          (define cw (let ([v (unbox* wb)]) (if (zero? v) (component-w comp) v)))
+          (define ch (let ([v (unbox* hb)]) (if (zero? v) (component-h comp) v)))
+          (and (component-show? comp)
+               (<= cx mx (+ cx cw -1))
+               (<= cy my (+ cy ch -1))
+               comp))))
+
     (define global
       (build-input
        #:char (λ (ch) (when (= ch (char->integer #\q))
@@ -140,19 +155,54 @@
     ;; 首帧全量绘制
     (render-all)
 
-    ;; 事件转发: resize → 广播所有组件, 其他 → 全局 + 焦点组件
+    ;; 事件转发: resize → 广播, mouse → mouse-router, 其他 → 焦点
     (define (dispatch-and-render type data mods)
       (cond
         [(eq? type 'resize)
          (for ([s specs])
            ((component-handler (car s)) type data mods))]
+        [(eq? type 'mouse)
+         (void)]
         [else
          (when (unbox focus)
            ((component-handler (unbox focus)) type data mods))])
       (render-all))
 
-    (if noblock?
-        (loop-input-noblock/stop (unbox quit?)
-          global dispatch-and-render)
-        (loop-input/stop (unbox quit?)
-          global dispatch-and-render))))
+    ;; mouse-router 用 let 绑定，不增加内部 define
+    (let ([mouse-router
+           (let ([send (λ (comp type data)
+                         ((component-handler comp) type data #f))])
+             (λ (type data mods)
+               (case (and (pair? data) (car data))
+                 [(press)
+                  (let ([comp (find-component-at (caddr data) (cadddr data))])
+                    (when comp
+                      (set-box! mouse-focus comp)
+                      (send comp 'mouse data)))]
+                 [(release)
+                  (let ([mf (unbox mouse-focus)])
+                    (if mf
+                        (begin
+                          (set-box! mouse-focus #f)
+                          (send mf 'mouse data))
+                        (let ([comp (find-component-at (caddr data) (cadddr data))])
+                          (when comp
+                            (send comp 'mouse data)))))]
+                 [(move)
+                  (let ([comp (or (unbox mouse-focus)
+                                  (find-component-at (caddr data) (cadddr data)))])
+                    (when comp
+                      (send comp 'mouse data)))]
+                 [(scroll)
+                  (let ([comp (or (unbox mouse-focus)
+                                  (find-component-at (cadddr data)
+                                                     (car (cddddr data))))])
+                    (when comp
+                      (send comp 'mouse data)))]
+                 [else (void)])))])
+      (render-all)
+      (if noblock?
+          (loop-input-noblock/stop (unbox quit?)
+            global mouse-router dispatch-and-render)
+          (loop-input/stop (unbox quit?)
+            global mouse-router dispatch-and-render)))))
