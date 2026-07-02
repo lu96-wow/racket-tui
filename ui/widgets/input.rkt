@@ -342,7 +342,7 @@
     (define ls (get-lines))
     (define ci (cursor-pos))
     (define tl (gap-buf-total-len b))
-    (define-values (cur-li _) (pos->line+col ls ci))
+    (define-values (cur-li cur-col) (pos->line+col ls ci))
     (define scr (unbox scroll-y))
     (cond
       ;; 空 + 无焦点 → placeholder
@@ -360,27 +360,71 @@
            (define line-end   (if (< (add1 li) (length ls))
                                   (max line-start (sub1 (list-ref ls (add1 li))))
                                   tl))
-           ;; 按显示宽度裁剪
+           (define line-len (- line-end line-start))
+
+           ;; ── 计算水平滚动偏移 ──
+           ;; 把 w 宽的视口当作 buffer 上的可移动窗口
+           (define-values (hscroll cursor-screen-x)
+             (cond
+               [(= li cur-li)
+                ;; 光标所在行：确保光标在窗口内
+                (define cursor-col-x (for/sum ([p (in-range line-start ci)])
+                                       (gb-width-ref b p)))
+                (define cursor-w (if (and (< ci tl)
+                                          (not (char=? (gb-ref b ci) #\newline)))
+                                     (gb-width-ref b ci)
+                                     1))
+                ;; 计算整行总宽度
+                (define total-w (for/sum ([p (in-range line-start line-end)])
+                                  (gb-width-ref b p)))
+                (cond [(<= total-w w)
+                       ;; 行完全可见 → 不滚动
+                       (values 0 cursor-col-x)]
+                      [(< cursor-col-x (quotient w 2))
+                       ;; 光标靠近行首 → 窗口靠左
+                       (values 0 cursor-col-x)]
+                      [(> (+ cursor-col-x cursor-w) (- total-w (quotient w 2)))
+                       ;; 光标靠近行尾 → 窗口靠右
+                       (define hs (max 0 (- total-w w)))
+                       (values hs (- cursor-col-x hs))]
+                      [else
+                       ;; 光标居中
+                       (define hs (- cursor-col-x (quotient w 2)))
+                       (values hs (- cursor-col-x hs))])]
+               [else
+                ;; 非光标行 → 窗口靠左
+                (values 0 0)]))
+
+           ;; ── 从 hscroll 偏移处开始渲染 ──
+           ;; 先找到 hscroll 对应的字符位置
+           (define render-start
+             (let loop ([p line-start] [acc 0])
+               (cond [(>= p line-end) p]
+                     [(>= acc hscroll) p]
+                     [else (loop (add1 p) (+ acc (gb-width-ref b p)))])))
+           ;; 渲染可见部分
            (define display-str
              (call-with-output-string
               (λ (out)
-                (let loop ([pos line-start] [used 0])
-                  (when (< pos line-end)
-                    (define cw (gb-width-ref b pos))
-                    (when (<= (+ used cw) w)
-                      (write-char (gb-ref b pos) out)
-                      (loop (add1 pos) (+ used cw))))))))
+                (let loop ([p render-start] [used 0])
+                  (when (and (< p line-end) (< used w))
+                    (define cw (gb-width-ref b p))
+                    (if (<= (+ used cw) w)
+                        (begin (write-char (gb-ref b p) out)
+                               (loop (add1 p) (+ used cw)))
+                        (void)))))))
            (define style (if focused? 'input-focus 'input-normal))
            (put-styled-at! (+ y screen-row) x style display-str)
-           ;; 光标
+
+           ;; ── 光标 ──
            (when (and focused? (= li cur-li))
-             (define col-x (for/sum ([pos (in-range line-start ci)])
-                             (gb-width-ref b pos)))
-             (when (< col-x w)
-               (define cch (if (and (< ci tl) (not (char=? (gb-ref b ci) #\newline)))
+             (define screen-x cursor-screen-x)
+             (when (and (>= screen-x 0) (< screen-x w))
+               (define cch (if (and (< ci tl)
+                                    (not (char=? (gb-ref b ci) #\newline)))
                                (string (gb-ref b ci))
                                " "))
-               (put-styled-at! (+ y screen-row) (+ x col-x) 'cursor cch)))))]))
+               (put-styled-at! (+ y screen-row) (+ x screen-x) 'cursor cch)))))]))
 
   ;; ── handler ──
   (define handler
