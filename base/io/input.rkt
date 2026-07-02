@@ -87,8 +87,8 @@
                              [(= type MOUSE-SCROLL-END) SCROLL-DOWN]
                              [else #f])])
     (if scroll-direction
-        (list action EVENT-MOUSE-SCROLL scroll-direction (- x 1) (- y 1) modifiers)
-        (list action button (- x 1) (- y 1) modifiers))))
+        (list action EVENT-MOUSE-SCROLL scroll-direction x y modifiers)
+        (list action button x y modifiers))))
 
 ;; ════════════════════════════════════════════════════════════════
 ;; ncurses ESCDELAY 超时机制 — 解决独立 ESC 空转 + 防御性上限
