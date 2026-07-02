@@ -35,4 +35,5 @@
    #t #t
    (string-length label)
    1
-   dirty))
+   dirty
+   #f))

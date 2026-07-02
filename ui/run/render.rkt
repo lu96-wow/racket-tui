@@ -56,6 +56,10 @@
                    (not (= w (third last)))
                    (not (= h (fourth last))))))
 
+        ;; 每帧给组件一次机会自行判断是否需要重绘
+        (when (component-render? comp)
+          ((component-render? comp) x y w h focused-now?))
+
         (define needs-redraw?
           (or (not last)
               bounds-changed?

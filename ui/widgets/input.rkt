@@ -213,4 +213,4 @@
     #:mouse-move (λ (mx my mods)
                    (mouse-xy->cid mx my)))
 
-   #t #t 0 1 dirty))
+   #t #t 0 1 dirty #f))
