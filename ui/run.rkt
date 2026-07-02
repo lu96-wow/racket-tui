@@ -66,7 +66,29 @@
         (and (< x cur-cols) (< y cur-rows)
              (>= (+ x w) 0) (>= (+ y h) 0)))
 
-      (screen-clear)
+      ;; ── 第一遍：检查所有组件 bounds/可见性 是否稳定 ──
+      ;; 全部稳定 → 可跳过 screen-clear，只重绘脏组件
+      (define all-bounds-stable?
+        (for/and ([s specs])
+          (match-let ([(list comp xb yb wb hb) s])
+            (define x (unbox* xb))
+            (define y (unbox* yb))
+            (define w (unbox* wb))
+            (define h (unbox* hb))
+            (define visible? (and (component-show? comp) (fits? x y w h)))
+            (define last (hash-ref last-bounds comp #f))
+            (cond [(and last visible?)
+                   ;; 上帧可见、本帧可见 → 检查 bounds 是否一致
+                   (and (= x (first last))
+                        (= y (second last))
+                        (= w (third last))
+                        (= h (fourth last)))]
+                  [(or last visible?) #f]  ;; 可见性变了 → 不稳定
+                  [else #t]))))            ;; 上帧不可见、本帧也不可见 → 稳定
+
+      ;; 有组件位置/可见性变化时才清屏，否则屏幕内容可直接复用
+      (unless all-bounds-stable?
+        (screen-clear))
 
       (for ([s specs])
         (match-let ([(list comp xb yb wb hb) s])
@@ -111,9 +133,14 @@
              (hash-set! last-focused comp focused-now?)
              (set-box! (component-dirty comp) #f)]
 
-            [else
+            ;; 组件不需要重绘，但屏幕被清过 → 从缓存回放恢复内容
+            [(not all-bounds-stable?)
              (define bs (hash-ref render-cache comp #""))
-             (write-bytes bs)])))
+             (write-bytes bs)]
+
+            ;; 组件不需要重绘，屏幕也没清 → 跳过（内容已在屏幕上）
+            [else
+             (void)])))
       (flush-output))
 
     ;; 首帧全量绘制

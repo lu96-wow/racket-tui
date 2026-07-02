@@ -26,27 +26,27 @@
 (define (make-status)
   (define dirty status-dirty)
   (component
-   (λ (focused? x y w h)
-     (for ([i (in-range h)])
-       (cursor-move (+ y i) x)
-       (put-string (make-string w #\space)))
-     (put-styled-at! y x 'title
-       "┌────┤ Input Widget Test ├────┐")
-     (put-styled-at! (+ y 1) x 'info
-       "│ Type in the input field       │")
-     (put-styled-at! (+ y 2) x 'info
-       "│ Enter = submit, Esc = clear   │")
-     (put-styled-at! (+ y 3) x 'info
-       (format "│ Last submit: ~a~a"
-               (unbox submitted)
-               (make-string (max 0 (- 26 (string-length (unbox submitted))))
-                            #\space)))
-     (put-styled-at! (+ y 4) x 'info
-       "│ Press q to quit               │")
-     (put-styled-at! (+ y 5) x 'title
-       "└──────────────────────────────┘"))
-   (build-input)
-   #f #t 36 6 dirty))
+    (λ (focused? x y w h)
+      (for ([i (in-range h)])
+        (cursor-move (+ y i) x)
+        (put-string (make-string w #\space)))
+      (put-styled-at! y x 'title
+                      "┌────┤ Input Widget Test ├────┐")
+      (put-styled-at! (+ y 1) x 'info
+                      "│ Type in the input field       │")
+      (put-styled-at! (+ y 2) x 'info
+                      "│ Enter = submit, Esc = clear   │")
+      (put-styled-at! (+ y 3) x 'info
+                      (format "│ Last submit: ~a~a"
+                              (unbox submitted)
+                              (make-string (max 0 (- 26 (string-length (unbox submitted))))
+                                           #\space)))
+      (put-styled-at! (+ y 4) x 'info
+                      "│ Press q to quit               │")
+      (put-styled-at! (+ y 5) x 'title
+                      "└──────────────────────────────┘"))
+    (build-input)
+    #f #t 36 6 dirty))
 
 ;; ═══════════════════════════════════════════════
 ;; specs
@@ -61,8 +61,8 @@
                #:on-activate (λ () (set-box! submitted "button clicked!") (set-box! status-dirty #t))))
 
 (define specs
-  (list (list (make-status) 0 0 36 6)
-        (list name-input     2 8 20 1)
-        (list submit-btn     2 10 0 0)))  ;; button w/h 由自身决定
+  (list (list (make-status) 1 1 36 6)
+        (list name-input 2 8 20 1)
+        (list submit-btn 2 10 0 0))) ;; button w/h 由自身决定
 
 (run-app specs)
