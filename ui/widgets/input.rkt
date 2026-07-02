@@ -174,6 +174,7 @@
   (define lines-dirty? (box #t))
   (define dirty        (box #t))
   (define scroll-y     (box 0))
+  (define scroll-x     (box 0))  ;; 水平滚动偏移（仅光标所在行生效）
   (define pos-x (box 0))
   (define pos-y (box 0))
   (define pos-w (box 0))
@@ -225,6 +226,7 @@
                      [else (loop (add1 pos) (+ col-w (gb-width-ref b pos)))]))]))
     (when (not (= new-pos (cursor-pos)))
       (gb-move-gap! b new-pos)
+      (set-box! scroll-x 0)
       (set-box! dirty #t)))
 
   ;; ── 编辑操作 ──
@@ -234,6 +236,7 @@
       (unless (and (not multiline?) (char=? ch #\newline))
         (gb-insert! b ch (char-display-width ch))))
     (set-box! gb b)
+    (set-box! scroll-x 0)
     (mark-lines-dirty!)
     (set-box! dirty #t)
     (ensure-cursor-visible!)
@@ -244,6 +247,7 @@
     (when (> (cursor-pos) 0)
       (gb-backspace! b)
       (set-box! gb b)
+      (set-box! scroll-x 0)
       (mark-lines-dirty!)
       (set-box! dirty #t)
       (ensure-cursor-visible!)
@@ -254,6 +258,7 @@
     (when (< (cursor-pos) (gap-buf-total-len b))
       (gb-delete! b)
       (set-box! gb b)
+      (set-box! scroll-x 0)
       (mark-lines-dirty!)
       (set-box! dirty #t)
       (on-change (text-string))))
@@ -275,6 +280,7 @@
       (ensure-cursor-visible!)))
 
   (define (do-move-up)
+    (set-box! scroll-x 0)
     (define b  (unbox gb))
     (define ls (get-lines))
     (define ci (cursor-pos))
@@ -289,6 +295,7 @@
       (ensure-cursor-visible!)))
 
   (define (do-move-down)
+    (set-box! scroll-x 0)
     (define b  (unbox gb))
     (define ls (get-lines))
     (define ci (cursor-pos))
@@ -304,6 +311,7 @@
       (ensure-cursor-visible!)))
 
   (define (do-move-home)
+    (set-box! scroll-x 0)
     (define b  (unbox gb))
     (define ls (get-lines))
     (define ci (cursor-pos))
@@ -315,6 +323,7 @@
       (set-box! dirty #t)))
 
   (define (do-move-end)
+    (set-box! scroll-x 0)
     (define b  (unbox gb))
     (define ls (get-lines))
     (define ci (cursor-pos))
@@ -334,87 +343,93 @@
     (set-box! pos-y y)
     (set-box! pos-w w)
     (set-box! pos-h h)
-    ;; 清区域
-    (for ([i (in-range h)])
-      (cursor-move (+ y i) x)
-      (put-string (make-string w #\space)))
+
     (define b  (unbox gb))
     (define ls (get-lines))
     (define ci (cursor-pos))
     (define tl (gap-buf-total-len b))
-    (define-values (cur-li cur-col) (pos->line+col ls ci))
+    (define-values (cur-li _) (pos->line+col ls ci))
     (define scr (unbox scroll-y))
-    (cond
-      ;; 空 + 无焦点 → placeholder
-      [(and (zero? tl) (not focused?))
-       (when (positive? (string-length placeholder))
-         (put-styled-at! y x 'input-normal
-                         (if (> (string-length placeholder) w)
-                             (substring placeholder 0 w)
-                             placeholder)))]
-      [else
-       (for ([screen-row (in-range h)])
-         (define li (+ scr screen-row))
-         (when (< li (length ls))
-           (define line-start (list-ref ls li))
-           (define line-end   (if (< (add1 li) (length ls))
-                                  (max line-start (sub1 (list-ref ls (add1 li))))
-                                  tl))
-           (define line-len (- line-end line-start))
 
-           ;; ── 视口 [hscroll, hscroll+w) 在 buffer 上的浮动窗口 ──
-           (define total-w
-             (for/sum ([p (in-range line-start line-end)]) (gb-width-ref b p)))
+    ;; placeholder
+    (cond [(and (zero? tl) (not focused?))
+           (when (positive? (string-length placeholder))
+             (put-styled-at! y x 'input-normal
+                             (if (> (string-length placeholder) w)
+                                 (substring placeholder 0 w) placeholder)))]
+          [else
+           (for ([screen-row (in-range h)])
+             (define row (+ y screen-row))
+             (define li  (+ scr screen-row))
 
-           ;; 计算水平滚动偏移：确保光标在窗口内
-           (define hscroll
-             (cond
-               [(not (= li cur-li)) 0]
-               [(<= total-w w) 0]
-               [else
-                (define cursor-col-x (for/sum ([p (in-range line-start ci)])
-                                       (gb-width-ref b p)))
-                (define cursor-w (if (and (< ci tl)
-                                          (not (char=? (gb-ref b ci) #\newline)))
-                                     (gb-width-ref b ci)
-                                     1))
-                (cond [(< cursor-col-x (quotient w 2)) 0]
-                      [(> (+ cursor-col-x cursor-w) (- total-w (quotient w 2)))
-                       (max 0 (- total-w w))]
-                      [else (- cursor-col-x (quotient w 2))])]))
+             ;; 清空行
+             (cursor-move row x)
+             (put-string (make-string w #\space))
 
-           ;; ── 逐字符渲染：完全在窗口内的才画 ──
-           ;; 窗口 = 屏幕列 [0, w) ← 映射到 buffer 显示列 [hscroll, hscroll+w)
-           (define style (if focused? 'input-focus 'input-normal))
-           (let loop ([p line-start] [col 0])
-             (when (< p line-end)
-               (define cw (gb-width-ref b p))
-               (define char-right (+ col cw))
-               (define screen-x (- col hscroll))
-               (cond
-                 ;; 字符完全在窗口左边 → 跳过
-                 [(<= char-right hscroll)
-                  (loop (add1 p) char-right)]
-                 ;; 字符在窗口内（完全可见）
-                 [(and (>= col hscroll) (<= char-right (+ hscroll w)))
-                  (put-styled-at! (+ y screen-row) (+ x screen-x) style
-                                  (if (char=? (gb-ref b p) #\newline) " " (string (gb-ref b p))))
-                  (loop (add1 p) char-right)]
-                 ;; 字符超出窗口右边或跨边界 → 不画
-                 [else
-                  (loop (add1 p) char-right)])))
+             (when (< li (length ls))
+               (define line-start (list-ref ls li))
+               (define line-end   (if (< (add1 li) (length ls))
+                                      (max line-start (sub1 (list-ref ls (add1 li))))
+                                      tl))
 
-           ;; ── 光标 ──
-           (when (and focused? (= li cur-li))
-             (define cursor-col-x (for/sum ([p (in-range line-start ci)])
-                                    (gb-width-ref b p)))
-             (define screen-x (- cursor-col-x hscroll))
-             (when (and (>= screen-x 0) (< screen-x w))
-               (define cch (if (and (< ci tl)
-                                    (not (char=? (gb-ref b ci) #\newline)))
-                               (string (gb-ref b ci))
-                               " "))
-               (put-styled-at! (+ y screen-row) (+ x screen-x) 'cursor cch)))))]))
+               ;; ── 视口 [hscroll, hscroll+w) — 仅光标贴边才滚动 ──
+               (define total-w
+                 (for/sum ([p (in-range line-start line-end)]) (gb-width-ref b p)))
+               (define hscroll
+                 (cond [(not (= li cur-li))
+                        ;; 非光标行或行不超宽 → 靠左
+                        (set-box! scroll-x 0) 0]
+                       [(<= total-w w)
+                        (set-box! scroll-x 0) 0]
+                       [else
+                        ;; 光标所在行且超宽：仅当光标贴边时调整 scroll-x
+                        (define cur-col-x (for/sum ([p (in-range line-start ci)])
+                                            (gb-width-ref b p)))
+                        (define cur-w (if (and (< ci tl) (not (char=? (gb-ref b ci) #\newline)))
+                                          (gb-width-ref b ci) 1))
+                        (define cur-right (+ cur-col-x cur-w))
+                        (define old-hs (unbox scroll-x))
+                        ;; 光标超出左边界 → 窗口左移
+                        (cond [(< cur-col-x old-hs)
+                               (set-box! scroll-x (max 0 cur-col-x))]
+                              ;; 光标超出右边界 → 窗口右移（给光标留1列）
+                              [(> cur-right (+ old-hs w -1))
+                               (set-box! scroll-x (min (- total-w w) (- cur-right w -1)))]
+                              ;; 行变短后窗口可能悬空 → 拉回
+                              [(> old-hs (max 0 (- total-w w)))
+                               (set-box! scroll-x (max 0 (- total-w w)))]
+                              [else old-hs])
+                        (unbox scroll-x)]))
+
+               ;; ── 收集可见字符到字符串，整行一次 put-styled-at! ──
+               (define line-str
+                 (call-with-output-string
+                  (λ (sout)
+                    (let cloop ([p line-start] [col 0])
+                      (when (< p line-end)
+                        (define cw (gb-width-ref b p))
+                        (define char-right (+ col cw))
+                        (cond [(<= char-right hscroll)
+                               (cloop (add1 p) char-right)]
+                              [(and (>= col hscroll) (<= char-right (+ hscroll w)))
+                               (write-char (if (char=? (gb-ref b p) #\newline)
+                                               #\space (gb-ref b p)) sout)
+                               (cloop (add1 p) char-right)]
+                              [else
+                               (cloop (add1 p) char-right)]))))))
+
+               (define style (if focused? 'input-focus 'input-normal))
+               (put-styled-at! row x style line-str)
+
+               ;; ── 光标（覆盖在行文本上）──
+               (when (and focused? (= li cur-li))
+                 (define cur-col-x (for/sum ([p (in-range line-start ci)])
+                                     (gb-width-ref b p)))
+                 (define screen-x (- cur-col-x hscroll))
+                 (when (and (>= screen-x 0) (< screen-x w))
+                   (define cch (if (and (< ci tl) (not (char=? (gb-ref b ci) #\newline)))
+                                   (string (gb-ref b ci)) " "))
+                   (put-styled-at! row (+ x screen-x) 'cursor cch)))))]))
 
   ;; ── handler ──
   (define handler
