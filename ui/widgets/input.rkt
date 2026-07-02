@@ -362,63 +362,53 @@
                                   tl))
            (define line-len (- line-end line-start))
 
-           ;; ── 计算水平滚动偏移 ──
-           ;; 把 w 宽的视口当作 buffer 上的可移动窗口
-           (define-values (hscroll cursor-screen-x)
+           ;; ── 视口 [hscroll, hscroll+w) 在 buffer 上的浮动窗口 ──
+           (define total-w
+             (for/sum ([p (in-range line-start line-end)]) (gb-width-ref b p)))
+
+           ;; 计算水平滚动偏移：确保光标在窗口内
+           (define hscroll
              (cond
-               [(= li cur-li)
-                ;; 光标所在行：确保光标在窗口内
+               [(not (= li cur-li)) 0]
+               [(<= total-w w) 0]
+               [else
                 (define cursor-col-x (for/sum ([p (in-range line-start ci)])
                                        (gb-width-ref b p)))
                 (define cursor-w (if (and (< ci tl)
                                           (not (char=? (gb-ref b ci) #\newline)))
                                      (gb-width-ref b ci)
                                      1))
-                ;; 计算整行总宽度
-                (define total-w (for/sum ([p (in-range line-start line-end)])
-                                  (gb-width-ref b p)))
-                (cond [(<= total-w w)
-                       ;; 行完全可见 → 不滚动
-                       (values 0 cursor-col-x)]
-                      [(< cursor-col-x (quotient w 2))
-                       ;; 光标靠近行首 → 窗口靠左
-                       (values 0 cursor-col-x)]
+                (cond [(< cursor-col-x (quotient w 2)) 0]
                       [(> (+ cursor-col-x cursor-w) (- total-w (quotient w 2)))
-                       ;; 光标靠近行尾 → 窗口靠右
-                       (define hs (max 0 (- total-w w)))
-                       (values hs (- cursor-col-x hs))]
-                      [else
-                       ;; 光标居中
-                       (define hs (- cursor-col-x (quotient w 2)))
-                       (values hs (- cursor-col-x hs))])]
-               [else
-                ;; 非光标行 → 窗口靠左
-                (values 0 0)]))
+                       (max 0 (- total-w w))]
+                      [else (- cursor-col-x (quotient w 2))])]))
 
-           ;; ── 从 hscroll 偏移处开始渲染 ──
-           ;; 先找到 hscroll 对应的字符位置
-           (define render-start
-             (let loop ([p line-start] [acc 0])
-               (cond [(>= p line-end) p]
-                     [(>= acc hscroll) p]
-                     [else (loop (add1 p) (+ acc (gb-width-ref b p)))])))
-           ;; 渲染可见部分
-           (define display-str
-             (call-with-output-string
-              (λ (out)
-                (let loop ([p render-start] [used 0])
-                  (when (and (< p line-end) (< used w))
-                    (define cw (gb-width-ref b p))
-                    (if (<= (+ used cw) w)
-                        (begin (write-char (gb-ref b p) out)
-                               (loop (add1 p) (+ used cw)))
-                        (void)))))))
+           ;; ── 逐字符渲染：完全在窗口内的才画 ──
+           ;; 窗口 = 屏幕列 [0, w) ← 映射到 buffer 显示列 [hscroll, hscroll+w)
            (define style (if focused? 'input-focus 'input-normal))
-           (put-styled-at! (+ y screen-row) x style display-str)
+           (let loop ([p line-start] [col 0])
+             (when (< p line-end)
+               (define cw (gb-width-ref b p))
+               (define char-right (+ col cw))
+               (define screen-x (- col hscroll))
+               (cond
+                 ;; 字符完全在窗口左边 → 跳过
+                 [(<= char-right hscroll)
+                  (loop (add1 p) char-right)]
+                 ;; 字符在窗口内（完全可见）
+                 [(and (>= col hscroll) (<= char-right (+ hscroll w)))
+                  (put-styled-at! (+ y screen-row) (+ x screen-x) style
+                                  (if (char=? (gb-ref b p) #\newline) " " (string (gb-ref b p))))
+                  (loop (add1 p) char-right)]
+                 ;; 字符超出窗口右边或跨边界 → 不画
+                 [else
+                  (loop (add1 p) char-right)])))
 
            ;; ── 光标 ──
            (when (and focused? (= li cur-li))
-             (define screen-x cursor-screen-x)
+             (define cursor-col-x (for/sum ([p (in-range line-start ci)])
+                                    (gb-width-ref b p)))
+             (define screen-x (- cursor-col-x hscroll))
              (when (and (>= screen-x 0) (< screen-x w))
                (define cch (if (and (< ci tl)
                                     (not (char=? (gb-ref b ci) #\newline)))
@@ -443,6 +433,7 @@
          #:end        do-move-end
          #:enter      (λ () (do-insert "\n"))
          #:escape     void
+         #:paste       (λ (data) (do-insert (bytes->string/utf-8 data)))
          #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
          #:mouse-move  (λ (mx my mods)       (mouse->cursor mx my)))
         (build-input
@@ -457,6 +448,7 @@
          #:end        do-move-end
          #:enter      (λ () (on-submit (text-string)))
          #:escape     void
+         #:paste       (λ (data) (do-insert (bytes->string/utf-8 data)))
          #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
          #:mouse-move  (λ (mx my mods)       (mouse->cursor mx my)))))
 
