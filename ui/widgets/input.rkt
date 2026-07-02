@@ -74,8 +74,42 @@
   (define widths (box (vector)))
   (define cid    (box 0))
   (define dirty  (box #t))
+  ;; 组件在屏幕上的位置（由 render 更新，供鼠标事件使用）
+  (define pos-x  (box 0))
+  (define pos-y  (box 0))
+  (define pos-w  (box 0))
 
   (define (text-string) (buffer->string (unbox chars)))
+
+  ;; 将鼠标绝对坐标转换为光标索引
+  (define (mouse-xy->cid mx my)
+    (define cs (unbox chars))
+    (define ws (unbox widths))
+    (define total (vector-length cs))
+    (define w (unbox pos-w))
+    ;; 空文本或无字符 → 光标在 0
+    (when (zero? total)
+      (set-box! cid 0)
+      (set-box! dirty #t))
+    (when (positive? total)
+      (define ci (unbox cid))
+      ;; 计算当前视口的起始索引（与 render 逻辑一致）
+      (define cw (if (< ci total) (vector-ref ws ci) 1))
+      (define start
+        (let loop ([i ci] [rem (- w cw)])
+          (if (or (<= i 0) (< rem (vector-ref ws (sub1 i))))
+              i
+              (loop (sub1 i) (- rem (vector-ref ws (sub1 i)))))))
+      ;; 将相对 x 映射为字符索引
+      (define rel-x (- mx (unbox pos-x)))
+      (define new-cid
+        (let loop ([i start] [rem rel-x])
+          (cond [(>= i total) total]
+                [(< rem (vector-ref ws i)) i]
+                [else (loop (add1 i) (- rem (vector-ref ws i)))])))
+      (when (not (= new-cid ci))
+        (set-box! cid new-cid)
+        (set-box! dirty #t))))
 
   (define (insert-char! str)
     (for ([ch (in-string str)])
@@ -109,6 +143,10 @@
 
   (component
    (λ (focused? x y w h)
+     ;; 记录组件位置，供鼠标事件使用
+     (set-box! pos-x x)
+     (set-box! pos-y y)
+     (set-box! pos-w w)
      ;; 清区域
      (for ([i (in-range h)])
        (cursor-move (+ y i) x)
@@ -168,6 +206,11 @@
     #:end  (λ () (set-box! cid (vector-length (unbox chars)))
                 (set-box! dirty #t))
     #:enter (λ () (on-submit (text-string)))
-    #:escape void)
+    #:escape void
+    #:mouse-press (λ (btn mx my mods)
+                    (when (eq? btn 'left)
+                      (mouse-xy->cid mx my)))
+    #:mouse-move (λ (mx my mods)
+                   (mouse-xy->cid mx my)))
 
    #t #t 0 1 dirty))

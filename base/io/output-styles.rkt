@@ -82,7 +82,7 @@
 
 ;; 输入框样式
 (style-define! 'input-normal     clr-white)
-(style-define! 'input-focus      clr-white bclr-blue)
+(style-define! 'input-focus      clr-white attr-bold)
 (style-define! 'input-error      clr-red bclr-white attr-bold)
 
 (provide (all-defined-out))
