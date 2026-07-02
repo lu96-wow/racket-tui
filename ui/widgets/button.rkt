@@ -17,10 +17,7 @@
 
   (component
    (λ (focused? x y w h)
-     (define style
-       (cond [(unbox pressed?) 'button-pressed]
-             [focused? 'button-hover]
-             [else 'button]))
+     (define style (if (unbox pressed?) 'button-pressed 'button))
      (put-styled-at! y x style label))
 
    (build-input
