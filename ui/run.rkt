@@ -61,12 +61,28 @@
     (define (render-all)
       (define-values (cur-rows cur-cols) (get-window-size))
 
-      ;; 组件区域与窗口有任意交集即为"可见"
       (define (fits? x y w h)
         (and (< x cur-cols) (< y cur-rows)
              (>= (+ x w) 0) (>= (+ y h) 0)))
 
-      (screen-clear)
+      ;; 预扫描：所有组件 bounds/可见性 都没变 → 跳过 screen-clear
+      (define all-bounds-stable?
+        (for/and ([s specs])
+          (match-let ([(list comp xb yb wb hb) s])
+            (define x (unbox* xb))
+            (define y (unbox* yb))
+            (define w (let ([v (unbox* wb)]) (if (zero? v) (component-w comp) v)))
+            (define h (let ([v (unbox* hb)]) (if (zero? v) (component-h comp) v)))
+            (define visible? (and (component-show? comp) (fits? x y w h)))
+            (define last (hash-ref last-bounds comp #f))
+            (cond [(and last visible?)
+                   (and (= x (first last)) (= y (second last))
+                        (= w (third last))  (= h (fourth last)))]
+                  [(or last visible?) #f]
+                  [else #t]))))
+
+      (unless all-bounds-stable?
+        (screen-clear))
 
       (for ([s specs])
         (match-let ([(list comp xb yb wb hb) s])
@@ -111,9 +127,14 @@
              (hash-set! last-focused comp focused-now?)
              (set-box! (component-dirty comp) #f)]
 
-            [else
+            ;; 组件没变但屏幕清过 → 从缓存恢复
+            [(not all-bounds-stable?)
              (define bs (hash-ref render-cache comp #""))
-             (write-bytes bs)])))
+             (write-bytes bs)]
+
+            ;; 组件没变、屏幕也没清 → 跳过
+            [else
+             (void)])))
       (flush-output))
 
     ;; 首帧全量绘制
