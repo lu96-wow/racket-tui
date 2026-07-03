@@ -1,17 +1,17 @@
 # Input — 文本输入框
 
-支持多行编辑，Gap Buffer 存储，惰性水平滚动，pref-col 列记忆。
+多行编辑，Gap Buffer，惰性滚动，pref-col 列记忆。format- 一次性写 bytes。
 
 ## 创建
 
 ```racket
 (make-input
-  #:placeholder  "Enter text..."    ; 空状态占位文本，默认 ""
-  #:initial-text "hello"            ; 初始内容，默认 ""
-  #:style        'input-normal      ; 无焦点时的样式，默认 'input-normal
-  #:focus-style  'input-focus       ; 聚焦时的样式，默认 'input-focus
-  #:on-submit    (λ (text) ...)     ; 提交回调，默认 void
-  #:on-change    (λ (text) ...))    ; 编辑回调，默认 void
+  #:placeholder   "Enter text..."    ; 空状态占位，默认 ""
+  #:initial-text  "hello"            ; 初始内容，默认 ""
+  #:style         'input-focus       ; 聚焦时样式，默认 'input-focus
+  #:nofocus-style 'input-normal      ; 非聚焦 + 背景底色，默认 'input-normal
+  #:on-submit     (λ (text) ...)     ; 提交回调，默认 void
+  #:on-change     (λ (text) ...))    ; 编辑回调，默认 void
 ```
 
 ## 交互
@@ -23,41 +23,23 @@
 | Backspace / Delete | 删除 |
 | ← → ↑ ↓ | 移动光标（↑↓ 含 pref-col 列记忆） |
 | Home / End | 行首/行尾 |
-| Enter | 提交（调用 `on-submit`） |
+| Enter | 提交 |
 | 鼠标左键/拖拽 | 定位光标 |
 | Paste | 粘贴 |
 
-无需 `#:multiline?` 参数——不想多行就不按 Escape，上下键在单行时天然 no-op。
-
 ## Pref-col 列记忆
 
-上下移动时保持之前的 display-width 列：
-
-```
-长行: hello world      ← 光标在 'w' (col 6)
-短行: hi               ← ↓ 后夹紧到行尾 (col 2)
-长行: another line     ← ↓ 恢复到 col 6 (pref-col 不变)
-```
+上下移动时保持之前的 display-width 列，短行夹紧、回长行恢复。
 
 ## 回调
 
-### on-submit : `(string → void)`
-
-Enter 时调用，参数为完整 buffer 文本（含所有换行）。
-
-### on-change : `(string → void)`
-
-每次编辑后调用。
+- **on-submit** `(string → void)` — Enter 时调用，参数为完整 buffer 文本
+- **on-change** `(string → void)` — 每次编辑后调用
 
 ## 样式
 
-| 状态 | 默认样式 | 参数 |
+| 状态 | 参数 | 默认 |
 |---|---|---|
-| 无焦点 | `input-normal` | `#:style` |
-| 聚焦 | `input-focus` | `#:focus-style` |
-| 光标 | `cursor` | — |
-| 占位符 | 同 `#:style` | — |
-
-## 实现
-
-两层架构：`base/gap-buffer.rkt`（纯数据） + `ui/widgets/input.rkt`（渲染），零渲染依赖。
+| 聚焦文字 | `#:style` | `input-focus` |
+| 非聚焦 + 背景 | `#:nofocus-style` | `input-normal` |
+| 光标 | — | `cursor` |
