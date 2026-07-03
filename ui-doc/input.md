@@ -8,6 +8,8 @@
 (make-input
   #:placeholder  "Enter text..."    ; 空状态占位文本，默认 ""
   #:initial-text "hello"            ; 初始内容，默认 ""
+  #:style        'input-normal      ; 无焦点时的样式，默认 'input-normal
+  #:focus-style  'input-focus       ; 聚焦时的样式，默认 'input-focus
   #:on-submit    (λ (text) ...)     ; 提交回调，默认 void
   #:on-change    (λ (text) ...))    ; 编辑回调，默认 void
 ```
@@ -49,11 +51,12 @@ Enter 时调用，参数为完整 buffer 文本（含所有换行）。
 
 ## 样式
 
-| 状态 | 样式 |
-|---|---|
-| 无焦点 | `input-normal` |
-| 聚焦 | `input-focus` |
-| 光标 | `cursor` |
+| 状态 | 默认样式 | 参数 |
+|---|---|---|
+| 无焦点 | `input-normal` | `#:style` |
+| 聚焦 | `input-focus` | `#:focus-style` |
+| 光标 | `cursor` | — |
+| 占位符 | 同 `#:style` | — |
 
 ## 实现
 

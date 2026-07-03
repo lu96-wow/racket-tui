@@ -41,7 +41,9 @@
 (define (make-input #:placeholder [placeholder ""]
                     #:on-submit [on-submit void]
                     #:on-change [on-change void]
-                    #:initial-text [initial-text ""])
+                    #:initial-text [initial-text ""]
+                    #:style [style 'input-normal]
+                    #:focus-style [focus-style 'input-focus])
 
   ;; ═══════════════════════════════════════════════════════
   ;; 状态 (Layer 1: buffer / Layer 2: 渲染上下文)
@@ -236,61 +238,57 @@
     (define sy (unbox scroll-y))
     (define sx (unbox scroll-x))
 
-    ;; ── 2. 渲染: 空/非空分两路, 避免 placeholder 被覆盖 ──
+    ;; ── 2. 渲染: format-* 一次性构建 bytes ──
+    (define (emit row col name val)
+      (write-bytes (format-styled-at! row col name val)))
+
     (cond
-      ;; 空 + 无焦点 + placeholder → 仅显示 placeholder
       [(and (zero? tl) (not focused?)
             (positive? (string-length placeholder)))
        (for ([sr (in-range h)])
-         (cursor-move (+ y sr) x)
-         (put-string (make-string w #\space)))
+         (emit (+ y sr) x style (make-string w #\space)))
        (define disp (if (> (string-length placeholder) w)
                         (substring placeholder 0 w) placeholder))
-       (put-styled-at! y x 'input-normal disp)]
+       (emit y x style disp)]
 
-      ;; 空 + 聚焦 → 仅显示光标
       [(zero? tl)
        (for ([sr (in-range h)])
-         (cursor-move (+ y sr) x)
-         (put-string (make-string w #\space)))
+         (emit (+ y sr) x style (make-string w #\space)))
        (when focused?
-         (put-styled-at! y x 'cursor " "))]
+         (emit y x 'cursor " "))]
 
-      ;; 有内容: 清空 + 逐行渲染
       [else
        (for ([sr (in-range h)])
-         (cursor-move (+ y sr) x)
-         (put-string (make-string w #\space)))
+         (emit (+ y sr) x style (make-string w #\space)))
 
        (for ([sr (in-range h)])
          (define li (+ sy sr))
          (when (< li n)
            (define line-start (buffer-line-start b li))
-           (define line-end (buffer-line-end b li))
+           (define line-end   (buffer-line-end b li))
            (define is-cur-line (= li cur-li))
 
            (define line-str
              (call-with-output-string
-               (λ (out)
-                 (let loop ([p line-start] [col 0])
-                   (when (< p line-end)
-                     (define cw (buffer-char-display-width-at b p))
-                     (define cr (+ col cw))
-                     (cond
-                       [(<= cr sx) (loop (add1 p) cr)]
-                       [(>= col (+ sx w)) (void)]
-                       [else
-                        (define display-ch
-                          (if (char=? (buffer-char-at b p) #\newline)
-                              #\space
-                              (buffer-char-at b p)))
-                        (write-char display-ch out)
-                        (loop (add1 p) cr)]))))))
+              (λ (out)
+                (let loop ([p line-start] [col 0])
+                  (when (< p line-end)
+                    (define cw (buffer-char-display-width-at b p))
+                    (define cr (+ col cw))
+                    (cond
+                      [(<= cr sx) (loop (add1 p) cr)]
+                      [(>= col (+ sx w)) (void)]
+                      [else
+                       (define display-ch
+                         (if (char=? (buffer-char-at b p) #\newline)
+                             #\space
+                             (buffer-char-at b p)))
+                       (write-char display-ch out)
+                       (loop (add1 p) cr)]))))))
 
-           (define style (if focused? 'input-focus 'input-normal))
-           (put-styled-at! (+ y sr) x style line-str)
+           (define line-style (if focused? focus-style style))
+           (emit (+ y sr) x line-style line-str)
 
-           ;; ── 光标 ──
            (when (and focused? is-cur-line)
              (define cur-col-x (buffer-cursor-display-col b))
              (define sx-cur (- cur-col-x sx))
@@ -300,7 +298,7 @@
                           (not (char=? (buffer-char-at b cur-pos) #\newline)))
                      (string (buffer-char-at b cur-pos))
                      " "))
-               (put-styled-at! (+ y sr) (+ x sx-cur) 'cursor cch)))))]))
+               (emit (+ y sr) (+ x sx-cur) 'cursor cch)))))]))
 
   ;; ═══════════════════════════════════════════════════════
   ;; 事件绑定
