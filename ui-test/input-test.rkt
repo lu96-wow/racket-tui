@@ -15,8 +15,8 @@
 (define name-input
   (make-input #:placeholder "Enter text..."
               #:initial-text "line one: hello world\nline two: 你好世界\nline three: 中文测试"
-              #:style 'panel-input
-              #:focus-style 'panel-focus
+              #:style 'panel-focus
+              #:nofocus-style 'panel-input
               #:on-submit (λ (t) (set-box! submitted t))
               #:on-change void))
 

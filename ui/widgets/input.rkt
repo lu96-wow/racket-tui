@@ -42,8 +42,8 @@
                     #:on-submit [on-submit void]
                     #:on-change [on-change void]
                     #:initial-text [initial-text ""]
-                    #:style [style 'input-normal]
-                    #:focus-style [focus-style 'input-focus])
+                    #:style [style 'input-focus]
+                    #:nofocus-style [nofocus-style 'input-normal])
 
   ;; ═══════════════════════════════════════════════════════
   ;; 状态 (Layer 1: buffer / Layer 2: 渲染上下文)
@@ -246,20 +246,20 @@
       [(and (zero? tl) (not focused?)
             (positive? (string-length placeholder)))
        (for ([sr (in-range h)])
-         (emit (+ y sr) x style (make-string w #\space)))
+         (emit (+ y sr) x nofocus-style (make-string w #\space)))
        (define disp (if (> (string-length placeholder) w)
                         (substring placeholder 0 w) placeholder))
-       (emit y x style disp)]
+       (emit y x nofocus-style disp)]
 
       [(zero? tl)
        (for ([sr (in-range h)])
-         (emit (+ y sr) x style (make-string w #\space)))
+         (emit (+ y sr) x nofocus-style (make-string w #\space)))
        (when focused?
          (emit y x 'cursor " "))]
 
       [else
        (for ([sr (in-range h)])
-         (emit (+ y sr) x style (make-string w #\space)))
+         (emit (+ y sr) x nofocus-style (make-string w #\space)))
 
        (for ([sr (in-range h)])
          (define li (+ sy sr))
@@ -286,7 +286,7 @@
                        (write-char display-ch out)
                        (loop (add1 p) cr)]))))))
 
-           (define line-style (if focused? focus-style style))
+           (define line-style (if focused? style nofocus-style))
            (emit (+ y sr) x line-style line-str)
 
            (when (and focused? is-cur-line)
