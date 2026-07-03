@@ -18,10 +18,15 @@
          "run/mouse.rkt"
          "run/dispatch.rkt")
 
-(provide run-app)
+(provide run-app run-app-nobuffer)
 
 (define (run-app specs #:noblock? [noblock? #f])
-  (with-tui
+  (with-tui (run-loop specs noblock?)))
+
+(define (run-app-nobuffer specs #:noblock? [noblock? #f])
+  (with-tui-nobuffer (run-loop specs noblock?)))
+
+(define (run-loop specs noblock?)
     (cursor-hide)
     (define (unbox* v) (if (box? v) (unbox v) v))
 
@@ -56,4 +61,4 @@
         (loop-input-noblock/stop (unbox quit?)
           global mouse-router dispatch-and-render)
         (loop-input/stop (unbox quit?)
-          global mouse-router dispatch-and-render))))
+          global mouse-router dispatch-and-render)))
