@@ -1,10 +1,11 @@
 #lang racket
-;; 渲染引擎 — screen-clear + 增量绘制 + 缓存回放
+;; 渲染引擎 — 单次 write-bytes，零闪烁
 ;;
 ;; 职责:
 ;;   - 预扫描组件 bounds/可见性 是否稳定
 ;;   - 稳定时跳过 screen-clear，只重绘脏/焦点变化组件
 ;;   - 不稳定时全量清屏 + 缓存回放
+;;   - 所有输出累积到一个 buffer，最后一口气 write-bytes
 
 (require "../../base/main.rkt"
          "../component.rkt")
@@ -35,8 +36,11 @@
                 [(or last visible?) #f]
                 [else #t]))))
 
+    ;; 所有输出累积到此 buffer
+    (define out (open-output-bytes))
+
     (unless all-bounds-stable?
-      (screen-clear))
+      (write-bytes format-screen-clear out))
 
     (for ([s specs])
       (match-let ([(list comp xb yb wb hb) s])
@@ -56,7 +60,6 @@
                    (not (= w (third last)))
                    (not (= h (fourth last))))))
 
-        ;; 每帧给组件一次机会自行判断是否需要重绘
         (when (component-render? comp)
           ((component-render? comp) x y w h focused-now?))
 
@@ -74,12 +77,12 @@
           [needs-redraw?
            (define saved-row current-cursor-row)
            (define saved-col current-cursor-col)
-           (define out (open-output-bytes))
-           (parameterize ([current-output-port out])
+           (define comp-out (open-output-bytes))
+           (parameterize ([current-output-port comp-out])
              ((component-render comp) focused-now? x y w h))
-           (define bs (get-output-bytes out))
+           (define bs (get-output-bytes comp-out))
            (set-cursor! saved-row saved-col)
-           (write-bytes bs)
+           (write-bytes bs out)
            (hash-set! render-cache comp bs)
            (hash-set! last-bounds comp (list x y w h))
            (hash-set! last-focused comp focused-now?)
@@ -87,10 +90,14 @@
 
           [(not all-bounds-stable?)
            (define bs (hash-ref render-cache comp #""))
-           (write-bytes bs)]
+           (write-bytes bs out)]
 
           [else
            (void)])))
+
+    ;; 一次性输出全部
+    (define all-bs (get-output-bytes out))
+    (write-bytes all-bs)
     (flush-output))
 
   render-all)
