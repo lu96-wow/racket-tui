@@ -9,34 +9,23 @@
 (provide make-text)
 
 ;; ═══════════════════════════════════════════════════════
-;; 宏：编译期按 #:text 类型分派到三个特化路径
-;;
-;;   字符串字面量 → make-text/static   (零 per-frame 开销)
-;;   lambda 字面量 → make-text/lambda  (每帧调用 proc 比对)
-;;   变量/表达式   → make-text/dynamic (运行时判 string/box/procedure)
+;; 宏：编译期按 #:text 类型分派
 ;; ═══════════════════════════════════════════════════════
 
 (define-syntax (make-text stx)
   (syntax-case stx ()
-    ;; 字符串字面量: #:text "hello"
     [(_ #:text str rest ...)
      (string? (syntax-e #'str))
      #'(make-text/static #:text str rest ...)]
-
-    ;; lambda: #:text (lambda () body)
     [(_ #:text (lambda () body ...) rest ...)
      #'(make-text/lambda #:text (lambda () body ...) rest ...)]
-
-    ;; λ: #:text (λ () body)
     [(_ #:text (λ () body ...) rest ...)
      #'(make-text/lambda #:text (λ () body ...) rest ...)]
-
-    ;; 变量/表达式 → 运行时 dispatch
     [(_ #:text expr rest ...)
      #'(make-text/dynamic #:text expr rest ...)]))
 
 ;; ═══════════════════════════════════════════════════════
-;; 共享渲染逻辑
+;; 共享渲染 — format-* 一次性写 bytes
 ;; ═══════════════════════════════════════════════════════
 
 (define (render-text s style h-align x y w h)
@@ -49,9 +38,8 @@
       [(right)  (max 0 (- w visible-w))]
       [else 0]))
   (for ([i (in-range h)])
-    (cursor-move (+ y i) x)
-    (put-string (make-string w #\space)))
-  (put-styled-at! y (+ x x-off) style visible))
+    (write-bytes (format-styled-at! (+ y i) x style (make-string w #\space))))
+  (write-bytes (format-styled-at! y (+ x x-off) style visible)))
 
 ;; ═══════════════════════════════════════════════════════
 ;; 路径 A: 静态字符串 — 零 per-frame 开销
@@ -65,9 +53,7 @@
    (λ (focused? x y w h)
      (render-text str style h-align x y w h))
    (build-input)
-   #f #t str-len 1 (box #t)
-   ;; 无 render? hook: 静态字符串永远不变
-   #f))
+   #f #t str-len 1 (box #t) #f))
 
 ;; ═══════════════════════════════════════════════════════
 ;; 路径 B: lambda — 每帧调用 proc，比对后标记 dirty

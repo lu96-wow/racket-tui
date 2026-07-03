@@ -8,15 +8,17 @@
 
 (provide make-button)
 
-(define (make-button #:text text #:on-activate [on-activate void])
+(define (make-button #:text text
+                     #:on-activate [on-activate void]
+                     #:style [style 'button])
   (define label (string-append " " text " "))
   (define pressed? (box #f))
   (define dirty    (box #t))
 
   (component
    (λ (focused? x y w h)
-     (define style (if (unbox pressed?) 'button-pressed 'button))
-     (put-styled-at! y x style label))
+     (define cur-style (if (unbox pressed?) 'button-pressed style))
+     (write-bytes (format-styled-at! y x cur-style label)))
 
    (build-input
     #:enter on-activate
