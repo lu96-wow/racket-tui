@@ -5,10 +5,12 @@
          "run.rkt"
          "widgets/input.rkt"
          "widgets/button.rkt"
-         "widgets/text.rkt")
+         "widgets/text.rkt"
+         "widgets/output.rkt")
 
 (provide (all-from-out "component.rkt")
          (all-from-out "run.rkt")
          (all-from-out "widgets/input.rkt")
          (all-from-out "widgets/button.rkt")
-         (all-from-out "widgets/text.rkt"))
+         (all-from-out "widgets/text.rkt")
+         (all-from-out "widgets/output.rkt"))
