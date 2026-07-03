@@ -7,16 +7,18 @@
          "../../base/io/output.rkt")
 
 (provide make-output
+         ;; fold
          out-fold out-fold? out-fold-title out-fold-children out-fold-expanded?
          out-fold-expand! out-fold-collapse! out-fold-toggle!
-         out-fold-expand-all! out-fold-collapse-all!)
+         out-fold-expand-all! out-fold-collapse-all!
+         ;; styled line
+         out-line out-line? out-line-text out-line-style)
 
 ;; ═══════════════════════════════════════════════════════
-;; 数据模型: 可折叠块
+;; 数据模型
 ;; ═══════════════════════════════════════════════════════
 
 (struct out-fold (title children expanded?) #:mutable #:transparent)
-
 (define (out-fold-expand! f)   (set-out-fold-expanded?! f #t))
 (define (out-fold-collapse! f) (set-out-fold-expanded?! f #f))
 (define (out-fold-toggle! f)
@@ -25,40 +27,49 @@
 (define (out-fold-expand-all! b)
   (when (out-fold? b)
     (out-fold-expand! b)
-    (for ([c (out-fold-children b)])
-      (out-fold-expand-all! c))))
+    (for ([c (out-fold-children b)]) (out-fold-expand-all! c))))
 
 (define (out-fold-collapse-all! b)
   (when (out-fold? b)
     (out-fold-collapse! b)
-    (for ([c (out-fold-children b)])
-      (out-fold-collapse-all! c))))
+    (for ([c (out-fold-children b)]) (out-fold-collapse-all! c))))
+
+;; 带样式的行
+(struct out-line (text style) #:transparent)
 
 ;; ═══════════════════════════════════════════════════════
-;; 展开 → 扁平行 + fold 映射 vector
-;;   fold-at[i] = fold 对象 (第 i 行是 fold 标题) 或 #f
+;; 展开 → (values flat-lines flat-styles fold-map)
+;;   每行有对应的 style 名; fold-at[i] = fold|#f
 ;; ═══════════════════════════════════════════════════════
 
-(define (flatten-blocks blocks)
+(define (flatten-blocks blocks default-style)
   (define lines '())
-  (define folds '())
+  (define styles '())
+  (define folds  '())
   (define (walk bs indent)
     (for ([b bs])
       (cond
         [(string? b)
-         (set! lines (append lines (list (string-append indent b))))
-         (set! folds (append folds (list #f)))]
+         (set! lines  (append lines  (list (string-append indent b))))
+         (set! styles (append styles (list default-style)))
+         (set! folds  (append folds  (list #f)))]
+        [(out-line? b)
+         (set! lines  (append lines  (list (string-append indent (out-line-text b)))))
+         (set! styles (append styles (list (out-line-style b))))
+         (set! folds  (append folds  (list #f)))]
         [(out-fold? b)
          (define marker (if (out-fold-expanded? b) "[-] " "[+] "))
-         (set! lines (append lines (list (string-append indent marker (out-fold-title b)))))
-         (set! folds (append folds (list b)))
+         (set! lines  (append lines  (list (string-append indent marker (out-fold-title b)))))
+         (set! styles (append styles (list 'output-fold)))
+         (set! folds  (append folds  (list b)))
          (when (out-fold-expanded? b)
            (walk (out-fold-children b) (string-append "  " indent)))]
         [else
-         (set! lines (append lines (list (string-append indent (format "~a" b)))))
-         (set! folds (append folds (list #f)))])))
+         (set! lines  (append lines  (list (string-append indent (format "~a" b)))))
+         (set! styles (append styles (list default-style)))
+         (set! folds  (append folds  (list #f)))])))
   (walk blocks "")
-  (values lines (list->vector folds)))
+  (values lines styles (list->vector folds)))
 
 ;; ═══════════════════════════════════════════════════════
 ;; make-output
@@ -71,25 +82,39 @@
   (define show-box (if (boolean? show?) (box show?) show?))
   (define dirty    (box #t))
   (define scroll-y (box 0))
-  (define cache    (box (list)))     ;; 扁平行列表
-  (define fold-at  (box (vector)))   ;; 行→fold 映射
+  (define cache    (box (list)))        ;; 扁平行
+  (define styles   (box (list)))        ;; 每行样式
+  (define fold-at  (box (vector)))      ;; 行→fold
+  (define at-bottom (box #t))           ;; 流式 auto-scroll
 
   (define vp-x (box 0)) (define vp-y (box 0))
   (define vp-w (box 0)) (define vp-h (box 0))
-  (define dragging? (box #f))  ;; 滚动条拖拽状态
+  (define dragging? (box #f))
 
   ;; ── 刷新缓存 ──
   (define (refresh-cache)
-    (define-values (lines fa) (flatten-blocks (unbox blocks-box)))
-    (set-box! cache lines)
+    (define-values (ls ss fa) (flatten-blocks (unbox blocks-box) style))
+    (set-box! cache ls)
+    (set-box! styles ss)
     (set-box! fold-at fa))
 
-  ;; ── render? 检测 blocks 变化 ──
+  ;; ── render? 检测变化 + auto-scroll ──
   (define (check-dirty x y w h focused?)
-    (define-values (new-lines _) (flatten-blocks (unbox blocks-box)))
-    (unless (equal? new-lines (unbox cache))
+    (define-values (new-ls _1 _2) (flatten-blocks (unbox blocks-box) style))
+    (unless (equal? new-ls (unbox cache))
+      (define was-at-bottom (unbox at-bottom))
       (refresh-cache)
-      (set-box! dirty #t)))
+      (set-box! dirty #t)
+      ;; 流式: 之前在底部 → 自动滚到底
+      (when was-at-bottom
+        (define new-n (length (unbox cache)))
+        (set-box! scroll-y (max 0 (- new-n h)))
+        (set-box! at-bottom #t))))
+
+  ;; ── 判定是否在底部 ──
+  (define (update-at-bottom!)
+    (define max-sy (max 0 (- (length (unbox cache)) (unbox vp-h))))
+    (set-box! at-bottom (>= (unbox scroll-y) max-sy)))
 
   ;; ── 鼠标: scrollbar 拖拽 ──
   (define (scrollbar-drag my)
@@ -100,20 +125,20 @@
       (define rel-y (- my (unbox vp-y) (quotient thumb-h 2)))
       (define sy-range (- n h))
       (define thumb-range (- h thumb-h))
-      (if (<= thumb-range 0)
-          (set-box! scroll-y 0)
-          (set-box! scroll-y (max 0 (min sy-range
-                                         (quotient (* rel-y sy-range) thumb-range)))))))
+      (set-box! scroll-y
+                (if (<= thumb-range 0)
+                    0
+                    (max 0 (min sy-range
+                                 (quotient (* rel-y sy-range) thumb-range)))))
+      (update-at-bottom!)))
 
-  ;; ── 鼠标 click: fold toggle 或 scrollbar drag 开始 ──
+  ;; ── 鼠标 click ──
   (define (mouse-click mx my)
     (define sb-x (+ (unbox vp-x) (unbox vp-w) -1))
     (if (= mx sb-x)
-        ;; 点击滚动条 → 开始拖拽
         (begin (set-box! dragging? #t)
                (scrollbar-drag my)
                (set-box! dirty #t))
-        ;; 点击内容区 → toggle fold
         (let* ((sy (unbox scroll-y))
                (li (+ sy (- my (unbox vp-y))))
                (fa (unbox fold-at)))
@@ -124,13 +149,22 @@
               (refresh-cache)
               (set-box! dirty #t))))))
 
+  ;; ── scroll helper ──
+  (define (do-scroll delta)
+    (define l (unbox cache))
+    (define max-sy (max 0 (- (length l) (unbox vp-h))))
+    (set-box! scroll-y (max 0 (min max-sy (+ (unbox scroll-y) delta))))
+    (update-at-bottom!)
+    (set-box! dirty #t))
+
   ;; ── render ──
   (define (render focused? x y w h)
     (set-box! vp-x x) (set-box! vp-y y)
     (set-box! vp-w w) (set-box! vp-h h)
 
-    (define lines (unbox cache))
-    (define n (length lines))
+    (define ls (unbox cache))
+    (define ss (unbox styles))
+    (define n (length ls))
 
     ;; 滚动 clamp
     (define max-sy (max 0 (- n h)))
@@ -142,26 +176,23 @@
     (for ([sr (in-range h)])
       (write-bytes (format-styled-at! (+ y sr) x style (make-string w #\space))))
 
-    ;; 逐行
+    ;; 逐行 — 每行用自己的 style
     (for ([sr (in-range h)])
       (define li (+ sy sr))
       (when (< li n)
-        (define line (list-ref lines li))
+        (define line (list-ref ls li))
+        (define line-style (list-ref ss li))
         (define visible (if (> (string-length line) w)
                            (substring line 0 w)
                            line))
-        (write-bytes (format-styled-at! (+ y sr) x
-                                        (if focused? focus-style style)
-                                        visible))))
+        (write-bytes (format-styled-at! (+ y sr) x line-style visible))))
 
     ;; 滚动条
     (when (> n h)
       (define thumb-h (max 1 (quotient (* h h) n)))
       (define thumb-y (quotient (* sy h) n))
-      ;; 轨道
       (for ([i (in-range h)])
         (write-bytes (format-styled-at! (+ y i) (+ x w -1) style " ")))
-      ;; 滑块
       (for ([i (in-range thumb-h)])
         (when (< (+ thumb-y i) h)
           (write-bytes (format-styled-at! (+ y thumb-y i) (+ x w -1)
@@ -170,22 +201,14 @@
   ;; ── handler ──
   (define handler
     (build-input
-     #:up         (λ () (when (> (unbox scroll-y) 0)
-                           (set-box! scroll-y (sub1 (unbox scroll-y)))
-                           (set-box! dirty #t)))
-     #:down       (λ () (define l (unbox cache))
-                         (when (< (unbox scroll-y) (max 0 (- (length l) (unbox vp-h))))
-                           (set-box! scroll-y (add1 (unbox scroll-y)))
-                           (set-box! dirty #t)))
-     #:pageup     (λ () (set-box! scroll-y (max 0 (- (unbox scroll-y) (unbox vp-h))))
-                         (set-box! dirty #t))
-     #:pagedown   (λ () (define l (unbox cache))
-                         (set-box! scroll-y (min (max 0 (- (length l) (unbox vp-h)))
-                                                 (+ (unbox scroll-y) (unbox vp-h))))
-                         (set-box! dirty #t))
-     #:home       (λ () (set-box! scroll-y 0) (set-box! dirty #t))
+     #:up         (λ () (do-scroll -1))
+     #:down       (λ () (do-scroll 1))
+     #:pageup     (λ () (do-scroll (- (unbox vp-h))))
+     #:pagedown   (λ () (do-scroll (unbox vp-h)))
+     #:home       (λ () (set-box! scroll-y 0) (update-at-bottom!) (set-box! dirty #t))
      #:end        (λ () (define l (unbox cache))
                          (set-box! scroll-y (max 0 (- (length l) (unbox vp-h))))
+                         (set-box! at-bottom #t)
                          (set-box! dirty #t))
      #:enter      (λ () (define fa (unbox fold-at))
                          (define sy (unbox scroll-y))
@@ -195,23 +218,16 @@
                              (out-fold-toggle! f)
                              (refresh-cache)
                              (set-box! dirty #t))))
-     #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse-click mx my)))
-     #:mouse-move  (λ (mx my mods)
-                     (when (unbox dragging?)
-                       (scrollbar-drag my)
-                       (set-box! dirty #t)))
+     #:mouse-press   (λ (btn mx my mods) (when (eq? btn 'left) (mouse-click mx my)))
+     #:mouse-move    (λ (mx my mods)
+                       (when (unbox dragging?)
+                         (scrollbar-drag my)
+                         (set-box! dirty #t)))
      #:mouse-release (λ (btn mx my mods)
                        (when (eq? btn 'left)
                          (set-box! dragging? #f)))
      #:mouse-scroll (λ (dir x y mods)
-                      (case dir
-                        [(up)   (when (> (unbox scroll-y) 0)
-                                  (set-box! scroll-y (sub1 (unbox scroll-y)))
-                                  (set-box! dirty #t))]
-                        [(down) (define l (unbox cache))
-                                (when (< (unbox scroll-y) (max 0 (- (length l) (unbox vp-h))))
-                                  (set-box! scroll-y (add1 (unbox scroll-y)))
-                                  (set-box! dirty #t))]))))
+                      (case dir [(up) (do-scroll -1)] [(down) (do-scroll 1)]))))
 
   (refresh-cache)
   (component render handler #t show-box 0 1 dirty check-dirty))

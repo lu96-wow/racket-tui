@@ -88,5 +88,6 @@
 ;; 输出组件样式
 (style-define! 'output-normal    clr-white)
 (style-define! 'output-focus     clr-white attr-bold)
+(style-define! 'output-fold      clr-cyan attr-bold)
 
 (provide (all-defined-out))

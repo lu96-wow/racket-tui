@@ -2,76 +2,73 @@
 
 (require "../ui/main.rkt")
 
-;; ── 构建可折叠内容 ──
+;; ── 内容: 混合 string / out-line / out-fold ──
 
 (define blocks
   (box
    (list
-    "=== Agent Output ==="
+    "=== Agent Session ==="
     ""
-    (out-fold "Task 1: Analyze code"
-              (list "  file: main.rkt"
-                    "  lines: 200"
-                    "  issues: 3"
-                    (out-fold "Issue #1: unused variable"
-                              (list "  line 42: define x = 5 (never used)"
-                                    "  severity: low")
-                              #t)
-                    (out-fold "Issue #2: missing type"
-                              (list "  line 88: no contract on public API"
-                                    "  severity: medium")
-                              #t)
-                    (out-fold "Issue #3: potential overflow"
-                              (list "  line 156: unchecked addition"
-                                    "  severity: high")
-                              #f))
+    (out-line "  ✓  analysis complete" 'success)
+    (out-line "  ⚠  3 warnings found" 'warning)
+    (out-line "  ✗  1 error detected" 'error)
+    ""
+    (out-fold "Warnings"
+              (list (out-line "  line 42: unused binding" 'warning)
+                    (out-line "  line 88: missing contract" 'warning)
+                    (out-line "  line 156: shadowed variable" 'warning))
               #t)
-    ""
-    (out-fold "Task 2: Run tests"
-              (list "  12/12 passed"
-                    "  coverage: 87%"
-                    "  time: 3.2s")
-              #f)
-    ""
-    (out-fold "Task 3: Deploy"
-              (list "  build: success"
-                    "  push: success"
-                    (out-fold "Details"
-                              (list "  commit: abc123"
-                                    "  branch: main"
-                                    "  tag: v1.2.0")
-                              #f))
-              #f)
+    (out-fold "Error"
+              (list (out-line "  line 200: type mismatch" 'error)
+                    (out-line "  expected: number" 'info)
+                    (out-line "  got: string" 'info))
+              #t)
     ""
     "=== Done ===")))
 
+;; ── 流式追加按钮 ──
+
+(define counter (box 0))
+
+(define (append-new!)
+  (set-box! counter (add1 (unbox counter)))
+  (define new-line
+    (out-line (format "  → streamed line #~a" (unbox counter)) 'info))
+  ;; 插到 "Done" 之前
+  (define bs (unbox blocks))
+  (define done-i (index-of bs "=== Done ==="))
+  (define before (take bs done-i))
+  (define after  (drop bs done-i))
+  (set-box! blocks (append before (list new-line) after)))
+
+(define (index-of lst item)
+  (for/or ([x lst] [i (in-naturals)]) (and (equal? x item) i)))
+
 ;; ── 组件 ──
 
-(define output
-  (make-output #:blocks blocks))
-
-;; 控制按钮: 全部展开 / 全部折叠
+(define output (make-output #:blocks blocks))
+(define btn-append (make-button #:text "Append line"
+                                #:on-activate append-new!))
 
 (define (all-expand!)
-  (for ([b (unbox blocks)])
-    (out-fold-expand-all! b))
+  (for ([b (unbox blocks)]) (out-fold-expand-all! b))
   (set-box! (component-dirty output) #t))
 
 (define (all-collapse!)
-  (for ([b (unbox blocks)])
-    (out-fold-collapse-all! b))
+  (for ([b (unbox blocks)]) (out-fold-collapse-all! b))
   (set-box! (component-dirty output) #t))
 
 (define specs
   (list
-   (list (make-text #:text "┌────┤ Output Test ├──────────────┐" #:style 'title)
+   (list (make-text #:text "┌────┤ Output + Style + Stream ├──┐" #:style 'title)
          1 1 34 1)
-   (list (make-text #:text "│ ↑↓ scroll  Enter/click toggle  │" #:style 'info)
+   (list (make-text #:text "│ ↑↓/Pg scroll  click/Enter fold│" #:style 'info)
          1 2 34 1)
    (list (make-text #:text "└────────────────────────────────┘" #:style 'title)
          1 3 34 1)
    (list output 1 4 34 12)
-   (list (make-button #:text "Expand All" #:on-activate all-expand!)  1 17 0 0)
-   (list (make-button #:text "Collapse All" #:on-activate all-collapse!) 15 17 0 0)))
+   (list btn-append 1 17 0 0)
+   (list (make-button #:text "Expand" #:on-activate all-expand!) 18 17 0 0)
+   (list (make-button #:text "Collapse" #:on-activate all-collapse!) 30 17 0 0)))
 
 (run-app specs)
