@@ -39,9 +39,9 @@
 (provide make-input)
 
 (define (make-input #:placeholder [placeholder ""]
-                    #:on-submit   [on-submit void]
-                    #:on-change   [on-change void]
-                    #:multiline?  [multiline? #f]
+                    #:on-submit [on-submit void]
+                    #:on-change [on-change void]
+                    #:multiline? [multiline? #t]
                     #:initial-text [initial-text ""])
 
   ;; ═══════════════════════════════════════════════════════
@@ -49,7 +49,7 @@
   ;; ═══════════════════════════════════════════════════════
 
   ;; ── Layer 1: 纯数据 ──
-  (define buf   (box (make-gap-buffer initial-text)))
+  (define buf (box (make-gap-buffer initial-text)))
   (define dirty (box #t))
 
   ;; ── Layer 2: 渲染上下文 (由 render 读写, 编辑操作不碰) ──
@@ -126,7 +126,7 @@
     (define sy (unbox scroll-y))
     (define sx (unbox scroll-x))
     (define li (+ sy (- my (unbox vp-y))))
-    (define n  (buffer-line-count b))
+    (define n (buffer-line-count b))
     (define tl (buffer-total-len b))
 
     (define pos
@@ -135,7 +135,7 @@
         [(>= li n) tl]
         [else
          (define lstart (buffer-line-start b li))
-         (define lend   (buffer-line-end b li))
+         (define lend (buffer-line-end b li))
          ;; 鼠标相对视口的 display-width 列
          (define rx (- mx (unbox vp-x)))
          ;; 将 display-width 列 + 当前水平滚动 → 目标 display-width 列
@@ -156,11 +156,11 @@
   ;; ═══════════════════════════════════════════════════════
 
   (define (compute-scroll! b focused? w h)
-    (define tl   (buffer-total-len b))
-    (define li   (buffer-cursor-line b))
-    (define n    (buffer-line-count b))
+    (define tl (buffer-total-len b))
+    (define li (buffer-cursor-line b))
+    (define n (buffer-line-count b))
     (define lstart (buffer-line-start b li))
-    (define lend   (buffer-line-end b li))
+    (define lend (buffer-line-end b li))
 
     ;; ── 垂直滚动 ──
     ;; 保证: scroll-y ≤ li < scroll-y + h
@@ -168,9 +168,9 @@
     (define max-sy (max 0 (- n h)))
     (define new-sy
       (cond
-        [(< li old-sy)       li]                    ; 光标在视口上方
-        [(>= li (+ old-sy h)) (add1 (- li h))]     ; 光标在视口下方
-        [(> old-sy max-sy)   max-sy]               ; 缓冲区缩小后 clamp
+        [(< li old-sy) li] ; 光标在视口上方
+        [(>= li (+ old-sy h)) (add1 (- li h))] ; 光标在视口下方
+        [(> old-sy max-sy) max-sy] ; 缓冲区缩小后 clamp
         [else old-sy]))
     (unless (= new-sy old-sy)
       (set-box! scroll-y new-sy))
@@ -180,7 +180,7 @@
     (define old-sx (unbox scroll-x))
     (define new-sx
       (cond
-        [(zero? tl) 0]  ;; 空缓冲区
+        [(zero? tl) 0] ;; 空缓冲区
 
         ;; 计算当前行的总 display-width
         [else
@@ -195,7 +195,7 @@
            (if (and (< (buffer-cursor-pos b) tl)
                     (not (char=? (buffer-char-at b (buffer-cursor-pos b)) #\newline)))
                (buffer-char-display-width-at b (buffer-cursor-pos b))
-               1))  ;; 换行符或末尾 → 宽度为 1 的空格
+               1)) ;; 换行符或末尾 → 宽度为 1 的空格
 
          (define cur-end (+ cur-col cur-w))
 
@@ -229,9 +229,9 @@
     (set-box! vp-x x) (set-box! vp-y y)
     (set-box! vp-w w) (set-box! vp-h h)
 
-    (define b      (unbox buf))
-    (define tl     (buffer-total-len b))
-    (define n      (buffer-line-count b))
+    (define b (unbox buf))
+    (define tl (buffer-total-len b))
+    (define n (buffer-line-count b))
     (define cur-li (buffer-cursor-line b))
     (define cur-pos (buffer-cursor-pos b))
 
@@ -270,26 +270,26 @@
          (define li (+ sy sr))
          (when (< li n)
            (define line-start (buffer-line-start b li))
-           (define line-end   (buffer-line-end b li))
+           (define line-end (buffer-line-end b li))
            (define is-cur-line (= li cur-li))
 
            (define line-str
              (call-with-output-string
-              (λ (out)
-                (let loop ([p line-start] [col 0])
-                  (when (< p line-end)
-                    (define cw (buffer-char-display-width-at b p))
-                    (define cr (+ col cw))
-                    (cond
-                      [(<= cr sx)  (loop (add1 p) cr)]
-                      [(>= col (+ sx w)) (void)]
-                      [else
-                       (define display-ch
-                         (if (char=? (buffer-char-at b p) #\newline)
-                             #\space
-                             (buffer-char-at b p)))
-                       (write-char display-ch out)
-                       (loop (add1 p) cr)]))))))
+               (λ (out)
+                 (let loop ([p line-start] [col 0])
+                   (when (< p line-end)
+                     (define cw (buffer-char-display-width-at b p))
+                     (define cr (+ col cw))
+                     (cond
+                       [(<= cr sx) (loop (add1 p) cr)]
+                       [(>= col (+ sx w)) (void)]
+                       [else
+                        (define display-ch
+                          (if (char=? (buffer-char-at b p) #\newline)
+                              #\space
+                              (buffer-char-at b p)))
+                        (write-char display-ch out)
+                        (loop (add1 p) cr)]))))))
 
            (define style (if focused? 'input-focus 'input-normal))
            (put-styled-at! (+ y sr) x style line-str)
@@ -313,37 +313,37 @@
   (define handler
     (if multiline?
         (build-input
-         #:char       (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
-         #:utf-char   do-insert
-         #:backspace  do-backspace
-         #:delete     do-delete
-         #:left       do-move-left
-         #:right      do-move-right
-         #:up         do-move-up
-         #:down       do-move-down
-         #:home       do-move-home
-         #:end        do-move-end
-         #:enter      (λ () (on-submit (buffer-text (unbox buf))))
-         #:escape     (λ () (do-insert "\n"))
-         #:paste      (λ (data) (do-insert (bytes->string/utf-8 data)))
-         #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
-         #:mouse-move  (λ (mx my mods) (mouse->cursor mx my)))
+          #:char (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
+          #:utf-char do-insert
+          #:backspace do-backspace
+          #:delete do-delete
+          #:left do-move-left
+          #:right do-move-right
+          #:up do-move-up
+          #:down do-move-down
+          #:home do-move-home
+          #:end do-move-end
+          #:enter (λ () (on-submit (buffer-text (unbox buf))))
+          #:escape (λ () (do-insert "\n"))
+          #:paste (λ (data) (do-insert (bytes->string/utf-8 data)))
+          #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
+          #:mouse-move (λ (mx my mods) (mouse->cursor mx my)))
         (build-input
-         #:char       (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
-         #:utf-char   do-insert
-         #:backspace  do-backspace
-         #:delete     do-delete
-         #:left       do-move-left
-         #:right      do-move-right
-         #:up         void
-         #:down       void
-         #:home       do-move-home
-         #:end        do-move-end
-         #:enter      (λ () (on-submit (buffer-text (unbox buf))))
-         #:escape     void
-         #:paste      (λ (data) (do-insert (bytes->string/utf-8 data)))
-         #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
-         #:mouse-move  (λ (mx my mods) (mouse->cursor mx my)))))
+          #:char (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
+          #:utf-char do-insert
+          #:backspace do-backspace
+          #:delete do-delete
+          #:left do-move-left
+          #:right do-move-right
+          #:up void
+          #:down void
+          #:home do-move-home
+          #:end do-move-end
+          #:enter (λ () (on-submit (buffer-text (unbox buf))))
+          #:escape void
+          #:paste (λ (data) (do-insert (bytes->string/utf-8 data)))
+          #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
+          #:mouse-move (λ (mx my mods) (mouse->cursor mx my)))))
 
   ;; ═══════════════════════════════════════════════════════
   ;; 组件封装
