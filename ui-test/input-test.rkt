@@ -6,7 +6,6 @@
 
 (define name-input
   (make-input #:placeholder "Enter text..."
-              #:multiline? #t
               #:initial-text "line one: hello world\nline two: 你好世界\nline three: 中文测试"
               #:on-submit (λ (t) (set-box! submitted t))
               #:on-change void))

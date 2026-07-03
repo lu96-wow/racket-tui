@@ -13,7 +13,7 @@
 
 ## 动态文本
 
-传入一个返回 string 的 thunk，每帧自动检查变化并重绘：
+传入一个string或返回 string 的 thunk，每帧自动检查变化并重绘：
 
 ```racket
 (make-text

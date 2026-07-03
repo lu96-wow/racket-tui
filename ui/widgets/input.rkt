@@ -41,7 +41,6 @@
 (define (make-input #:placeholder [placeholder ""]
                     #:on-submit [on-submit void]
                     #:on-change [on-change void]
-                    #:multiline? [multiline? #t]
                     #:initial-text [initial-text ""])
 
   ;; ═══════════════════════════════════════════════════════
@@ -69,9 +68,8 @@
 
   (define (do-insert str)
     (define norm (regexp-replace* #rx"\r\n|\r" str "\n"))
-    (define filtered (if multiline? norm (string-replace norm "\n" "")))
-    (unless (equal? filtered "")
-      (edit! (λ () (buffer-insert! (unbox buf) filtered)))))
+    (unless (equal? norm "")
+      (edit! (λ () (buffer-insert! (unbox buf) norm)))))
 
   (define (do-backspace)
     (when (> (buffer-cursor-pos (unbox buf)) 0)
@@ -95,18 +93,16 @@
       (set-box! dirty #t)))
 
   (define (do-move-up)
-    (when multiline?
-      (define b (unbox buf))
-      (when (> (buffer-cursor-line b) 0)
-        (buffer-move-up b)
-        (set-box! dirty #t))))
+    (define b (unbox buf))
+    (when (> (buffer-cursor-line b) 0)
+      (buffer-move-up b)
+      (set-box! dirty #t)))
 
   (define (do-move-down)
-    (when multiline?
-      (define b (unbox buf))
-      (when (< (add1 (buffer-cursor-line b)) (buffer-line-count b))
-        (buffer-move-down b)
-        (set-box! dirty #t))))
+    (define b (unbox buf))
+    (when (< (add1 (buffer-cursor-line b)) (buffer-line-count b))
+      (buffer-move-down b)
+      (set-box! dirty #t)))
 
   (define (do-move-home)
     (define b (unbox buf))
@@ -311,39 +307,22 @@
   ;; ═══════════════════════════════════════════════════════
 
   (define handler
-    (if multiline?
-        (build-input
-          #:char (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
-          #:utf-char do-insert
-          #:backspace do-backspace
-          #:delete do-delete
-          #:left do-move-left
-          #:right do-move-right
-          #:up do-move-up
-          #:down do-move-down
-          #:home do-move-home
-          #:end do-move-end
-          #:enter (λ () (on-submit (buffer-text (unbox buf))))
-          #:escape (λ () (do-insert "\n"))
-          #:paste (λ (data) (do-insert (bytes->string/utf-8 data)))
-          #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
-          #:mouse-move (λ (mx my mods) (mouse->cursor mx my)))
-        (build-input
-          #:char (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
-          #:utf-char do-insert
-          #:backspace do-backspace
-          #:delete do-delete
-          #:left do-move-left
-          #:right do-move-right
-          #:up void
-          #:down void
-          #:home do-move-home
-          #:end do-move-end
-          #:enter (λ () (on-submit (buffer-text (unbox buf))))
-          #:escape void
-          #:paste (λ (data) (do-insert (bytes->string/utf-8 data)))
-          #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
-          #:mouse-move (λ (mx my mods) (mouse->cursor mx my)))))
+    (build-input
+     #:char       (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
+     #:utf-char   do-insert
+     #:backspace  do-backspace
+     #:delete     do-delete
+     #:left       do-move-left
+     #:right      do-move-right
+     #:up         do-move-up
+     #:down       do-move-down
+     #:home       do-move-home
+     #:end        do-move-end
+     #:enter      (λ () (on-submit (buffer-text (unbox buf))))
+     #:escape     (λ () (do-insert "\n"))
+     #:paste      (λ (data) (do-insert (bytes->string/utf-8 data)))
+     #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
+     #:mouse-move  (λ (mx my mods) (mouse->cursor mx my))))
 
   ;; ═══════════════════════════════════════════════════════
   ;; 组件封装
