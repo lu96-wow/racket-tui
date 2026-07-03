@@ -85,4 +85,8 @@
 (style-define! 'input-focus      clr-white attr-bold)
 (style-define! 'input-error      clr-red bclr-white attr-bold)
 
+;; 输出组件样式
+(style-define! 'output-normal    clr-white)
+(style-define! 'output-focus     clr-white attr-bold)
+
 (provide (all-defined-out))
