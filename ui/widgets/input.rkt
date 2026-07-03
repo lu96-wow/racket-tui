@@ -294,11 +294,6 @@
            (define style (if focused? 'input-focus 'input-normal))
            (put-styled-at! (+ y sr) x style line-str)
 
-           (define rendered-len (string-length line-str))
-           (when (< rendered-len w)
-             (cursor-move (+ y sr) (+ x rendered-len))
-             (put-string (make-string (- w rendered-len) #\space)))
-
            ;; ── 光标 ──
            (when (and focused? is-cur-line)
              (define cur-col-x (buffer-cursor-display-col b))
