@@ -43,7 +43,10 @@
                     #:on-change [on-change void]
                     #:initial-text [initial-text ""]
                     #:style [style 'input-focus]
-                    #:nofocus-style [nofocus-style 'input-normal])
+                    #:nofocus-style [nofocus-style 'input-normal]
+                    #:show? [show? (box #t)])
+
+  (define show-box (if (boolean? show?) (box show?) show?))
 
   ;; ═══════════════════════════════════════════════════════
   ;; 状态 (Layer 1: buffer / Layer 2: 渲染上下文)
@@ -326,4 +329,4 @@
   ;; 组件封装
   ;; ═══════════════════════════════════════════════════════
 
-  (component render handler #t #t 0 1 dirty #f))
+  (component render handler #t show-box 0 1 dirty #f))

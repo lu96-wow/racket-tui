@@ -23,7 +23,7 @@
                          (define cy (unbox* yb))
                          (define cw (let ([v (unbox* wb)]) (if (zero? v) (component-w comp) v)))
                          (define ch (let ([v (unbox* hb)]) (if (zero? v) (component-h comp) v)))
-                         (and (component-show? comp)
+                         (and (component-visible? comp)
                               (component-focusable? comp)
                               (<= cx mx (+ cx cw -1))
                               (<= cy my (+ cy ch -1))

@@ -47,13 +47,15 @@
 
 (define (make-text/static #:text str
                           #:style [style 'info]
-                          #:h-align [h-align 'left])
+                          #:h-align [h-align 'left]
+                          #:show? [show? (box #t)])
   (define str-len (string-length str))
+  (define show-box (if (boolean? show?) (box show?) show?))
   (component
    (λ (focused? x y w h)
      (render-text str style h-align x y w h))
    (build-input)
-   #f #t str-len 1 (box #t) #f))
+   #f show-box str-len 1 (box #t) #f))
 
 ;; ═══════════════════════════════════════════════════════
 ;; 路径 B: lambda — 每帧调用 proc，比对后标记 dirty
@@ -61,14 +63,16 @@
 
 (define (make-text/lambda #:text proc
                           #:style [style 'info]
-                          #:h-align [h-align 'left])
+                          #:h-align [h-align 'left]
+                          #:show? [show? (box #t)])
   (define dirty (box #t))
   (define cache (box (proc)))
+  (define show-box (if (boolean? show?) (box show?) show?))
   (component
    (λ (focused? x y w h)
      (render-text (unbox cache) style h-align x y w h))
    (build-input)
-   #f #t 0 1 dirty
+   #f show-box 0 1 dirty
    (λ (x y w h focused?)
      (define cur (proc))
      (unless (equal? cur (unbox cache))
@@ -81,12 +85,14 @@
 
 (define (make-text/dynamic #:text val
                            #:style [style 'info]
-                           #:h-align [h-align 'left])
+                           #:h-align [h-align 'left]
+                           #:show? [show? (box #t)])
+  (define show-box (if (boolean? show?) (box show?) show?))
   (cond
     [(string? val)
-     (make-text/static #:text val #:style style #:h-align h-align)]
+     (make-text/static #:text val #:style style #:h-align h-align #:show? show-box)]
     [(procedure? val)
-     (make-text/lambda #:text val #:style style #:h-align h-align)]
+     (make-text/lambda #:text val #:style style #:h-align h-align #:show? show-box)]
     [(box? val)
      (define dirty (box #t))
      (define cache (box (unbox val)))
@@ -94,7 +100,7 @@
       (λ (focused? x y w h)
         (render-text (unbox cache) style h-align x y w h))
       (build-input)
-      #f #t 0 1 dirty
+      #f show-box 0 1 dirty
       (λ (x y w h focused?)
         (define cur (unbox val))
         (unless (equal? cur (unbox cache))

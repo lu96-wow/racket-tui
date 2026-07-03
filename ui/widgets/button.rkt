@@ -10,8 +10,10 @@
 
 (define (make-button #:text text
                      #:on-activate [on-activate void]
-                     #:style [style 'button])
+                     #:style [style 'button]
+                     #:show? [show? (box #t)])
   (define label (string-append " " text " "))
+  (define show-box (if (boolean? show?) (box show?) show?))
   (define pressed? (box #f))
   (define dirty    (box #t))
 
@@ -34,7 +36,7 @@
                         (set-box! pressed? #f)
                         (set-box! dirty #t))))
 
-   #t #t
+   #t show-box
    (string-length label)
    1
    dirty

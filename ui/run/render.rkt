@@ -28,7 +28,7 @@
           (define y (unbox* yb))
           (define w (let ([v (unbox* wb)]) (if (zero? v) (component-w comp) v)))
           (define h (let ([v (unbox* hb)]) (if (zero? v) (component-h comp) v)))
-          (define visible? (and (component-show? comp) (fits? x y w h)))
+          (define visible? (and (component-visible? comp) (fits? x y w h)))
           (define last (hash-ref last-bounds comp #f))
           (cond [(and last visible?)
                  (and (= x (first last)) (= y (second last))
@@ -49,7 +49,7 @@
         (define w (unbox* wb))
         (define h (unbox* hb))
 
-        (define visible? (and (component-show? comp) (fits? x y w h)))
+        (define visible? (and (component-visible? comp) (fits? x y w h)))
         (define last (hash-ref last-bounds comp #f))
         (define focused-now? (eq? comp (unbox focus)))
 
