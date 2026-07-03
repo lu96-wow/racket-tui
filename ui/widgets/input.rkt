@@ -1,6 +1,36 @@
 #lang racket
 
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Input 组件 — 两层架构
+;;
+;; Layer 1 (gap-buffer.rkt): 数据 + 编辑 + 查询 — 纯逻辑，零渲染依赖
+;; Layer 2 (本模块):         渲染 + 滚动 + 事件绑定 — 只读 buffer，写屏幕
+;;
+;; 核心原则:
+;;   1. 编辑操作只改 buffer, 设置 dirty 标记, 绝不碰滚动/渲染
+;;   2. 渲染只读 buffer, 计算滚动确保光标始终可见, 写屏幕
+;;   3. 滚动偏移由渲染统一计算, 编辑后自动修正
+;;   4. 水平滚动"惰性": 只有光标贴边时才移
+;;
+;; ═══════════════════════════════════════════════════════════════════════════
+;; 渲染边界情况:
+;;
+;;  R01. 空缓冲区 + 聚焦 → 显示光标在 (x, y)
+;;  R02. 空缓冲区 + 无焦点 → 显示 placeholder
+;;  R03. 光标在换行符上 → 显示高亮空格
+;;  R04. 光标在行尾 (total-len) → 显示高亮空格
+;;  R05. 行长 > 视口宽 → 水平滚动, 光标贴边触发
+;;  R06. 行数 > 视口高 → 垂直滚动, 光标出界触发
+;;  R07. 输入换行符 (多行模式) → 光标下移, 必要时滚动
+;;  R08. CJK 宽字符在视口边缘 → 正确裁剪, 不显示半字符
+;;  R09. 视口尺寸变化 → 重新计算滚动
+;;  R10. 光标始终在视口内 → 渲染保证 scroll-y ≤ cursor-line < scroll-y + h
+;;     且 scroll-x ≤ cursor-col < scroll-x + w (cursor-width 预留)
+;;
+;; ═══════════════════════════════════════════════════════════════════════════
+
 (require "../component.rkt"
+         "../../base/gap-buffer.rkt"
          "../../base/io/build-input.rkt"
          "../../base/io/output-styles.rkt"
          "../../base/io/output-color.rkt"
@@ -8,378 +38,287 @@
 
 (provide make-input)
 
-;; ═══════════════════════════════════════════════════════════
-;; Gap Buffer: 借鉴 racket/gui text% 绝对位置模型
-;; 布局: [left...][gap...][right...]  gap-start=cursor=有效字符数
-;; ═══════════════════════════════════════════════════════════
-
-(define (char-display-width ch)
-  (define cp (char->integer ch))
-  (cond [(<= #x1100 cp #x115F) 2] [(<= #x2329 cp #x232A) 2]
-        [(<= #x2E80 cp #x303E) 2] [(<= #x3040 cp #x33BF) 2]
-        [(<= #x3400 cp #x4DBF) 2] [(<= #x4E00 cp #x9FFF) 2]
-        [(<= #xA000 cp #xA4CF) 2] [(<= #xAC00 cp #xD7AF) 2]
-        [(<= #xF900 cp #xFAFF) 2] [(<= #xFE10 cp #xFE19) 2]
-        [(<= #xFE30 cp #xFE6F) 2] [(<= #xFF01 cp #xFF60) 2]
-        [(<= #xFFE0 cp #xFFE6) 2]
-        [(<= #x1F300 cp #x1F5FF) 2] [(<= #x1F600 cp #x1F64F) 2]
-        [(<= #x1F680 cp #x1F6FF) 2] [(<= #x1F900 cp #x1F9FF) 2]
-        [(<= #x20000 cp #x2FFFF) 2] [(<= #x30000 cp #x3FFFF) 2]
-        [else 1]))
-
-(struct gap-buf (chars widths gap-start gap-end total-len capacity) #:mutable)
-
-(define (make-gap-buf)
-  (define cap 256)
-  (gap-buf (make-vector cap #\nul) (make-vector cap 0) 0 cap 0 cap))
-
-(define (gb-logic->phys gb pos)
-  (if (< pos (gap-buf-gap-start gb))
-      pos
-      (+ pos (- (gap-buf-gap-end gb) (gap-buf-gap-start gb)))))
-
-(define (gb-ref gb pos)      (vector-ref (gap-buf-chars gb)  (gb-logic->phys gb pos)))
-(define (gb-width-ref gb pos)(vector-ref (gap-buf-widths gb) (gb-logic->phys gb pos)))
-
-(define (gb-ensure-gap! gb need)
-  (when (< (- (gap-buf-gap-end gb) (gap-buf-gap-start gb)) need)
-    (define old-cap (gap-buf-capacity gb))
-    (define new-cap (* 2 (+ old-cap need)))
-    (define nc (make-vector new-cap #\nul))
-    (define nw (make-vector new-cap 0))
-    (define gs (gap-buf-gap-start gb))
-    (define ge (gap-buf-gap-end gb))
-    (vector-copy! nc 0  (gap-buf-chars gb)  0 gs)
-    (vector-copy! nw 0  (gap-buf-widths gb) 0 gs)
-    (vector-copy! nc (+ gs need) (gap-buf-chars gb)  ge old-cap)
-    (vector-copy! nw (+ gs need) (gap-buf-widths gb) ge old-cap)
-    (set-gap-buf-chars!  gb nc)
-    (set-gap-buf-widths! gb nw)
-    (set-gap-buf-gap-end!   gb (+ gs need))
-    (set-gap-buf-capacity!  gb new-cap)))
-
-(define (gb-move-gap! gb pos)
-  (define gs (gap-buf-gap-start gb))
-  (define ge (gap-buf-gap-end gb))
-  (define cs (gap-buf-chars gb))
-  (define ws (gap-buf-widths gb))
-  (cond [(= pos gs) (void)]
-        [(< pos gs)
-         (define n (- gs pos))
-         (vector-copy! cs (- ge n) cs pos gs)
-         (vector-copy! ws (- ge n) ws pos gs)
-         (set-gap-buf-gap-start! gb pos)
-         (set-gap-buf-gap-end!   gb (- ge n))]
-        [else
-         (define n (- pos gs))
-         (vector-copy! cs gs cs ge (+ ge n))
-         (vector-copy! ws gs ws ge (+ ge n))
-         (set-gap-buf-gap-start! gb (+ gs n))
-         (set-gap-buf-gap-end!   gb (+ ge n))]))
-
-(define (gb-insert! gb ch w)
-  (gb-ensure-gap! gb 1)
-  (define gs (gap-buf-gap-start gb))
-  (vector-set! (gap-buf-chars gb)  gs ch)
-  (vector-set! (gap-buf-widths gb) gs w)
-  (set-gap-buf-gap-start! gb (add1 gs))
-  (set-gap-buf-total-len! gb (add1 (gap-buf-total-len gb))))
-
-(define (gb-backspace! gb)
-  (when (> (gap-buf-gap-start gb) 0)
-    (set-gap-buf-gap-end!   gb (sub1 (gap-buf-gap-end gb)))
-    (set-gap-buf-gap-start! gb (sub1 (gap-buf-gap-start gb)))
-    (set-gap-buf-total-len! gb (sub1 (gap-buf-total-len gb)))))
-
-(define (gb-delete! gb)
-  (when (< (gap-buf-gap-start gb) (gap-buf-total-len gb))
-    (set-gap-buf-gap-end!   gb (add1 (gap-buf-gap-end gb)))
-    (set-gap-buf-total-len! gb (sub1 (gap-buf-total-len gb)))))
-
-(define (gb->string gb)
-  (define cs (gap-buf-chars gb))
-  (define gs (gap-buf-gap-start gb))
-  (define ge (gap-buf-gap-end gb))
-  (define tl (gap-buf-total-len gb))
-  (string-append
-   (list->string (for/list ([i (in-range gs)]) (vector-ref cs i)))
-   (list->string (for/list ([i (in-range ge (+ ge (- tl gs)))]) (vector-ref cs i)))))
-
-;; ═══════════════════════════════════════════════════════════
-;; 行索引（按需扫描换行符）
-;; ═══════════════════════════════════════════════════════════
-(define (compute-lines gb)
-  (define tl (gap-buf-total-len gb))
-  (let loop ([pos 0] [start 0] [acc '()])
-    (cond [(>= pos tl) (reverse (cons start acc))]
-          [(char=? (gb-ref gb pos) #\newline)
-           (loop (add1 pos) (add1 pos) (cons start acc))]
-          [else (loop (add1 pos) start acc)])))
-
-(define (pos->line+col lines pos)
-  (define n (length lines))
-  (let loop ([li 0])
-    (if (>= li (sub1 n))
-        (values li (- pos (list-ref lines li)))
-        (if (< pos (list-ref lines (add1 li)))
-            (values li (- pos (list-ref lines li)))
-            (loop (add1 li))))))
-
-;; ═══════════════════════════════════════════════════════════
-;; make-input
-;; ═══════════════════════════════════════════════════════════
 (define (make-input #:placeholder [placeholder ""]
                     #:on-submit   [on-submit void]
                     #:on-change   [on-change void]
                     #:multiline?  [multiline? #f]
                     #:initial-text [initial-text ""])
-  ;; ── buffer 状态 ──
-  (define gb           (box (make-gap-buf)))
-  (define lines-cache  (box '(0)))
-  (define lines-valid? (box #f))
-  (define dirty        (box #t))
 
-  ;; ── 持久滚动状态（渲染时更新）──
-  (define view-scroll-y (box 0))
-  (define view-scroll-x (box 0))
+  ;; ═══════════════════════════════════════════════════════
+  ;; 状态 (Layer 1: buffer / Layer 2: 渲染上下文)
+  ;; ═══════════════════════════════════════════════════════
+
+  ;; ── Layer 1: 纯数据 ──
+  (define buf   (box (make-gap-buffer initial-text)))
+  (define dirty (box #t))
+
+  ;; ── Layer 2: 渲染上下文 (由 render 读写, 编辑操作不碰) ──
+  (define scroll-y (box 0))
+  (define scroll-x (box 0))
   (define vp-x (box 0)) (define vp-y (box 0))
   (define vp-w (box 0)) (define vp-h (box 0))
 
-  ;; 初始化文本
-  (unless (equal? initial-text "")
-    (define b (unbox gb))
-    (for ([ch (in-string initial-text)])
-      (gb-insert! b ch (char-display-width ch)))
-    (set-box! gb b)
-    (set-box! lines-valid? #f))
+  ;; ═══════════════════════════════════════════════════════
+  ;; Layer 1: 编辑操作 — 只改 buffer, 设置 dirty
+  ;; ═══════════════════════════════════════════════════════
 
-  ;; ── 行缓存 ──
-  (define (get-lines)
-    (unless (unbox lines-valid?)
-      (set-box! lines-cache (compute-lines (unbox gb)))
-      (set-box! lines-valid? #t))
-    (unbox lines-cache))
-
-  (define (invalid-lines!)
-    (set-box! lines-valid? #f))
-
-  (define (buf-text)   (gb->string (unbox gb)))
-  (define (cursor-pos) (gap-buf-gap-start (unbox gb)))
-  (define (buf-total)  (gap-buf-total-len (unbox gb)))
-
-  ;; ── 鼠标→光标 ──
-  (define (mouse->cursor mx my)
-    (define ls (get-lines))
-    (define li (+ (unbox view-scroll-y) (- my (unbox vp-y))))
-    (define n  (length ls))
-    (define b  (unbox gb))
-    (define pos
-      (cond [(< li 0) 0]
-            [(>= li n) (buf-total)]
-            [else
-             (define lstart (list-ref ls li))
-             (define lend   (if (< (add1 li) n) (list-ref ls (add1 li)) (buf-total)))
-             (define rx (- mx (unbox vp-x)))
-             (let loop ([p lstart] [col 0])
-               (cond [(>= p lend) p] [(>= col rx) p]
-                     [else (loop (add1 p) (+ col (gb-width-ref b p)))]))]))
-    (when (not (= pos (cursor-pos)))
-      (gb-move-gap! b pos)
-      (set-box! dirty #t)))
-
-  ;; ── 编辑操作（只改 buffer，不碰滚动）──
-  (define (do-insert str)
-    (define b (unbox gb))
-    (define norm (regexp-replace* #rx"\r\n|\r" str "\n"))
-    (for ([ch (in-string norm)])
-      (unless (and (not multiline?) (char=? ch #\newline))
-        (gb-insert! b ch (char-display-width ch))))
-    (set-box! gb b)
-    (invalid-lines!)
+  (define (edit! thunk)
+    (thunk)
     (set-box! dirty #t)
-    (on-change (buf-text)))
+    (on-change (buffer-text (unbox buf))))
+
+  (define (do-insert str)
+    (define norm (regexp-replace* #rx"\r\n|\r" str "\n"))
+    (define filtered (if multiline? norm (string-replace norm "\n" "")))
+    (unless (equal? filtered "")
+      (edit! (λ () (buffer-insert! (unbox buf) filtered)))))
 
   (define (do-backspace)
-    (when (> (cursor-pos) 0)
-      (define b (unbox gb))
-      (gb-backspace! b)
-      (set-box! gb b)
-      (invalid-lines!)
-      (set-box! dirty #t)
-      (on-change (buf-text))))
+    (when (> (buffer-cursor-pos (unbox buf)) 0)
+      (edit! (λ () (buffer-backspace! (unbox buf))))))
 
   (define (do-delete)
-    (define b (unbox gb))
-    (when (< (cursor-pos) (buf-total))
-      (gb-delete! b)
-      (set-box! gb b)
-      (invalid-lines!)
-      (set-box! dirty #t)
-      (on-change (buf-text))))
+    (define b (unbox buf))
+    (when (< (buffer-cursor-pos b) (buffer-total-len b))
+      (edit! (λ () (buffer-delete! b)))))
 
   (define (do-move-left)
-    (when (> (cursor-pos) 0)
-      (define b (unbox gb))
-      (gb-move-gap! b (sub1 (cursor-pos)))
-      (set-box! gb b)
+    (define b (unbox buf))
+    (when (> (buffer-cursor-pos b) 0)
+      (buffer-move-left b)
       (set-box! dirty #t)))
 
   (define (do-move-right)
-    (define b (unbox gb))
-    (when (< (cursor-pos) (buf-total))
-      (gb-move-gap! b (add1 (cursor-pos)))
-      (set-box! gb b)
+    (define b (unbox buf))
+    (when (< (buffer-cursor-pos b) (buffer-total-len b))
+      (buffer-move-right b)
       (set-box! dirty #t)))
 
   (define (do-move-up)
-    (define b  (unbox gb))
-    (define ls (get-lines))
-    (define ci (cursor-pos))
-    (define-values (li col) (pos->line+col ls ci))
-    (when (> li 0)
-      (define ps (list-ref ls (sub1 li)))
-      (define pe (list-ref ls li))
-      (define pl (- pe ps))
-      (gb-move-gap! b (+ ps (min col (max 0 (sub1 pl)))))
-      (set-box! gb b)
-      (set-box! dirty #t)))
+    (when multiline?
+      (define b (unbox buf))
+      (when (> (buffer-cursor-line b) 0)
+        (buffer-move-up b)
+        (set-box! dirty #t))))
 
   (define (do-move-down)
-    (define b  (unbox gb))
-    (define ls (get-lines))
-    (define ci (cursor-pos))
-    (define-values (li col) (pos->line+col ls ci))
-    (define n  (length ls))
-    (when (< (add1 li) n)
-      (define ps (list-ref ls (add1 li)))
-      (define pe (if (< (+ li 2) n) (list-ref ls (+ li 2)) (buf-total)))
-      (define pl (- pe ps))
-      (gb-move-gap! b (+ ps (min col (max 0 (sub1 pl)))))
-      (set-box! gb b)
-      (set-box! dirty #t)))
+    (when multiline?
+      (define b (unbox buf))
+      (when (< (add1 (buffer-cursor-line b)) (buffer-line-count b))
+        (buffer-move-down b)
+        (set-box! dirty #t))))
 
   (define (do-move-home)
-    (define b  (unbox gb))
-    (define ls (get-lines))
-    (define ci (cursor-pos))
-    (define-values (li _) (pos->line+col ls ci))
-    (define ps (list-ref ls li))
-    (unless (= ci ps)
-      (gb-move-gap! b ps)
-      (set-box! gb b)
+    (define b (unbox buf))
+    (define ls (buffer-line-start b (buffer-cursor-line b)))
+    (unless (= (buffer-cursor-pos b) ls)
+      (buffer-move-home b)
       (set-box! dirty #t)))
 
   (define (do-move-end)
-    (define b  (unbox gb))
-    (define ls (get-lines))
-    (define ci (cursor-pos))
-    (define-values (li _) (pos->line+col ls ci))
-    (define n  (length ls))
-    (define pe (if (< (add1 li) n) (sub1 (list-ref ls (add1 li))) (buf-total)))
-    (unless (= ci pe)
-      (gb-move-gap! b pe)
-      (set-box! gb b)
+    (define b (unbox buf))
+    (buffer-move-end b)
+    (set-box! dirty #t))
+
+  ;; ── 鼠标 → 光标 ──
+  (define (mouse->cursor mx my)
+    (define b (unbox buf))
+    (define sy (unbox scroll-y))
+    (define sx (unbox scroll-x))
+    (define li (+ sy (- my (unbox vp-y))))
+    (define n  (buffer-line-count b))
+    (define tl (buffer-total-len b))
+
+    (define pos
+      (cond
+        [(< li 0) 0]
+        [(>= li n) tl]
+        [else
+         (define lstart (buffer-line-start b li))
+         (define lend   (buffer-line-end b li))
+         ;; 鼠标相对视口的 display-width 列
+         (define rx (- mx (unbox vp-x)))
+         ;; 将 display-width 列 + 当前水平滚动 → 目标 display-width 列
+         (define target-col (+ sx rx))
+         ;; 在当前行找最接近的位置
+         (let loop ([p lstart] [col 0])
+           (cond
+             [(>= p lend) p]
+             [(>= col target-col) p]
+             [else (loop (add1 p) (+ col (buffer-char-display-width-at b p)))]))]))
+
+    (when (not (= pos (buffer-cursor-pos b)))
+      (buffer-move-to b pos)
       (set-box! dirty #t)))
 
-  ;; ═══════════════════════════════════════════════════════════
-  ;; 渲染：唯一计算滚动偏移的地方
-  ;; ═══════════════════════════════════════════════════════════
+  ;; ═══════════════════════════════════════════════════════
+  ;; Layer 2: 滚动计算 — 确保光标始终在视口内
+  ;; ═══════════════════════════════════════════════════════
+
+  (define (compute-scroll! b focused? w h)
+    (define tl   (buffer-total-len b))
+    (define li   (buffer-cursor-line b))
+    (define n    (buffer-line-count b))
+    (define lstart (buffer-line-start b li))
+    (define lend   (buffer-line-end b li))
+
+    ;; ── 垂直滚动 ──
+    ;; 保证: scroll-y ≤ li < scroll-y + h
+    (define old-sy (unbox scroll-y))
+    (define max-sy (max 0 (- n h)))
+    (define new-sy
+      (cond
+        [(< li old-sy)       li]                    ; 光标在视口上方
+        [(>= li (+ old-sy h)) (add1 (- li h))]     ; 光标在视口下方
+        [(> old-sy max-sy)   max-sy]               ; 缓冲区缩小后 clamp
+        [else old-sy]))
+    (unless (= new-sy old-sy)
+      (set-box! scroll-y new-sy))
+
+    ;; ── 水平滚动 (仅光标所在行) ──
+    ;; 保证: scroll-x ≤ cursor-col < scroll-x + w, 且光标有 1 格余量
+    (define old-sx (unbox scroll-x))
+    (define new-sx
+      (cond
+        [(zero? tl) 0]  ;; 空缓冲区
+
+        ;; 计算当前行的总 display-width
+        [else
+         (define line-width
+           (let loop ([p lstart] [lw 0])
+             (if (>= p lend) lw
+                 (loop (add1 p) (+ lw (buffer-char-display-width-at b p))))))
+
+         ;; 光标 display-width 列及宽度
+         (define cur-col (buffer-cursor-display-col b))
+         (define cur-w
+           (if (and (< (buffer-cursor-pos b) tl)
+                    (not (char=? (buffer-char-at b (buffer-cursor-pos b)) #\newline)))
+               (buffer-char-display-width-at b (buffer-cursor-pos b))
+               1))  ;; 换行符或末尾 → 宽度为 1 的空格
+
+         (define cur-end (+ cur-col cur-w))
+
+         (cond
+           ;; 行宽小于视口 → 不滚动
+           [(<= line-width w) 0]
+
+           ;; 光标左侧贴边 → 滚动到光标左侧
+           [(< cur-col old-sx)
+            (max 0 cur-col)]
+
+           ;; 光标右侧贴边 → 滚动使光标完整可见 (预留 1 格)
+           [(> cur-end (+ old-sx w -1))
+            (max 0 (min cur-col (- cur-end w)))]
+
+           ;; 无贴边 → 保持; 但若光标实际已超出旧 sx (缓冲区扩大后) → clamp
+           [(> old-sx cur-col)
+            (max 0 cur-col)]
+
+           [else old-sx])]))
+
+    (unless (= new-sx old-sx)
+      (set-box! scroll-x new-sx)))
+
+  ;; ═══════════════════════════════════════════════════════
+  ;; Layer 2: 渲染 — 只读 buffer, 写屏幕
+  ;; ═══════════════════════════════════════════════════════
+
   (define (render focused? x y w h)
+    ;; 保存视口参数
     (set-box! vp-x x) (set-box! vp-y y)
     (set-box! vp-w w) (set-box! vp-h h)
-    (define b  (unbox gb))
-    (define ls (get-lines))
-    (define ci (cursor-pos))
-    (define tl (buf-total))
-    (define-values (cur-li cur-col) (pos->line+col ls ci))
-    (define n-lines (length ls))
 
-    ;; ── 垂直滚动：确保光标行在 [0, h) 内 ──
-    (define old-sy (unbox view-scroll-y))
-    (define new-sy
-      (cond [(< cur-li old-sy)       cur-li]
-            [(>= cur-li (+ old-sy h)) (add1 (- cur-li h))]
-            [(> old-sy (max 0 (- n-lines h))) (max 0 (- n-lines h))]
-            [else old-sy]))
-    (unless (= new-sy old-sy)
-      (set-box! view-scroll-y new-sy))
-    (define scr new-sy)
+    (define b      (unbox buf))
+    (define tl     (buffer-total-len b))
+    (define n      (buffer-line-count b))
+    (define cur-li (buffer-cursor-line b))
+    (define cur-pos (buffer-cursor-pos b))
 
-    ;; ── 水平滚动：仅光标贴边才移 ──
-    (define old-sx (unbox view-scroll-x))
+    ;; ── 1. 计算滚动 (确保光标可见) ──
+    (compute-scroll! b focused? w h)
+    (define sy (unbox scroll-y))
+    (define sx (unbox scroll-x))
 
-    ;; ── 清屏 ──
-    (for ([sr (in-range h)])
-      (cursor-move (+ y sr) x)
-      (put-string (make-string w #\space)))
+    ;; ── 2. 渲染: 空/非空分两路, 避免 placeholder 被覆盖 ──
+    (cond
+      ;; 空 + 无焦点 + placeholder → 仅显示 placeholder
+      [(and (zero? tl) (not focused?)
+            (positive? (string-length placeholder)))
+       (for ([sr (in-range h)])
+         (cursor-move (+ y sr) x)
+         (put-string (make-string w #\space)))
+       (define disp (if (> (string-length placeholder) w)
+                        (substring placeholder 0 w) placeholder))
+       (put-styled-at! y x 'input-normal disp)]
 
-    ;; ── 空+无焦点 → placeholder ──
-    (when (and (zero? tl) (not focused?)
-               (positive? (string-length placeholder)))
-      (put-styled-at! y x 'input-normal
-                      (if (> (string-length placeholder) w)
-                          (substring placeholder 0 w) placeholder)))
+      ;; 空 + 聚焦 → 仅显示光标
+      [(zero? tl)
+       (for ([sr (in-range h)])
+         (cursor-move (+ y sr) x)
+         (put-string (make-string w #\space)))
+       (when focused?
+         (put-styled-at! y x 'cursor " "))]
 
-    ;; ── 逐行渲染 ──
-    (for ([sr (in-range h)])
-      (define li (+ scr sr))
-      (when (< li n-lines)
-        (define lstart (list-ref ls li))
-        (define lend   (if (< (add1 li) n-lines)
-                           (max lstart (sub1 (list-ref ls (add1 li))))
-                           tl))
+      ;; 有内容: 清空 + 逐行渲染
+      [else
+       (for ([sr (in-range h)])
+         (cursor-move (+ y sr) x)
+         (put-string (make-string w #\space)))
 
-        ;; 计算总宽度
-        (define total-w (for/sum ([p (in-range lstart lend)]) (gb-width-ref b p)))
+       (for ([sr (in-range h)])
+         (define li (+ sy sr))
+         (when (< li n)
+           (define line-start (buffer-line-start b li))
+           (define line-end   (buffer-line-end b li))
+           (define is-cur-line (= li cur-li))
 
-        ;; ── 水平滚动（光标所在行）──
-        (define hs
-          (cond [(not (= li cur-li)) 0]
-                [(<= total-w w)      0]
-                [else
-                 (define cur-col-x (for/sum ([p (in-range lstart ci)]) (gb-width-ref b p)))
-                 (define cur-w (if (and (< ci tl) (not (char=? (gb-ref b ci) #\newline)))
-                                   (gb-width-ref b ci) 1))
-                 (define cur-r (+ cur-col-x cur-w))
-                 ;; 仅贴边触发
-                 (cond ((< cur-col-x old-sx)         (max 0 cur-col-x))
-                       ((> cur-r (+ old-sx w -1))   (max 0 (min cur-col-x (- cur-r w))))
-                       ((> old-sx cur-col-x)         (max 0 cur-col-x))
-                       (else old-sx))]))
-        (when (= li cur-li)
-          (set-box! view-scroll-x hs))
+           (define line-str
+             (call-with-output-string
+              (λ (out)
+                (let loop ([p line-start] [col 0])
+                  (when (< p line-end)
+                    (define cw (buffer-char-display-width-at b p))
+                    (define cr (+ col cw))
+                    (cond
+                      [(<= cr sx)  (loop (add1 p) cr)]
+                      [(>= col (+ sx w)) (void)]
+                      [else
+                       (define display-ch
+                         (if (char=? (buffer-char-at b p) #\newline)
+                             #\space
+                             (buffer-char-at b p)))
+                       (write-char display-ch out)
+                       (loop (add1 p) cr)]))))))
 
-        ;; ── 构建可见行字符串 ──
-        (define line-str
-          (call-with-output-string
-           (λ (out)
-             (let loop ([p lstart] [col 0])
-               (when (< p lend)
-                 (define cw (gb-width-ref b p))
-                 (define cr (+ col cw))
-                 (cond [(<= cr hs)            (loop (add1 p) cr)]
-                       [(and (>= col hs) (<= cr (+ hs w)))
-                        (write-char (if (char=? (gb-ref b p) #\newline) #\space (gb-ref b p)) out)
-                        (loop (add1 p) cr)]
-                       [else (loop (add1 p) cr)]))))))
+           (define style (if focused? 'input-focus 'input-normal))
+           (put-styled-at! (+ y sr) x style line-str)
 
-        (define style (if focused? 'input-focus 'input-normal))
-        (put-styled-at! (+ y sr) x style line-str)
+           (define rendered-len (string-length line-str))
+           (when (< rendered-len w)
+             (cursor-move (+ y sr) (+ x rendered-len))
+             (put-string (make-string (- w rendered-len) #\space)))
 
-        ;; ── 光标 ──
-        (when (and focused? (= li cur-li))
-          (define cur-col-x (for/sum ([p (in-range lstart ci)]) (gb-width-ref b p)))
-          (define sx (- cur-col-x hs))
-          (when (and (>= sx 0) (< sx w))
-            (define cch (if (and (< ci tl) (not (char=? (gb-ref b ci) #\newline)))
-                            (string (gb-ref b ci)) " "))
-            (put-styled-at! (+ y sr) (+ x sx) 'cursor cch))))))
+           ;; ── 光标 ──
+           (when (and focused? is-cur-line)
+             (define cur-col-x (buffer-cursor-display-col b))
+             (define sx-cur (- cur-col-x sx))
+             (when (and (>= sx-cur 0) (< sx-cur w))
+               (define cch
+                 (if (and (< cur-pos tl)
+                          (not (char=? (buffer-char-at b cur-pos) #\newline)))
+                     (string (buffer-char-at b cur-pos))
+                     " "))
+               (put-styled-at! (+ y sr) (+ x sx-cur) 'cursor cch)))))]))
 
-  ;; ── handler ──
+  ;; ═══════════════════════════════════════════════════════
+  ;; 事件绑定
+  ;; ═══════════════════════════════════════════════════════
+
   (define handler
     (if multiline?
         (build-input
-         #:char      (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
+         #:char       (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
          #:utf-char   do-insert
          #:backspace  do-backspace
          #:delete     do-delete
@@ -389,24 +328,30 @@
          #:down       do-move-down
          #:home       do-move-home
          #:end        do-move-end
-         #:enter      (λ () (on-submit (buf-text)))
+         #:enter      (λ () (on-submit (buffer-text (unbox buf))))
          #:escape     (λ () (do-insert "\n"))
          #:paste      (λ (data) (do-insert (bytes->string/utf-8 data)))
          #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
-         #:mouse-move  (λ (mx my mods)       (mouse->cursor mx my)))
+         #:mouse-move  (λ (mx my mods) (mouse->cursor mx my)))
         (build-input
-         #:char      (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
+         #:char       (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
          #:utf-char   do-insert
          #:backspace  do-backspace
          #:delete     do-delete
          #:left       do-move-left
          #:right      do-move-right
+         #:up         void
+         #:down       void
          #:home       do-move-home
          #:end        do-move-end
-         #:enter      (λ () (on-submit (buf-text)))
+         #:enter      (λ () (on-submit (buffer-text (unbox buf))))
          #:escape     void
          #:paste      (λ (data) (do-insert (bytes->string/utf-8 data)))
          #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
-         #:mouse-move  (λ (mx my mods)       (mouse->cursor mx my)))))
+         #:mouse-move  (λ (mx my mods) (mouse->cursor mx my)))))
+
+  ;; ═══════════════════════════════════════════════════════
+  ;; 组件封装
+  ;; ═══════════════════════════════════════════════════════
 
   (component render handler #t #t 0 1 dirty #f))
