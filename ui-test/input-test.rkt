@@ -3,12 +3,17 @@
 (require "../ui/main.rkt"
          "../base/io/output-color.rkt")
 
-;; ── 256 色深灰背景 (fg=255 白字, bg=238 深灰底) ──
-(style-define! 'panel-title  (color256-fg 255) (color256-bg 238) attr-bold)
-(style-define! 'panel-info   (color256-fg 255) (color256-bg 238))
-(style-define! 'panel-input  (color256-fg 255) (color256-bg 238))
-(style-define! 'panel-focus  (color256-fg 255) (color256-bg 238) attr-bold)
-(style-define! 'cursor       (color256-fg 238) (color256-bg 255))
+;; ── 256 色深灰背景 (自动回退 16 色白字黑底) ──
+(define fg-panel  (color-fg* 255 7))
+(define bg-panel  (color-bg* 238 0))
+(define fg-cursor (color-fg* 238 0))
+(define bg-cursor (color-bg* 255 7))
+
+(style-define! 'panel-title  fg-panel bg-panel attr-bold)
+(style-define! 'panel-info   fg-panel bg-panel)
+(style-define! 'panel-input  fg-panel bg-panel)
+(style-define! 'panel-focus  fg-panel bg-panel attr-bold)
+(style-define! 'cursor       fg-cursor bg-cursor)
 
 (define submitted (box "(none)"))
 

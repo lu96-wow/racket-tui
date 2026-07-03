@@ -19,6 +19,7 @@
   (enter-raw-mode!)
   (init-newline-var)
   (resize-monitor-start)
+  (use-color-auto!)
   (buffer-alt-enable)
   (enable-mouse!)
   (enable-bracketed-paste!))
@@ -28,6 +29,7 @@
   (enter-raw-mode!)
   (init-newline-var)
   (resize-monitor-start)
+  (use-color-auto!)
   (enable-mouse!)
   (enable-bracketed-paste!))
 
@@ -37,6 +39,7 @@
   (enter-raw-mode-keep-echo!)
   (init-newline-var)
   (resize-monitor-start)
+  (use-color-auto!)
   (enable-mouse!)
   (enable-bracketed-paste!))
 
