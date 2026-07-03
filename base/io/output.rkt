@@ -45,6 +45,9 @@
   (put-string (unbox newline-var))
   (set-cursor! (+ current-cursor-row 1) 0))
 
+(define (format-newline)
+  (string->bytes/utf-8 (unbox newline-var)))
+
 ;; 光标控制
 (define (cursor-up n)   (put-bytes (format-cursor-up n))   (set-cursor! (max 0 (- current-cursor-row n)) current-cursor-col))
 (define (cursor-down n) (put-bytes (format-cursor-down n)) (set-cursor! (+ current-cursor-row n) current-cursor-col))
@@ -94,6 +97,7 @@
 
 ;; 导出
 (provide put put-byte put-bytes put-format-bytes put-char put-string put-newline
+         format-newline
          put-at put-at!
          cursor-up cursor-down cursor-right cursor-left
          cursor-move cursor-col cursor-home
