@@ -8,35 +8,111 @@
 
 (provide make-text)
 
-(define (make-text #:text text #:style [style 'info] #:h-align [h-align 'left])
-  ;; text 可以是 string 或 (-> string)
-  (define get-text (if (string? text) (λ () text) text))
-  (define dirty (box #t))
-  (define last-text (box ""))
+;; ═══════════════════════════════════════════════════════
+;; 宏：编译期按 #:text 类型分派到三个特化路径
+;;
+;;   字符串字面量 → make-text/static   (零 per-frame 开销)
+;;   lambda 字面量 → make-text/lambda  (每帧调用 proc 比对)
+;;   变量/表达式   → make-text/dynamic (运行时判 string/box/procedure)
+;; ═══════════════════════════════════════════════════════
 
-  (define (render? x y w h focused?)
-    (define current (get-text))
-    (unless (equal? current (unbox last-text))
-      (set-box! last-text current)
-      (set-box! dirty #t)))
+(define-syntax (make-text stx)
+  (syntax-case stx ()
+    ;; 字符串字面量: #:text "hello"
+    [(_ #:text str rest ...)
+     (string? (syntax-e #'str))
+     #'(make-text/static #:text str rest ...)]
 
+    ;; lambda: #:text (lambda () body)
+    [(_ #:text (lambda () body ...) rest ...)
+     #'(make-text/lambda #:text (lambda () body ...) rest ...)]
+
+    ;; λ: #:text (λ () body)
+    [(_ #:text (λ () body ...) rest ...)
+     #'(make-text/lambda #:text (λ () body ...) rest ...)]
+
+    ;; 变量/表达式 → 运行时 dispatch
+    [(_ #:text expr rest ...)
+     #'(make-text/dynamic #:text expr rest ...)]))
+
+;; ═══════════════════════════════════════════════════════
+;; 共享渲染逻辑
+;; ═══════════════════════════════════════════════════════
+
+(define (render-text s style h-align x y w h)
+  (define visible
+    (if ((string-length s) . > . w) (substring s 0 w) s))
+  (define visible-w (string-length visible))
+  (define x-off
+    (case h-align
+      [(center) (quotient (max 0 (- w visible-w)) 2)]
+      [(right)  (max 0 (- w visible-w))]
+      [else 0]))
+  (for ([i (in-range h)])
+    (cursor-move (+ y i) x)
+    (put-string (make-string w #\space)))
+  (put-styled-at! y (+ x x-off) style visible))
+
+;; ═══════════════════════════════════════════════════════
+;; 路径 A: 静态字符串 — 零 per-frame 开销
+;; ═══════════════════════════════════════════════════════
+
+(define (make-text/static #:text str
+                          #:style [style 'info]
+                          #:h-align [h-align 'left])
+  (define str-len (string-length str))
   (component
    (λ (focused? x y w h)
-     (define s (get-text))
-     (define visible (if (> (string-length s) w)
-                        (substring s 0 w)
-                        s))
-     (define visible-w (string-length visible))
-     (define x-off
-       (case h-align
-         [(center) (quotient (max 0 (- w visible-w)) 2)]
-         [(right)  (max 0 (- w visible-w))]
-         [else 0]))
-     (for ([i (in-range h)])
-       (cursor-move (+ y i) x)
-       (put-string (make-string w #\space)))
-     (put-styled-at! y (+ x x-off) style visible))
-
+     (render-text str style h-align x y w h))
    (build-input)
-   #f #t (string-length (get-text)) 1 dirty
-   render?))
+   #f #t str-len 1 (box #t)
+   ;; 无 render? hook: 静态字符串永远不变
+   #f))
+
+;; ═══════════════════════════════════════════════════════
+;; 路径 B: lambda — 每帧调用 proc，比对后标记 dirty
+;; ═══════════════════════════════════════════════════════
+
+(define (make-text/lambda #:text proc
+                          #:style [style 'info]
+                          #:h-align [h-align 'left])
+  (define dirty (box #t))
+  (define cache (box (proc)))
+  (component
+   (λ (focused? x y w h)
+     (render-text (unbox cache) style h-align x y w h))
+   (build-input)
+   #f #t 0 1 dirty
+   (λ (x y w h focused?)
+     (define cur (proc))
+     (unless (equal? cur (unbox cache))
+       (set-box! cache cur)
+       (set-box! dirty #t)))))
+
+;; ═══════════════════════════════════════════════════════
+;; 路径 C: 运行时 dispatch — string / box / procedure
+;; ═══════════════════════════════════════════════════════
+
+(define (make-text/dynamic #:text val
+                           #:style [style 'info]
+                           #:h-align [h-align 'left])
+  (cond
+    [(string? val)
+     (make-text/static #:text val #:style style #:h-align h-align)]
+    [(procedure? val)
+     (make-text/lambda #:text val #:style style #:h-align h-align)]
+    [(box? val)
+     (define dirty (box #t))
+     (define cache (box (unbox val)))
+     (component
+      (λ (focused? x y w h)
+        (render-text (unbox cache) style h-align x y w h))
+      (build-input)
+      #f #t 0 1 dirty
+      (λ (x y w h focused?)
+        (define cur (unbox val))
+        (unless (equal? cur (unbox cache))
+          (set-box! cache cur)
+          (set-box! dirty #t))))]
+    [else
+     (error 'make-text "unsupported #:text type: ~a" val)]))
