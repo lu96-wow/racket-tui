@@ -11,8 +11,11 @@
          out-fold out-fold? out-fold-title out-fold-children out-fold-expanded?
          out-fold-expand! out-fold-collapse! out-fold-toggle!
          out-fold-expand-all! out-fold-collapse-all!
+         out-fold-append!
+         set-out-fold-title!
          ;; styled line
-         out-line out-line? out-line-text out-line-style)
+         out-line out-line? out-line-text out-line-style
+         set-out-line-text!)
 
 ;; ═══════════════════════════════════════════════════════
 ;; 数据模型
@@ -34,8 +37,11 @@
     (out-fold-collapse! b)
     (for ([c (out-fold-children b)]) (out-fold-collapse-all! c))))
 
-;; 带样式的行
-(struct out-line (text style) #:transparent)
+(define (out-fold-append! f . items)
+  (set-out-fold-children! f (append (out-fold-children f) items)))
+
+;; 带样式的行 — text 可 mutate 支持逐字追加
+(struct out-line (text style) #:mutable #:transparent)
 
 ;; ═══════════════════════════════════════════════════════
 ;; 展开 → (values flat-lines flat-styles fold-map)
@@ -75,9 +81,8 @@
 ;; make-output
 ;; ═══════════════════════════════════════════════════════
 
-(define (make-output #:blocks [blocks-box (box '())]
+(define (make-output #:blocks blocks-box
                      #:style [style 'output-normal]
-                     #:focus-style [focus-style 'output-focus]
                      #:show? [show? (box #t)])
   (define show-box (if (boolean? show?) (box show?) show?))
   (define dirty    (box #t))
