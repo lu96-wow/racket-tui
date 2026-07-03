@@ -22,12 +22,12 @@
               1 2 36 1)
         (list (make-text #:text "│ Up/Down/Left/Right = move     │" #:style 'info)
               1 3 36 1)
-        (list (make-text #:text (λ () (format "│ Submit: ~a~a"
-                                              (unbox submitted)
-                                              (make-string (max 0 (- 22 (string-length (unbox submitted))))
-                                                           #\space)))
+        (list (make-text #:text (λ () (let ([t (regexp-replace* #rx"\n" (unbox submitted) "↵")])
+                                        (define max-len (- 22 (string-length t)))
+                                        (format "│ Submit: ~a~a" t
+                                                (make-string (max 0 max-len) #\space))))
                          #:style 'info)
-              1 4 36 1)
+              1 4 50 1)
         (list (make-text #:text "│ Press q to quit               │" #:style 'info)
               1 5 36 1)
         (list (make-text #:text "└──────────────────────────────┘" #:style 'title)
