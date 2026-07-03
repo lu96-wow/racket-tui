@@ -30,7 +30,7 @@
 ;; ═══════════════════════════════════════════════════════════════════════════
 
 (require "../component.rkt"
-         "../../base/gap-buffer.rkt"
+         "../gap-buffer.rkt"
          "../../base/io/build-input.rkt"
          "../../base/io/output-styles.rkt"
          "../../base/io/output-color.rkt"
