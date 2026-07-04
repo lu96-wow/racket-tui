@@ -49,7 +49,7 @@
         (define txt (if (< row (length slots)) (list-ref slots row) ""))
         (define pad (- w (string-length txt)))
         (define line (if (> pad 0) (string-append txt (make-string pad #\space)) txt))
-        (write-bytes (format-styled-at! (+ y row) x style line)))))
+        (write-bytes (format-styled-at (+ y row) x style line)))))
 
   (define (scroll-by! delta)
     (define w (unbox vp-w))
