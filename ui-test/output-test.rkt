@@ -37,6 +37,6 @@
    (stream append2! "─── done ───\n")))
 
 (run-app-noblock
- (out1 0  0  40 12)
- (out2 42 0  36 12)
- (inp  0  13 30 2))
+ (out1 1  1  40 12)
+ (out2 43 1  36 12)
+ (inp  1  14 30 2))

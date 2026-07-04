@@ -17,8 +17,8 @@
     (define-values (cur-rows cur-cols) (get-window-size))
 
     (define (fits? x y w h)
-      (and (< x cur-cols) (< y cur-rows)
-           (>= (+ x w) 0) (>= (+ y h) 0)))
+      (and (<= x cur-cols) (<= y cur-rows)
+           (>= (+ x w -1) 1) (>= (+ y h -1) 1)))
 
     ;; 预扫描：所有组件 bounds/可见性 都没变 → 跳过 screen-clear
     (define all-bounds-stable?

@@ -33,46 +33,46 @@
 (run-app
  ;; 标题
  ((make-text #:text "┌────┤ Text Mode Test ├──────────┐" #:style 'title)
-  0 0 32 1)
+  1 1 32 1)
 
  ;; 方案 1: box
  ((make-text #:text "│ box:                          │" #:style 'info)
-  0 1 32 1)
+  1 2 32 1)
  ((make-text #:text box-text #:style 'success)
-  0 2 32 1)
+  1 3 32 1)
  ((make-text #:text "│ press [Update Box] to change  │" #:style 'info)
-  0 3 32 1)
+  1 4 32 1)
 
  ;; 方案 2: lambda
  ((make-text #:text "│ lambda:                       │" #:style 'info)
-  0 4 32 1)
+  1 5 32 1)
  ((make-text #:text (λ () (set-box! lambda-ticks (add1 (unbox lambda-ticks)))
                         (format "lambda: counter=~a ticks=~a"
                                 (unbox counter) (unbox lambda-ticks)))
             #:style 'warning)
-  0 5 32 1)
+  1 6 32 1)
  ((make-text #:text "│ press [Inc] to bump counter   │" #:style 'info)
-  0 6 32 1)
+  1 7 32 1)
 
  ;; 方案 3: 静态
  ((make-text #:text "│ static:                       │" #:style 'info)
-  0 7 32 1)
+  1 8 32 1)
  ((make-text #:text static-label #:style 'white)
-  0 8 32 1)
+  1 9 32 1)
  ((make-text #:text "│ never changes, zero overhead  │" #:style 'info)
-  0 9 32 1)
+  1 10 32 1)
 
  ;; 底部线
  ((make-text #:text "└───────────────────────────────┘" #:style 'title)
-  0 10 32 1)
+  1 11 32 1)
 
  ;; 按钮
  ((make-button #:text "Update Box"
               #:on-activate update-box)
-  1 12 0 0)
+  2 13 0 0)
 
  ((make-button #:text "Inc"
               #:on-activate increment)
-  15 12 0 0)
+  16 13 0 0)
 
- (reset-btn 21 12 0 0))
+ (reset-btn 22 13 0 0))
