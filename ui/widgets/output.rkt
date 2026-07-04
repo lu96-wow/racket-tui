@@ -30,6 +30,9 @@
   ;; 当前活跃的折叠块 id（在 begin-fold! / end-fold! 之间自动关联）
   (define active-block-id (box #f))
 
+  ;; ── 内部: 内容区宽度（右侧 1 列留给滚动条）──
+  (define (content-width) (max 1 (- (unbox vp-w) 1)))
+
   ;; ── 基础输出 ──
 
   (define (append! str)
@@ -70,11 +73,10 @@
 
   (define (toggle-fold! bid)
     (output-model-toggle-block! model bid)
-    ;; toggle 后 scroll 可能越界，clamp 一下
-    (define w (unbox vp-w))
+    (define cw (content-width))
     (define h (unbox vp-h))
-    (when (and (> w 0) (> h 0))
-      (define total (vector-ref (compute-prefix-sum model w)
+    (when (and (> cw 0) (> h 0))
+      (define total (vector-ref (compute-prefix-sum model cw)
                                 (output-model-count model)))
       (set-box! scroll (max 0 (min (unbox scroll) (max 0 (- total h))))))
     (set-box! dirty #t))
@@ -90,23 +92,31 @@
     (set-box! vp-w w) (set-box! vp-h h)
     (set-box! vp-x x) (set-box! vp-y y)
     (when (and (> w 0) (> h 0))
-      (define p (compute-prefix-sum model w))
+      (define cw (content-width))
+      (define bar-col (+ x cw))
+      (define p (compute-prefix-sum model cw))
       (define total (vector-ref p (output-model-line-count model)))
       (when (and (unbox auto) (> total (unbox last-total)))
         (set-box! scroll (max 0 (- total h))))
       (set-box! last-total total)
       (define sy (max 0 (min (unbox scroll) (max 0 (- total h)))))
       (define-values (slots _li) (extract-visible-slots model p sy h))
+      ;; ── 文本渲染 ──
       (for ([row (in-range h)])
         (define txt (if (< row (length slots)) (list-ref slots row) ""))
-        (define pad (- w (string-display-width txt)))
+        (define pad (- cw (string-display-width txt)))
         (define line (if (> pad 0) (string-append txt (make-string pad #\space)) txt))
-
-        ;; 获取该 slot 所在行的 style
-        ;; extract-visible-slots 不返回 style，我们通过 slot 位置反查
-        ;; 简化：用行级 style 映射（通过 scan 获得）
         (define line-style (slot-style model p sy row style))
-        (write-bytes (format-styled-at (+ y row) x line-style line)))))
+        (write-bytes (format-styled-at (+ y row) x line-style line)))
+      ;; ── 滚动条（内容溢出时显示）──
+      (when (and (> w 1) (> total h))
+        (define thumb-h (max 1 (quotient (* h h) total)))
+        (define thumb-y (quotient (* sy (- h thumb-h)) (max 1 (- total h))))
+        (for ([row (in-range h)])
+          (define in-thumb? (<= thumb-y row (+ thumb-y thumb-h -1)))
+          (write-bytes (format-styled-at (+ y row) bar-col
+                         (if in-thumb? 'scroll-thumb 'scroll-track)
+                         (if in-thumb? "█" "│")))))))
 
   ;; 根据 slot 位置查找对应行的 style
   (define (slot-style model prefix sy row style)
@@ -121,10 +131,10 @@
   ;; ── 滚动 ──
 
   (define (scroll-by! delta)
-    (define w (unbox vp-w))
+    (define cw (content-width))
     (define h (unbox vp-h))
-    (when (and (> w 0) (> h 0))
-      (define p (compute-prefix-sum model w))
+    (when (and (> cw 0) (> h 0))
+      (define p (compute-prefix-sum model cw))
       (define total (vector-ref p (output-model-line-count model)))
       (define cur (unbox scroll))
       (define max-sy (max 0 (- total h)))
@@ -145,7 +155,8 @@
                (<= x mx (+ x w -1))
                (<= y my (+ y h -1)))
       (define rel-row (- my y))
-      (define p (compute-prefix-sum model w))
+      (define cw (content-width))
+      (define p (compute-prefix-sum model cw))
       (define total (vector-ref p (output-model-count model)))
       ;; clamp — 和 render 一致
       (define sy (max 0 (min (unbox scroll) (max 0 (- total h)))))

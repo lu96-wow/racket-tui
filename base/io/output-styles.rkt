@@ -85,4 +85,8 @@
 (style-define! 'input-focus      clr-white attr-bold)
 (style-define! 'input-error      clr-red bclr-white attr-bold)
 
+;; 滚动条
+(style-define! 'scroll-track  clr-black bclr-black)
+(style-define! 'scroll-thumb  clr-white bclr-black attr-bold)
+
 (provide (all-defined-out))
