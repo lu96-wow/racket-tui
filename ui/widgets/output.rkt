@@ -70,6 +70,13 @@
 
   (define (toggle-fold! bid)
     (output-model-toggle-block! model bid)
+    ;; toggle 后 scroll 可能越界，clamp 一下
+    (define w (unbox vp-w))
+    (define h (unbox vp-h))
+    (when (and (> w 0) (> h 0))
+      (define total (vector-ref (compute-prefix-sum model w)
+                                (output-model-count model)))
+      (set-box! scroll (max 0 (min (unbox scroll) (max 0 (- total h))))))
     (set-box! dirty #t))
 
   ;; ── 旧 fold API (单行) ──
@@ -139,7 +146,9 @@
                (<= y my (+ y h -1)))
       (define rel-row (- my y))
       (define p (compute-prefix-sum model w))
-      (define sy (unbox scroll))
+      (define total (vector-ref p (output-model-count model)))
+      ;; clamp — 和 render 一致
+      (define sy (max 0 (min (unbox scroll) (max 0 (- total h)))))
       (define slot-idx (+ sy rel-row))
       (define li (prefix-find p slot-idx))
       (define ls (output-model-lines model))

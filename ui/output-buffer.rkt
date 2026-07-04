@@ -129,8 +129,9 @@
     ;; 折叠块 body — 看 block 是否折叠
     [(and (output-line-block-id line)
           (not (output-line-block-header? line))
-          (hash-ref (output-model-block-folded model)
-                    (output-line-block-id line) #f))
+          (let ([b (hash-ref (output-model-block-folded model)
+                             (output-line-block-id line) #f)])
+            (and b (unbox b))))
      0]
     [else
      (ensure-wrap! line w)
@@ -176,8 +177,9 @@
              (or (output-line-folded line)
                  (and (output-line-block-id line)
                       (not (output-line-block-header? line))
-                      (hash-ref (output-model-block-folded model)
-                                (output-line-block-id line) #f))))
+                      (let ([b (hash-ref (output-model-block-folded model)
+                                         (output-line-block-id line) #f)])
+                        (and b (unbox b))))))
            (if skip?
                (iter (add1 li) rem acc)
                (let* ([wrapped (output-line-wrap-cache line)]

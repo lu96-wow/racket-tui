@@ -46,7 +46,19 @@
     (_bf2 "Errors (click to toggle)" 'error-style)
     (for ([i (in-range 1 6)])
       (append2-styled! (format "error ~a: something went wrong\n" i) 'panel-blue))
-    (_ef2)))
+    (_ef2)
+    ;; 块外继续
+    (sleep 0.3)
+    (append2-styled! "--- block closed ---\n" 'panel-blue)
+    ;; 第二个折叠块
+    (sleep 0.3)
+    (_bf2 "Warnings" 'ok-style)
+    (for ([i (in-range 1 4)])
+      (append2-styled! (format "warning ~a: low memory\n" i) 'panel-blue))
+    (_ef2)
+    ;; 块外普通输出
+    (sleep 0.3)
+    (append2! "all done.\n")))
 
 (run-app-noblock
   (out1 1 1 40 12)
