@@ -90,11 +90,13 @@
 
 (define (wrap-text text w)
   (define chars (string->list text))
-  (let loop ([chars chars] [lw 0] [cur '()] [acc '()])
-    (cond
-      [(null? chars)
-       (reverse (if (null? cur) acc
-                    (cons (list->string (reverse cur)) acc)))]
+  (if (null? chars)
+      '("")
+      (let loop ([chars chars] [lw 0] [cur '()] [acc '()])
+        (cond
+          [(null? chars)
+           (reverse (if (null? cur) acc
+                        (cons (list->string (reverse cur)) acc)))]
       [else
        (define ch (car chars))
        (define cw (char-display-width ch))
@@ -103,7 +105,7 @@
              [(> (+ lw cw) w)
               (loop chars 0 '() (cons (list->string (reverse cur)) acc))]
              [else
-              (loop (cdr chars) (+ lw cw) (cons ch cur) acc)])])))
+              (loop (cdr chars) (+ lw cw) (cons ch cur) acc)])]))))
 
 (define (string-display-width s)
   (for/sum ([ch (in-string s)]) (char-display-width ch)))

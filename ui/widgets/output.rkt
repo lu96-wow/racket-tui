@@ -114,7 +114,7 @@
       (define bar-col (+ x cw))
       (define p (compute-prefix-sum model cw))
       (define total (vector-ref p (output-model-line-count model)))
-      (when (and (unbox auto) (> total (unbox last-total)))
+      (when (and (unbox auto) (not (= total (unbox last-total))))
         (set-box! scroll (max 0 (- total h))))
       (set-box! last-total total)
       (define sy (max 0 (min (unbox scroll) (max 0 (- total h)))))
@@ -206,8 +206,7 @@
                               (sb-press my)
                               (let ([line (click-line mx my)])
                                 (when (and line (output-line-block-header? line))
-                                  (output-model-toggle-block! model (output-line-block-id line))
-                                  (set-box! dirty #t)))))))
+                                  (toggle-fold! (output-line-block-id line))))))))
      #:mouse-move   (λ (mx my mods) (sb-move my))
      #:mouse-release (λ (btn mx my mods) (when (eq? btn 'left) (sb-release)))))
 
