@@ -17,6 +17,6 @@
               #:on-change void))
 
 (define specs
-  (list (list input 2 2 40 1)))
+  (list (list input 1 1 40 1)))
 
 (run-app specs)

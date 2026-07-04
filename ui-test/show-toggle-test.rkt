@@ -26,28 +26,28 @@
 (define specs
   (list
    (list (make-text #:text "┌────┤ show? Toggle Test ├───────┐" #:style 'title)
-         1 1 34 1)
+         0 0 34 1)
 
    (list (make-text #:text (λ () (format "│ A visible: ~a~a"
                                          (if (component-visible? btn-a) "yes " "no  ")
                                          (make-string (max 0 (- 17 (if (component-visible? btn-a) 4 3))) #\space)))
                     #:style 'info)
-         1 2 34 1)
+         0 1 34 1)
 
    (list (make-text #:text (λ () (format "│ Toggles:  ~a~a"
                                          (unbox toggle-count)
                                          (make-string (max 0 (- 18 (string-length (number->string (unbox toggle-count))))) #\space)))
                     #:style 'info)
-         1 3 34 1)
+         0 2 34 1)
 
    (list (make-text #:text "│ q = quit                       │" #:style 'info)
-         1 4 34 1)
+         0 3 34 1)
 
    (list (make-text #:text "└────────────────────────────────┘" #:style 'title)
-         1 5 34 1)
+         0 4 34 1)
 
-   (list btn-a 2 7 0 0)
-   (list btn-b 2 9 0 0)
-   (list btn-c 18 9 0 0)))
+   (list btn-a 1 6 0 0)
+   (list btn-b 1 8 0 0)
+   (list btn-c 17 8 0 0)))
 
 (run-app specs)

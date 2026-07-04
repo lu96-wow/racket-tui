@@ -54,7 +54,7 @@
 
 ;; 带参数的 ANSI 序列（返回字节串）
 (define (format-cursor-move row col)
-  (string->bytes/utf-8 (format "\e[~a;~aH" row col)))
+  (string->bytes/utf-8 (format "\e[~a;~aH" (add1 row) (add1 col))))
 
 (define (format-cursor-up n)
   (string->bytes/utf-8 (format "\e[~aA" n)))

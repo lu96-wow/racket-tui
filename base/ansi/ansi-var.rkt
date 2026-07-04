@@ -12,8 +12,8 @@
 ;; （raw 模式关闭了 OPOST/ONLCR，需手动回车）
 (define newline-var (box "\n"))
 
-(define ansi-source-row 1)
-(define ansi-source-col 1)
+(define ansi-source-row 0)
+(define ansi-source-col 0)
 
 ;; ─── ASCII 控制字符 ───
 
