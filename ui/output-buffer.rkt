@@ -141,6 +141,13 @@
           (not (output-line-block-header? line))
           (block-folded? model (output-line-block-id line)))
      0]
+    ;; Hide nested block headers when ancestor is folded
+    [(and (output-line-block-header? line)
+          (output-line-block-id line)
+          (let ([parent (hash-ref (output-model-block-parent model)
+                                  (output-line-block-id line) #f)])
+            (and parent (block-folded? model parent))))
+     0]
     [else
      (ensure-wrap! line w)
      (length (output-line-wrap-cache line))]))
@@ -185,7 +192,12 @@
              (or (output-line-folded line)
                  (and (output-line-block-id line)
                       (not (output-line-block-header? line))
-                      (block-folded? model (output-line-block-id line)))))
+                      (block-folded? model (output-line-block-id line)))
+                 (and (output-line-block-header? line)
+                      (output-line-block-id line)
+                      (let ([parent (hash-ref (output-model-block-parent model)
+                                              (output-line-block-id line) #f)])
+                        (and parent (block-folded? model parent))))))
            (if skip?
                (iter (add1 li) rem acc)
                (let* ([wrapped (output-line-wrap-cache line)]
