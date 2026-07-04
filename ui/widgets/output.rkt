@@ -47,7 +47,7 @@
       ;; 每行一笔：文本 + 右补齐空格，保证整行同一样式
       (for ([row (in-range h)])
         (define txt (if (< row (length slots)) (list-ref slots row) ""))
-        (define pad (- w (string-length txt)))
+        (define pad (- w (string-display-width txt)))
         (define line (if (> pad 0) (string-append txt (make-string pad #\space)) txt))
         (write-bytes (format-styled-at (+ y row) x style line)))))
 

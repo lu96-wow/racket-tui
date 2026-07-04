@@ -11,7 +11,7 @@
          output-model-toggle-fold!
          output-model-render-slots
          compute-prefix-sum extract-visible-slots
-         wrap-text)
+         wrap-text string-display-width)
 
 (struct output-line (text wrap-cache wrap-w folded)
   #:mutable #:transparent)
@@ -78,6 +78,9 @@
               (loop chars 0 '() (cons (list->string (reverse cur)) acc))]
              [else
               (loop (cdr chars) (+ lw cw) (cons ch cur) acc)])])))
+
+(define (string-display-width s)
+  (for/sum ([ch (in-string s)]) (char-display-width ch)))
 
 (define (ensure-wrap! line w)
   (unless (and (output-line-wrap-cache line)
