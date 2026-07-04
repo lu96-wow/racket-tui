@@ -1,14 +1,6 @@
 #lang racket
 
-;; ═══════════════════════════════════════════════════════
-;; Output Buffer — 流式输出数据层
-;;
-;; logical-lines: \n 分隔，预分配 vector (O(1) 追加)
-;; wrap-cache:    每行折行缓存，追加只失效最后一行
-;; prefix-sum:    渲染时计算，二分定位 scroll-y
-;; ═══════════════════════════════════════════════════════
-
-(require "gap-buffer.rkt")  ;; char-display-width
+(require "gap-buffer.rkt")
 
 (provide output-line output-model
          make-output-model
@@ -33,7 +25,6 @@
   (vector-set! v 0 (output-line "" #f 0 #f))
   (output-model v 1 c max))
 
-;; ── 扩容 ──
 (define (grow! m)
   (define old-c (output-model-cap m))
   (define new-c (* 2 old-c))
@@ -44,7 +35,6 @@
   (set-output-model-lines! m new-ls)
   (set-output-model-cap! m new-c))
 
-;; ── 查询 ──
 (define (output-model-line-count m) (output-model-count m))
 
 (define (line-slots line w)
@@ -53,7 +43,6 @@
       (begin (ensure-wrap! line w)
              (length (output-line-wrap-cache line)))))
 
-;; ── 前缀和 ──
 (define (compute-prefix-sum model w)
   (define ls (output-model-lines model))
   (define n (output-model-count model))
@@ -63,7 +52,6 @@
                                (line-slots (vector-ref ls i) w))))
   p)
 
-;; 二分: 找最大的 i 使得 prefix[i] <= slot-index
 (define (prefix-find prefix slot-index)
   (define n (sub1 (vector-length prefix)))
   (let loop ([lo 0] [hi n])
@@ -74,7 +62,6 @@
               (loop mid hi)
               (loop lo (sub1 mid)))))))
 
-;; ── 折行 ──
 (define (wrap-text text w)
   (define chars (string->list text))
   (let loop ([chars chars] [lw 0] [cur '()] [acc '()])
@@ -98,7 +85,6 @@
     (set-output-line-wrap-cache! line (wrap-text (output-line-text line) w))
     (set-output-line-wrap-w! line w)))
 
-;; ── 追加 ──
 (define (enforce-max! m)
   (define max (output-model-max-lines m))
   (when max
@@ -136,13 +122,11 @@
   (vector-set! ls 0 (output-line "" #f 0 #f))
   (set-output-model-count! m 1))
 
-;; ── 折叠 ──
 (define (output-model-toggle-fold! m idx)
   (when (< idx (output-model-count m))
     (define l (vector-ref (output-model-lines m) idx))
     (set-output-line-folded! l (not (output-line-folded l)))))
 
-;; ── 渲染辅助 ──
 (define (output-model-render-slots model w scroll-y h)
   (define ls (output-model-lines model))
   (define n (output-model-count model))

@@ -1,13 +1,5 @@
 #lang racket
 
-;; ═══════════════════════════════════════════════════════
-;; Output 组件 — 流式输出 + 软折行 + 滚动
-;;
-;; x, y, w, h 由 spec 定义，组件内部只做渲染和滚动
-;;
-;; 返回: (values component append! clear! fold! scroll-end!)
-;; ═══════════════════════════════════════════════════════
-
 (require "../component.rkt"
          "../output-buffer.rkt"
          "../../base/io/build-input.rkt"
@@ -32,7 +24,6 @@
   (define vp-w (box 80)) (define vp-h (box 24))
   (define last-total (box 0))
 
-  ;; ── API ──
   (define (append! str)
     (output-model-put-string! model str) (set-box! dirty #t))
   (define (clear!)
@@ -43,31 +34,23 @@
   (define (scroll-end!)
     (set-box! auto #t) (set-box! scroll 0) (set-box! dirty #t))
 
-  ;; ── 渲染 ──
   (define (render focused? x y w h)
     (set-box! vp-w w) (set-box! vp-h h)
     (when (and (> w 0) (> h 0))
-      ;; 1. 前缀和
       (define p (compute-prefix-sum model w))
       (define total (vector-ref p (output-model-line-count model)))
-
-      ;; 2. 自动跟底
       (when (and (unbox auto) (> total (unbox last-total)))
         (set-box! scroll (max 0 (- total h))))
       (set-box! last-total total)
-
-      ;; 3. 提取可见行
       (define sy (max 0 (min (unbox scroll) (max 0 (- total h)))))
       (define-values (slots _li) (extract-visible-slots model p sy h))
-
-      ;; 4. 清空视口 + 绘制内容
+      ;; 每行一笔：文本 + 右补齐空格，保证整行同一样式
       (for ([row (in-range h)])
-        (write-bytes
-         (format-styled-at! (+ y row) x style (make-string w #\space))))
-      (for ([text (in-list slots)] [row (in-naturals)])
-        (write-bytes (format-styled-at! (+ y row) x style text)))))
+        (define txt (if (< row (length slots)) (list-ref slots row) ""))
+        (define pad (- w (string-length txt)))
+        (define line (if (> pad 0) (string-append txt (make-string pad #\space)) txt))
+        (write-bytes (format-styled-at! (+ y row) x style line)))))
 
-  ;; ── 滚动 ──
   (define (scroll-by! delta)
     (define w (unbox vp-w))
     (define h (unbox vp-h))
@@ -81,7 +64,6 @@
         (set-box! scroll new-sy) (set-box! dirty #t)
         (set-box! auto (>= new-sy max-sy)))))
 
-  ;; ── 事件 ──
   (define handler
     (build-input
      #:up           (λ () (scroll-by! -1))
@@ -96,6 +78,5 @@
                       (scroll-by! (if (eq? dir 'up) -3 3)))
      #:mouse-press  (λ (btn mx my mods) (set-box! auto #f))))
 
-  ;; ── 返回 ──
   (values (component render handler #t show-box 0 1 dirty #f)
           append! clear! fold! scroll-end!))
