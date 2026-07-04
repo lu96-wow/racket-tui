@@ -98,6 +98,9 @@
     ;; 一次性输出全部
     (define all-bs (get-output-bytes out))
     (write-bytes all-bs)
+    ;; 渲染后光标归位 (1,1)，不干扰终端状态
+    (set-cursor! 1 1)
+    (write-bytes format-cursor-home)
     (flush-output))
 
   render-all)

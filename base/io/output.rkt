@@ -43,24 +43,24 @@
 
 (define (put-newline)
   (put-string (unbox newline-var))
-  (set-cursor! (+ current-cursor-row 1) 0))
+  (set-cursor! (+ current-cursor-row 1) 1))
 
 (define (format-newline)
   (string->bytes/utf-8 (unbox newline-var)))
 
 ;; 光标控制
-(define (cursor-up n)   (put-bytes (format-cursor-up n))   (set-cursor! (max 0 (- current-cursor-row n)) current-cursor-col))
+(define (cursor-up n)   (put-bytes (format-cursor-up n))   (set-cursor! (max 1 (- current-cursor-row n)) current-cursor-col))
 (define (cursor-down n) (put-bytes (format-cursor-down n)) (set-cursor! (+ current-cursor-row n) current-cursor-col))
 (define (cursor-right n)(put-bytes (format-cursor-right n))(set-cursor! current-cursor-row (+ current-cursor-col n)))
-(define (cursor-left n) (put-bytes (format-cursor-left n)) (set-cursor! current-cursor-row (max 0 (- current-cursor-col n))))
+(define (cursor-left n) (put-bytes (format-cursor-left n)) (set-cursor! current-cursor-row (max 1 (- current-cursor-col n))))
 (define (cursor-move row col) (put-bytes (format-cursor-move row col)) (set-cursor! row col))
 (define (cursor-col n)  (put-bytes (format-cursor-col n)) (set-cursor! current-cursor-row n))
-(define (cursor-home)   (put-bytes format-cursor-home) (set-cursor! 0 0))
+(define (cursor-home)   (put-bytes format-cursor-home) (set-cursor! 1 1))
 (define (cursor-hide)   (put-bytes format-cursor-hide))
 (define (cursor-show)   (put-bytes format-cursor-show))
 
 ;; 屏幕控制
-(define (screen-clear)        (put-bytes format-screen-clear) (set-cursor! 0 0))
+(define (screen-clear)        (put-bytes format-screen-clear) (set-cursor! 1 1))
 (define (screen-clear-below)  (put-bytes format-screen-clear-below))
 (define (screen-clear-above)  (put-bytes format-screen-clear-above))
 (define (line-clear)          (put-bytes format-line-clear))
