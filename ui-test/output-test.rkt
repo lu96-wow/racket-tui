@@ -36,8 +36,7 @@
    (stream append1! "─── done ───\n")
    (stream append2! "─── done ───\n")))
 
-(run-app
- (list (list out1 0  0  40 12)
-       (list out2 42 0  36 12)
-       (list inp  0  13 30 2))
- #:noblock? #t)
+(run-app-noblock
+ (out1 0  0  40 12)
+ (out2 42 0  36 12)
+ (inp  0  13 30 2))

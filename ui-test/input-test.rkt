@@ -29,24 +29,22 @@
   (make-button #:text "Submit"
                #:on-activate (λ () (set-box! submitted "button clicked!"))))
 
-(define specs
-  (list (list (make-text #:text "┌────┤ Multi-line Input Test ├──┐" #:style 'panel-title)
-              0 0 36 1)
-        (list (make-text #:text "│ ESC=newline, Enter = submit    │" #:style 'panel-info)
-              0 1 36 1)
-        (list (make-text #:text "│ Up/Down/Left/Right = move     │" #:style 'panel-info)
-              0 2 36 1)
-        (list (make-text #:text (λ () (let ([t (regexp-replace* #rx"\n" (unbox submitted) "↵")])
-                                        (define max-len (- 22 (string-length t)))
-                                        (format "│ Submit: ~a~a" t
-                                                (make-string (max 0 max-len) #\space))))
-                         #:style 'panel-info)
-              0 3 50 1)
-        (list (make-text #:text "│ Press q to quit               │" #:style 'panel-info)
-              0 4 36 1)
-        (list (make-text #:text "└──────────────────────────────┘" #:style 'panel-title)
-              0 5 36 1)
-        (list name-input 1 7 30 3)
-        (list submit-btn 1 11 0 0)))
-
-(run-app specs)
+(run-app
+ ((make-text #:text "┌────┤ Multi-line Input Test ├──┐" #:style 'panel-title)
+  0 0 36 1)
+ ((make-text #:text "│ ESC=newline, Enter = submit    │" #:style 'panel-info)
+  0 1 36 1)
+ ((make-text #:text "│ Up/Down/Left/Right = move     │" #:style 'panel-info)
+  0 2 36 1)
+ ((make-text #:text (λ () (let ([t (regexp-replace* #rx"\n" (unbox submitted) "↵")])
+                            (define max-len (- 22 (string-length t)))
+                            (format "│ Submit: ~a~a" t
+                                    (make-string (max 0 max-len) #\space))))
+             #:style 'panel-info)
+  0 3 50 1)
+ ((make-text #:text "│ Press q to quit               │" #:style 'panel-info)
+  0 4 36 1)
+ ((make-text #:text "└──────────────────────────────┘" #:style 'panel-title)
+  0 5 36 1)
+ (name-input 1 7 30 3)
+ (submit-btn 1 11 0 0))
