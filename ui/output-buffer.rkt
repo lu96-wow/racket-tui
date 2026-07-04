@@ -44,7 +44,7 @@
 (struct output-line (text style wrap-cache wrap-w folded block-id block-header?)
   #:mutable #:transparent)
 
-(struct output-model (lines count cap max-lines block-folded next-block-id)
+(struct output-model (lines count cap max-lines block-folded block-parent next-block-id)
   #:mutable #:transparent)
 
 (define (make-output-line [text ""] [style #f])
@@ -54,7 +54,7 @@
   (define c 256)
   (define v (make-vector c))
   (vector-set! v 0 (make-output-line))
-  (output-model v 1 c max (make-hash) 1))
+  (output-model v 1 c max (make-hash) (make-hash) 1))
 
 ;; ═══════════════════════════════════════════════════════
 ;; 内部 — 容量 & 上限
@@ -115,6 +115,16 @@
     (set-output-line-wrap-w! line w)))
 
 ;; ═══════════════════════════════════════════════════════
+;; 折叠块可见性 — 递归检查祖先链
+;; ═══════════════════════════════════════════════════════
+
+(define (block-folded? model bid)
+  (if (not bid) #f
+      (let ([b (hash-ref (output-model-block-folded model) bid #f)])
+        (or (and b (unbox b))
+            (block-folded? model (hash-ref (output-model-block-parent model) bid #f))))))
+
+;; ═══════════════════════════════════════════════════════
 ;; slot 计算 — 一行占几个 display-slot
 ;;   折叠块 body 行 → 0
 ;;   折叠块 header → 正常（显示 ▶ 缩略）
@@ -129,9 +139,7 @@
     ;; 折叠块 body — 看 block 是否折叠
     [(and (output-line-block-id line)
           (not (output-line-block-header? line))
-          (let ([b (hash-ref (output-model-block-folded model)
-                             (output-line-block-id line) #f)])
-            (and b (unbox b))))
+          (block-folded? model (output-line-block-id line)))
      0]
     [else
      (ensure-wrap! line w)
@@ -177,9 +185,7 @@
              (or (output-line-folded line)
                  (and (output-line-block-id line)
                       (not (output-line-block-header? line))
-                      (let ([b (hash-ref (output-model-block-folded model)
-                                         (output-line-block-id line) #f)])
-                        (and b (unbox b))))))
+                      (block-folded? model (output-line-block-id line)))))
            (if skip?
                (iter (add1 li) rem acc)
                (let* ([wrapped (output-line-wrap-cache line)]
@@ -221,7 +227,9 @@
         (set-output-line-text! last
           (string-append (output-line-text last) (string ch)))
         (when style
-          (set-output-line-style! last style)))))
+          (set-output-line-style! last style))
+        (when active-block-id
+          (set-output-line-block-id! last active-block-id)))))
 
 (define (output-model-put-char! m ch)        (put-char! m ch #f #f))
 (define (output-model-put-string! m str)     (for ([ch (in-string str)]) (put-char! m ch #f #f)))
@@ -234,41 +242,23 @@
 ;; 折叠块
 ;; ═══════════════════════════════════════════════════════
 
-(define (output-model-begin-block! m header-text style)
-  ;; 结束上一行（自动补换行，避免块 header 拼在上行尾部）
+(define (output-model-begin-block! m parent-bid)
   (define cnt (output-model-count m))
   (define ls (output-model-lines m))
-  (define last (vector-ref ls (sub1 cnt)))
-  (when (positive? (string-length (output-line-text last)))
-    ;; 模拟一个 newline
-    (set-output-line-wrap-cache! last #f)
-    (when (>= cnt (output-model-cap m))
-      (grow! m) (set! ls (output-model-lines m)))
-    (let ([new-line (make-output-line)])
-      (vector-set! ls cnt new-line))
-    (set-output-model-count! m (add1 cnt))
-    (enforce-max! m)
-    (set! cnt (output-model-count m))
-    (set! ls (output-model-lines m)))
-  ;; 创建块 id
   (define bid (output-model-next-block-id m))
   (set-output-model-next-block-id! m (add1 bid))
   (hash-set! (output-model-block-folded m) bid (box #f))
-  ;; header 行
-  (define header-text-full (string-append "▼ " header-text))
-  (set! cnt (output-model-count m))
-  (when (>= cnt (output-model-cap m))
-    (grow! m) (set! ls (output-model-lines m)))
-  (define header-line (output-line header-text-full style #f 0 #f bid #t))
-  (vector-set! ls cnt header-line)
-  (set-output-model-count! m (add1 cnt))
-  ;; push empty line，确保 body 从新行开始
-  (set! cnt (output-model-count m))
-  (when (>= cnt (output-model-cap m))
-    (grow! m) (set! ls (output-model-lines m)))
-  (vector-set! ls cnt (output-line "" style #f 0 #f bid #f))
-  (set-output-model-count! m (add1 cnt))
-  (enforce-max! m)
+  (when parent-bid
+    (hash-set! (output-model-block-parent m) bid parent-bid))
+  ;; find last non-empty line → mark as block header
+  ;; also mark trailing empty lines with this block-id
+  (let loop ([i (sub1 cnt)])
+    (when (>= i 0)
+      (define line (vector-ref ls i))
+      (set-output-line-block-id! line bid)
+      (if (positive? (string-length (output-line-text line)))
+          (set-output-line-block-header?! line #t)
+          (loop (sub1 i)))))
   bid)
 
 (define (output-model-end-block! m bid)
@@ -315,6 +305,7 @@
   (for ([i (in-range (output-model-count m))])
     (vector-set! ls i (make-output-line)))
   (set-output-model-block-folded! m (make-hash))
+  (set-output-model-block-parent! m (make-hash))
   (set-output-model-next-block-id! m 1)
   (set-output-model-count! m 1))
 

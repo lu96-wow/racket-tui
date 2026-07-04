@@ -9,10 +9,26 @@
          "../../base/io/output.rkt")
 
 (provide make-output
+         output-api output-api?
+         ;; 函数式 API: (append api "str") (append-styled api "str" 'style) ...
+         append append-styled clear scroll-end
+         fold begin-fold end-fold toggle-fold
          output-model-put-string! output-model-put-char!
          output-model-put-styled-string! output-model-put-styled-char!
          output-model-put-string-in-block! output-model-put-styled-string-in-block!
          output-model-clear! output-model-toggle-fold!)
+
+(struct output-api (append! append-styled! clear! scroll-end!
+                    fold! begin-fold! end-fold! toggle-fold!) #:transparent)
+
+(define (append api . args)         (apply (output-api-append! api) args))
+(define (append-styled api . args)  (apply (output-api-append-styled! api) args))
+(define (clear api)                 ((output-api-clear! api)))
+(define (scroll-end api)           ((output-api-scroll-end! api)))
+(define (fold api . args)           (apply (output-api-fold! api) args))
+(define (begin-fold api)           ((output-api-begin-fold! api)))
+(define (end-fold api)             ((output-api-end-fold! api)))
+(define (toggle-fold api . args)    (apply (output-api-toggle-fold! api) args))
 
 (define (make-output #:max-lines   [max-lines #f]
                      #:style       [style 'info]
@@ -28,21 +44,24 @@
   (define vp-x (box 1))  (define vp-y (box 1))
   (define last-total (box 0))
   (define active-block-id (box #f))
+  (define block-stack (box '()))       ;; 嵌套折叠栈
 
   (define (content-width) (max 1 (- (unbox vp-w) 1)))
   (define sb (make-scrollbar))
 
+  (define (active-bid) (and (pair? (unbox block-stack)) (car (unbox block-stack))))
+
   ;; ── 基础 ──
 
   (define (append! str)
-    (define bid (unbox active-block-id))
+    (define bid (active-bid))
     (if bid
         (output-model-put-string-in-block! model str style bid)
         (output-model-put-string! model str))
     (set-box! dirty #t))
 
   (define (append-styled! str st)
-    (define bid (unbox active-block-id))
+    (define bid (active-bid))
     (if bid
         (output-model-put-styled-string-in-block! model str st bid)
         (output-model-put-styled-string! model str st))
@@ -50,6 +69,7 @@
 
   (define (clear!)
     (output-model-clear! model) (set-box! scroll 0)
+    (set-box! block-stack '())
     (set-box! active-block-id #f)
     (set-box! last-total 0) (set-box! dirty #t))
 
@@ -58,14 +78,18 @@
 
   ;; ── 折叠 ──
 
-  (define (begin-fold! header-text [block-style style])
-    (define bid (output-model-begin-block! model header-text block-style))
-    (set-box! active-block-id bid) (set-box! dirty #t) bid)
+  (define (begin-fold!)
+    (define parent (active-bid))
+    (define bid (output-model-begin-block! model parent))
+    (set-box! block-stack (cons bid (unbox block-stack)))
+    (set-box! dirty #t) bid)
 
   (define (end-fold!)
-    (define bid (unbox active-block-id))
-    (when bid (output-model-end-block! model bid))
-    (set-box! active-block-id #f) (set-box! dirty #t))
+    (when (pair? (unbox block-stack))
+      (define bid (car (unbox block-stack)))
+      (set-box! block-stack (cdr (unbox block-stack)))
+      (output-model-end-block! model bid))
+    (set-box! dirty #t))
 
   (define (toggle-fold! bid)
     (output-model-toggle-block! model bid)
@@ -187,6 +211,5 @@
      #:mouse-release (λ (btn mx my mods) (when (eq? btn 'left) (sb-release)))))
 
   (values (component render handler #t show-box 0 1 dirty #f)
-          append! append-styled! clear!
-          fold! begin-fold! end-fold! toggle-fold!
-          scroll-end!))
+          (output-api append! append-styled! clear! scroll-end!
+                      fold! begin-fold! end-fold! toggle-fold!)))
