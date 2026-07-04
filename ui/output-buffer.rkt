@@ -262,6 +262,12 @@
   (define header-line (output-line header-text-full style #f 0 #f bid #t))
   (vector-set! ls cnt header-line)
   (set-output-model-count! m (add1 cnt))
+  ;; push empty line，确保 body 从新行开始
+  (set! cnt (output-model-count m))
+  (when (>= cnt (output-model-cap m))
+    (grow! m) (set! ls (output-model-lines m)))
+  (vector-set! ls cnt (output-line "" style #f 0 #f bid #f))
+  (set-output-model-count! m (add1 cnt))
   (enforce-max! m)
   bid)
 

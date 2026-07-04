@@ -7,50 +7,43 @@
          "../base/io/output-color.rkt")
 
 ;; ── 样式 ──
-(style-define! 'panel       (color256-bg 235) (color256-fg 250))
-(style-define! 'error-style (color256-bg  88) (color256-fg 231) attr-bold)
-(style-define! 'ok-style    (color256-bg  28) (color256-fg 231) attr-bold)
-(style-define! 'warn-style  (color256-bg  94) (color256-fg 231) attr-bold)
+(style-define! 'panel (color256-bg 235) (color256-fg 250))
+(style-define! 'error-style (color256-bg 88) (color256-fg 231) attr-bold)
+(style-define! 'ok-style (color256-bg 28) (color256-fg 231) attr-bold)
+(style-define! 'warn-style (color256-bg 94) (color256-fg 231) attr-bold)
 
 ;; ── 创建 output ──
 (define-values (out append! append-styled! clear!
                     fold! begin-fold! end-fold! toggle-fold!
                     scroll-end!)
-  (make-output #:max-lines 200 #:style 'panel))
+  (make-output #:max-lines 500 #:style 'panel))
 
-;; ── 写内容 ──
+;; ── 写满 max-lines 看性能 ──
 (append! "╔══════════════════════════════╗\n")
-(append! "║    Output Demo              ║\n")
+(append! "║    Output Perf Test         ║\n")
 (append! "╚══════════════════════════════╝\n")
-(append! "\n")
-
-;; 普通文本
-(for ([i (in-range 1 6)])
-  (append! (format "log ~a: everything normal\n" i)))
 
 ;; styled 输出
-(append! "\n")
-(append-styled! "[ERROR] disk full\n"       'error-style)
-(append-styled! "[OK]    retry scheduled\n" 'ok-style)
-(append-styled! "[WARN]  latency spike\n"   'warn-style)
-(append! "\n")
+(append-styled! "[ERROR] connection timeout\n" 'error-style)
+(append-styled! "[OK]    retry scheduled     \n" 'ok-style)
+(append-styled! "[WARN]  high memory usage   \n" 'warn-style)
 
-;; 折叠块 1 — 错误详情
-(define err-bid (begin-fold! "Error Details" 'error-style))
-(for ([i (in-range 1 8)])
-  (append-styled! (format "  trace ~a: /src/module-~a.rkt:42\n" i i) 'panel))
+;; 折叠块
+(define err-bid (begin-fold! "Errors" 'error-style))
+(for ([i (in-range 1 21)])
+  (append-styled! (format "error ~a: stack overflow in module-~a.rkt\n" i i) 'panel))
 (end-fold!)
 
-(append! "\n")
-
-;; 折叠块 2 — 警告列表
-(define warn-bid (begin-fold! "Warning Summary" 'warn-style))
-(for ([i (in-range 1 5)])
-  (append-styled! (format "  warning ~a: threshold exceeded\n" i) 'panel))
+(define warn-bid (begin-fold! "Warnings" 'warn-style))
+(for ([i (in-range 1 15)])
+  (append-styled! (format "warning ~a: deprecated API usage\n" i) 'panel))
 (end-fold!)
 
-(append! "\n")
-(append! "─── ready, press q to quit ───\n")
+;; 填充到 max-lines
+(displayln "--- filling to max-lines ---")
+(time
+ (for ([i (in-range 1 451)])
+   (append! (format "log ~a: all systems operational, no issues detected\n" i))))
 
 ;; ── 启动 ──
 (run-app-noblock
