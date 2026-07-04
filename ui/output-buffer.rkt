@@ -4,26 +4,61 @@
 
 (provide output-line output-model
          make-output-model
+         output-model-lines output-model-count
+         output-line-block-header? output-line-block-id output-line-style
+         output-line-text output-line-folded output-line-wrap-cache
+         output-model-block-folded
          output-model-put-char!
          output-model-put-string!
+         output-model-put-styled-char!
+         output-model-put-styled-string!
+         output-model-put-string-in-block!
+         output-model-put-styled-string-in-block!
          output-model-clear!
          output-model-line-count
          output-model-toggle-fold!
+         output-model-begin-block!
+         output-model-end-block!
+         output-model-toggle-block!
+         output-model-block-folded?
          output-model-render-slots
-         compute-prefix-sum extract-visible-slots
+         compute-prefix-sum extract-visible-slots prefix-find
          wrap-text string-display-width)
 
-(struct output-line (text wrap-cache wrap-w folded)
+;; ═══════════════════════════════════════════════════════
+;; 数据模型
+;;
+;;   output-line:  text     — 行文本（block header 包含 ▼/▶ 前缀）
+;;                 style    — #f = 面板默认, 否则为 style name
+;;                 wrap-cache / wrap-w — 换行缓存
+;;                 folded   — 单行折叠（旧 API）
+;;                 block-id — #f = 无块,  非负整数 = 块 id
+;;                 block-header? — 是否为块的标题行
+;;
+;;   output-model: lines[]  — output-line 动态数组
+;;                 count / cap / max-lines
+;;                 block-folded — hash: block-id → box<boolean>
+;;                 next-block-id — 自增计数器
+;; ═══════════════════════════════════════════════════════
+
+(struct output-line (text style wrap-cache wrap-w folded block-id block-header?)
   #:mutable #:transparent)
 
-(struct output-model (lines count cap max-lines)
+(struct output-model (lines count cap max-lines block-folded next-block-id)
   #:mutable #:transparent)
+
+(define (make-output-line [text ""] [style #f])
+  (output-line text style #f 0 #f #f #f))
 
 (define (make-output-model #:max-lines [max #f])
   (define c 256)
   (define v (make-vector c))
-  (vector-set! v 0 (output-line "" #f 0 #f))
-  (output-model v 1 c max))
+  (vector-set! v 0 (make-output-line))
+  (output-model v 1 c max (make-hash) 1))
+
+;; ═══════════════════════════════════════════════════════
+;; 内部 — 容量 & 上限
+;; ═══════════════════════════════════════════════════════
 
 (define (grow! m)
   (define old-c (output-model-cap m))
@@ -35,32 +70,23 @@
   (set-output-model-lines! m new-ls)
   (set-output-model-cap! m new-c))
 
+(define (enforce-max! m)
+  (define max (output-model-max-lines m))
+  (when max
+    (define cnt (output-model-count m))
+    (when (> cnt max)
+      (define excess (- cnt max))
+      (define ls (output-model-lines m))
+      (vector-copy! ls 0 ls excess cnt)
+      (for ([i (in-range (- cnt excess) cnt)])
+        (vector-set! ls i (make-output-line)))
+      (set-output-model-count! m (- cnt excess)))))
+
 (define (output-model-line-count m) (output-model-count m))
 
-(define (line-slots line w)
-  (if (output-line-folded line)
-      0
-      (begin (ensure-wrap! line w)
-             (length (output-line-wrap-cache line)))))
-
-(define (compute-prefix-sum model w)
-  (define ls (output-model-lines model))
-  (define n (output-model-count model))
-  (define p (make-vector (add1 n) 0))
-  (for ([i (in-range n)])
-    (vector-set! p (add1 i) (+ (vector-ref p i)
-                               (line-slots (vector-ref ls i) w))))
-  p)
-
-(define (prefix-find prefix slot-index)
-  (define n (sub1 (vector-length prefix)))
-  (let loop ([lo 0] [hi n])
-    (if (>= lo hi)
-        lo
-        (let ([mid (quotient (+ lo hi 1) 2)])
-          (if (<= (vector-ref prefix mid) slot-index)
-              (loop mid hi)
-              (loop lo (sub1 mid)))))))
+;; ═══════════════════════════════════════════════════════
+;; 换行 & 显示宽度
+;; ═══════════════════════════════════════════════════════
 
 (define (wrap-text text w)
   (define chars (string->list text))
@@ -88,56 +114,54 @@
     (set-output-line-wrap-cache! line (wrap-text (output-line-text line) w))
     (set-output-line-wrap-w! line w)))
 
-(define (enforce-max! m)
-  (define max (output-model-max-lines m))
-  (when max
-    (define cnt (output-model-count m))
-    (when (> cnt max)
-      (define excess (- cnt max))
-      (define ls (output-model-lines m))
-      (vector-copy! ls 0 ls excess cnt)
-      (for ([i (in-range (- cnt excess) cnt)])
-        (vector-set! ls i (output-line "" #f 0 #f)))
-      (set-output-model-count! m (- cnt excess)))))
+;; ═══════════════════════════════════════════════════════
+;; slot 计算 — 一行占几个 display-slot
+;;   折叠块 body 行 → 0
+;;   折叠块 header → 正常（显示 ▶ 缩略）
+;;   单行折叠      → 0
+;; ═══════════════════════════════════════════════════════
 
-(define (output-model-put-char! m ch)
-  (define cnt (output-model-count m))
-  (define ls (output-model-lines m))
-  (define last (vector-ref ls (sub1 cnt)))
-  (set-output-line-wrap-cache! last #f)
-  (if (char=? ch #\newline)
-      (begin
-        (when (>= cnt (output-model-cap m))
-          (grow! m) (set! ls (output-model-lines m)))
-        (vector-set! ls cnt (output-line "" #f 0 #f))
-        (set-output-model-count! m (add1 cnt))
-        (enforce-max! m))
-      (set-output-line-text! last
-        (string-append (output-line-text last) (string ch)))))
+(define (line-slots model i w)
+  (define line (vector-ref (output-model-lines model) i))
+  (cond
+    ;; 单行折叠（旧 API）
+    [(output-line-folded line) 0]
+    ;; 折叠块 body — 看 block 是否折叠
+    [(and (output-line-block-id line)
+          (not (output-line-block-header? line))
+          (hash-ref (output-model-block-folded model)
+                    (output-line-block-id line) #f))
+     0]
+    [else
+     (ensure-wrap! line w)
+     (length (output-line-wrap-cache line))]))
 
-(define (output-model-put-string! m str)
-  (for ([ch (in-string str)]) (output-model-put-char! m ch)))
+;; ═══════════════════════════════════════════════════════
+;; 前缀和 — 行号 → 累计 slot 索引 的映射
+;; ═══════════════════════════════════════════════════════
 
-(define (output-model-clear! m)
-  (define ls (output-model-lines m))
-  (for ([i (in-range (output-model-count m))])
-    (vector-set! ls i (output-line "" #f 0 #f)))
-  (vector-set! ls 0 (output-line "" #f 0 #f))
-  (set-output-model-count! m 1))
-
-(define (output-model-toggle-fold! m idx)
-  (when (< idx (output-model-count m))
-    (define l (vector-ref (output-model-lines m) idx))
-    (set-output-line-folded! l (not (output-line-folded l)))))
-
-(define (output-model-render-slots model w scroll-y h)
+(define (compute-prefix-sum model w)
   (define ls (output-model-lines model))
   (define n (output-model-count model))
-  (define p (compute-prefix-sum model w))
-  (define total (vector-ref p n))
-  (define sy (max 0 (min scroll-y (max 0 (- total h)))))
-  (define-values (slots li) (extract-visible-slots model p sy h))
-  (values slots total sy))
+  (define p (make-vector (add1 n) 0))
+  (for ([i (in-range n)])
+    (vector-set! p (add1 i) (+ (vector-ref p i)
+                               (line-slots model i w))))
+  p)
+
+(define (prefix-find prefix slot-index)
+  (define n (sub1 (vector-length prefix)))
+  (let loop ([lo 0] [hi n])
+    (if (>= lo hi)
+        lo
+        (let ([mid (quotient (+ lo hi 1) 2)])
+          (if (<= (vector-ref prefix mid) slot-index)
+              (loop mid hi)
+              (loop lo (sub1 mid)))))))
+
+;; ═══════════════════════════════════════════════════════
+;; 可视 slot 提取
+;; ═══════════════════════════════════════════════════════
 
 (define (extract-visible-slots model prefix sy h)
   (define ls (output-model-lines model))
@@ -148,7 +172,13 @@
     (cond [(or (zero? rem) (>= li n)) (values (reverse acc) li)]
           [else
            (define line (vector-ref ls li))
-           (if (output-line-folded line)
+           (define skip?
+             (or (output-line-folded line)
+                 (and (output-line-block-id line)
+                      (not (output-line-block-header? line))
+                      (hash-ref (output-model-block-folded model)
+                                (output-line-block-id line) #f))))
+           (if skip?
                (iter (add1 li) rem acc)
                (let* ([wrapped (output-line-wrap-cache line)]
                       [start (if (= li start-li) off 0)]
@@ -158,3 +188,129 @@
                        (iter (add1 li) (- rem take) a)
                        (collect (add1 j) end
                                 (cons (list-ref wrapped j) a))))))])))
+
+(define (output-model-render-slots model w scroll-y h)
+  (define p (compute-prefix-sum model w))
+  (define n (output-model-count model))
+  (define total (vector-ref p n))
+  (define sy (max 0 (min scroll-y (max 0 (- total h)))))
+  (define-values (slots li) (extract-visible-slots model p sy h))
+  (values slots total sy))
+
+;; ═══════════════════════════════════════════════════════
+;; 追加文本
+;; ═══════════════════════════════════════════════════════
+
+(define (put-char! m ch style active-block-id)
+  (define cnt (output-model-count m))
+  (define ls (output-model-lines m))
+  (define last (vector-ref ls (sub1 cnt)))
+  (set-output-line-wrap-cache! last #f)
+  (if (char=? ch #\newline)
+      (begin
+        (when (>= cnt (output-model-cap m))
+          (grow! m) (set! ls (output-model-lines m)))
+        ;; 新行继承当前 block-id（如果在块内）
+        (let ([new-line (output-line "" style #f 0 #f active-block-id #f)])
+          (vector-set! ls cnt new-line))
+        (set-output-model-count! m (add1 cnt))
+        (enforce-max! m))
+      (begin
+        (set-output-line-text! last
+          (string-append (output-line-text last) (string ch)))
+        (when style
+          (set-output-line-style! last style)))))
+
+(define (output-model-put-char! m ch)        (put-char! m ch #f #f))
+(define (output-model-put-string! m str)     (for ([ch (in-string str)]) (put-char! m ch #f #f)))
+(define (output-model-put-styled-char! m ch style)       (put-char! m ch style #f))
+(define (output-model-put-styled-string! m str style)    (for ([ch (in-string str)]) (put-char! m ch style #f)))
+(define (output-model-put-string-in-block! m str style block-id)          (for ([ch (in-string str)]) (put-char! m ch style block-id)))
+(define (output-model-put-styled-string-in-block! m str style block-id)   (for ([ch (in-string str)]) (put-char! m ch style block-id)))
+
+;; ═══════════════════════════════════════════════════════
+;; 折叠块
+;; ═══════════════════════════════════════════════════════
+
+(define (output-model-begin-block! m header-text style)
+  ;; 结束上一行（自动补换行，避免块 header 拼在上行尾部）
+  (define cnt (output-model-count m))
+  (define ls (output-model-lines m))
+  (define last (vector-ref ls (sub1 cnt)))
+  (when (positive? (string-length (output-line-text last)))
+    ;; 模拟一个 newline
+    (set-output-line-wrap-cache! last #f)
+    (when (>= cnt (output-model-cap m))
+      (grow! m) (set! ls (output-model-lines m)))
+    (let ([new-line (make-output-line)])
+      (vector-set! ls cnt new-line))
+    (set-output-model-count! m (add1 cnt))
+    (enforce-max! m)
+    (set! cnt (output-model-count m))
+    (set! ls (output-model-lines m)))
+  ;; 创建块 id
+  (define bid (output-model-next-block-id m))
+  (set-output-model-next-block-id! m (add1 bid))
+  (hash-set! (output-model-block-folded m) bid (box #f))
+  ;; header 行
+  (define header-text-full (string-append "▼ " header-text))
+  (set! cnt (output-model-count m))
+  (when (>= cnt (output-model-cap m))
+    (grow! m) (set! ls (output-model-lines m)))
+  (define header-line (output-line header-text-full style #f 0 #f bid #t))
+  (vector-set! ls cnt header-line)
+  (set-output-model-count! m (add1 cnt))
+  (enforce-max! m)
+  bid)
+
+(define (output-model-end-block! m bid)
+  ;; 关闭块 — 后续 put 不再继承此 block-id
+  ;; 这里不需要特别操作，因为 put-char! 使用 active-block-id 参数
+  ;; end-block! 的作用是让 widget 层知道不再往这个块里写
+  (void))
+
+(define (output-model-toggle-block! m bid)
+  (define folded-box (hash-ref (output-model-block-folded m) bid #f))
+  (when folded-box
+    (define was-folded (unbox folded-box))
+    (set-box! folded-box (not was-folded))
+    ;; 更新 header 文本: ▼ ↔ ▶
+    (define ls (output-model-lines m))
+    (define cnt (output-model-count m))
+    (let loop ([i 0])
+      (when (< i cnt)
+        (define line (vector-ref ls i))
+        (if (and (output-line-block-header? line)
+                 (= (output-line-block-id line) bid))
+            (let ([txt (output-line-text line)]
+                  [prefix (if was-folded "▼ " "▶ ")]
+                  [old-prefix (if was-folded "▶ " "▼ ")])
+              (define new-txt
+                (string-append prefix
+                  (if (string-prefix? txt old-prefix)
+                      (substring txt 2)
+                      txt)))
+              (set-output-line-text! line new-txt)
+              (set-output-line-wrap-cache! line #f))
+            (loop (add1 i)))))))
+
+(define (output-model-block-folded? m bid)
+  (define b (hash-ref (output-model-block-folded m) bid #f))
+  (and b (unbox b)))
+
+;; ═══════════════════════════════════════════════════════
+;; 旧 API 兼容
+;; ═══════════════════════════════════════════════════════
+
+(define (output-model-clear! m)
+  (define ls (output-model-lines m))
+  (for ([i (in-range (output-model-count m))])
+    (vector-set! ls i (make-output-line)))
+  (set-output-model-block-folded! m (make-hash))
+  (set-output-model-next-block-id! m 1)
+  (set-output-model-count! m 1))
+
+(define (output-model-toggle-fold! m idx)
+  (when (< idx (output-model-count m))
+    (define l (vector-ref (output-model-lines m) idx))
+    (set-output-line-folded! l (not (output-line-folded l)))))
