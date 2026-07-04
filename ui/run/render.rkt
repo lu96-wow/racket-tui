@@ -75,13 +75,10 @@
            (hash-remove! render-cache comp)]
 
           [needs-redraw?
-           (define saved-row current-cursor-row)
-           (define saved-col current-cursor-col)
            (define comp-out (open-output-bytes))
            (parameterize ([current-output-port comp-out])
              ((component-render comp) focused-now? x y w h))
            (define bs (get-output-bytes comp-out))
-           (set-cursor! saved-row saved-col)
            (write-bytes bs out)
            (hash-set! render-cache comp bs)
            (hash-set! last-bounds comp (list x y w h))
@@ -98,9 +95,6 @@
     ;; 一次性输出全部
     (define all-bs (get-output-bytes out))
     (write-bytes all-bs)
-    ;; 渲染后光标归位 (1,1)，不干扰终端状态
-    (set-cursor! 1 1)
-    (write-bytes format-cursor-home)
     (flush-output))
 
   render-all)

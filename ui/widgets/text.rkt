@@ -38,8 +38,8 @@
       [(right)  (max 0 (- w visible-w))]
       [else 0]))
   (for ([i (in-range h)])
-    (write-bytes (format-styled-at! (+ y i) x style (make-string w #\space))))
-  (write-bytes (format-styled-at! y (+ x x-off) style visible)))
+    (write-bytes (format-styled-at (+ y i) x style (make-string w #\space))))
+  (write-bytes (format-styled-at y (+ x x-off) style visible)))
 
 ;; ═══════════════════════════════════════════════════════
 ;; 路径 A: 静态字符串 — 零 per-frame 开销

@@ -20,7 +20,7 @@
   (component
    (λ (focused? x y w h)
      (define cur-style (if (unbox pressed?) 'button-pressed style))
-     (write-bytes (format-styled-at! y x cur-style label)))
+     (write-bytes (format-styled-at y x cur-style label)))
 
    (build-input
     #:enter on-activate
