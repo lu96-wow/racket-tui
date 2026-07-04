@@ -33,7 +33,8 @@
 (define (make-output #:max-lines   [max-lines #f]
                      #:style       [style 'info]
                      #:show?       [show? (box #t)]
-                     #:auto-scroll? [auto? #t])
+                     #:auto-scroll? [auto? #t]
+                     #:bar-width   [bar-width 1])
 
   (define show-box (if (boolean? show?) (box show?) show?))
   (define model   (make-output-model #:max-lines max-lines))
@@ -46,8 +47,8 @@
   (define active-block-id (box #f))
   (define block-stack (box '()))       ;; 嵌套折叠栈
 
-  (define (content-width) (max 1 (- (unbox vp-w) 1)))
-  (define sb (make-scrollbar))
+  (define (content-width) (max 1 (- (unbox vp-w) bar-width)))
+  (define sb (make-scrollbar #:width bar-width))
 
   (define (active-bid) (and (pair? (unbox block-stack)) (car (unbox block-stack))))
 

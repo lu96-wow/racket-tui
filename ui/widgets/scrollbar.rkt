@@ -13,17 +13,22 @@
   #:mutable #:transparent)
 
 (define (make-scrollbar #:track-style [track-style 'scroll-track]
-                        #:thumb-style [thumb-style 'scroll-thumb])
+                        #:thumb-style [thumb-style 'scroll-thumb]
+                        #:width [w 1])
   (define dragging? (box #f))
+
+  (define bar-w (max 1 w))  ; scrollbar pixel width
 
   (define (render x y h total sy)
     (define thumb-h (max 1 (quotient (* h h) total)))
     (define thumb-y (quotient (* sy (- h thumb-h)) (max 1 (- total h))))
+    (define track-str (make-string bar-w #\│))
+    (define thumb-str (make-string bar-w #\█))
     (for ([row (in-range h)])
       (define in-thumb? (<= thumb-y row (+ thumb-y thumb-h -1)))
       (write-bytes (format-styled-at (+ y row) x
                      (if in-thumb? thumb-style track-style)
-                     (if in-thumb? "█" "│")))))
+                     (if in-thumb? thumb-str track-str)))))
 
   (define (thumb-pos sy h total)
     (define thumb-h (max 1 (quotient (* h h) total)))
