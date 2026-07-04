@@ -211,7 +211,8 @@
 ;; 非阻塞版本, 等价于 ncurses timeout(0) getch()
 ;; 无事件时 evt 为 #f (sync/timeout 返回), 返回 EVENT-NULL
 (define (read-event-noblock)
-  (define evt (sync/timeout 0 (make-stdin-evt) resize-channel))
+  ;; sync/timeout 避免 CPU 空转，~60fps 足够流式刷新
+  (define evt (sync/timeout 0.016 (make-stdin-evt) resize-channel))
   (cond [(bytes? evt)
          (read-event-impl (bytes-ref evt 0))]
         [(pair? evt)
