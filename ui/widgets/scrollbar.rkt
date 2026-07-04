@@ -25,22 +25,36 @@
                      (if in-thumb? thumb-style track-style)
                      (if in-thumb? "█" "│")))))
 
-  (define (calc-scroll my y h total)
-    (let* ([rel-row (- my y)]
-           [max-sy (max 0 (- total h))]
-           [new-scroll (max 0 (min (quotient (* rel-row max-sy) (max 1 (- h 1))) max-sy))])
-      new-scroll))
+  (define (thumb-pos sy h total)
+    (define thumb-h (max 1 (quotient (* h h) total)))
+    (define thumb-y (quotient (* sy (- h thumb-h)) (max 1 (- total h))))
+    (values thumb-y thumb-h))
+
+  (define (scroll-from-thumb-y thumb-y h total)
+    ;; 从滑块顶部位置反算 scroll
+    (define thumb-h (max 1 (quotient (* h h) total)))
+    (define range (max 1 (- total h)))
+    (define range-px (max 1 (- h thumb-h)))
+    (max 0 (min (quotient (* thumb-y range) range-px) range)))
+
+  ;; 鼠标 y 坐标 → scroll 值（用浮点避免整数累积误差）
+  (define (my->scroll my y h total)
+    (define thumb-h (max 1 (quotient (* h h) total)))
+    (define range-px (max 1 (- h thumb-h)))
+    (define range (max 1 (- total h)))
+    (define rel (- my y))
+    (max 0 (min (inexact->exact (round (/ (* rel range) range-px 1.0))) range)))
 
   (define (press my y h total sy)
     (if (and (> total h) (<= y my (+ y h -1)))
-        (begin (set-box! dragging? #t)
-               (values (calc-scroll my y h total) #t))
+        (begin
+          (set-box! dragging? #t)
+          (values (my->scroll my y h total) #t))
         (values sy #f)))
 
   (define (move my y h total sy)
-    ;; 允许鼠标越界 — calc-scroll 自动 clamp，拖拽更顺滑
     (if (and (unbox dragging?) (> total h))
-        (values (calc-scroll my y h total) #t)
+        (values (my->scroll my y h total) #t)
         (values sy #f)))
 
   (define (release)
