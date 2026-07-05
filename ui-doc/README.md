@@ -8,75 +8,83 @@
 #lang racket
 (require "ui/main.rkt")
 
-(define specs
-  (list
-    (list (make-text #:text "Hello, TUI!" #:style 'title) 1 1 20 1)
-    (list (make-input #:placeholder "type...")              2 3 20 1)))
+(define t-title  (make-text #:text " Demo " #:style 'heading))
+(define t-body   (make-text #:text " body " #:style 'info))
+(define t-footer (make-text #:text " q to quit " #:style 'dim))
 
-(run-app specs)
+(run-app
+  (screen
+   (t-title 1)
+   (t-body 6)
+   (t-footer 1)))
 ```
 
-按 `q` 退出。
+按 `q` 退出。resize 终端窗口时布局自动重算。
 
 ## 架构
 
 ```
-┌─────────────────────────────────────────────────┐
-│  run-app (ui/run.rkt)                           │
-│  ├─ render-all  — 渲染引擎，增量绘制 + 缓存回放  │
-│  ├─ global      — 全局快捷键 (q=quit, 鼠标切焦点) │
-│  ├─ mouse-router— 鼠标事件空间分发              │
-│  └─ dispatch    — 键盘事件 → 焦点组件            │
-├─────────────────────────────────────────────────┤
-│  component 协议 (ui/component.rkt)              │
-│  ├─ make-text   — 静态/动态文本                  │
-│  ├─ make-input  — 文本输入框 (单行/多行)         │
-│  └─ make-button — 按钮                          │
-├─────────────────────────────────────────────────┤
-│  底层 (base/)                                    │
-│  ├─ gap-buffer  — 纯文本缓冲区 (gap buffer)       │
-│  ├─ build-input — 输入事件分发器                  │
-│  └─ output/*    — ANSI 输出 & 样式              │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  run-app (ui/run.rkt)                                    │
+│  ├─ layout 解析 → spec-list                              │
+│  ├─ resize 事件 → 重算 layout → 更新 spec-list            │
+│  ├─ render-all  — 增量绘制 + 缓存回放                     │
+│  ├─ global      — q=quit, 鼠标切焦点                     │
+│  ├─ mouse-router— 鼠标事件空间分发                        │
+│  └─ dispatch    — 键盘事件 → 焦点组件                     │
+├──────────────────────────────────────────────────────────┤
+│  layout (ui/layout.rkt)                                  │
+│  ├─ layout-row / layout-col — 权重布局                   │
+│  ├─ screen — 填满终端                                    │
+│  ├─ border — 边框包装                                    │
+│  └─ space — 空白占位                                     │
+├──────────────────────────────────────────────────────────┤
+│  component (ui/component.rkt + widgets/)                 │
+│  ├─ make-text     — 静态/动态文本                         │
+│  ├─ make-input    — 文本输入框                            │
+│  ├─ make-button   — 按钮                                 │
+│  ├─ make-output   — 可滚动输出面板（折叠块）               │
+│  └─ make-border   — 边框组件                              │
+├──────────────────────────────────────────────────────────┤
+│  底层 (base/)                                             │
+│  ├─ gap-buffer   — 纯文本缓冲区                           │
+│  ├─ output-buffer— 输出行缓冲（换行+折叠）                 │
+│  ├─ build-input  — 输入事件分发器                         │
+│  └─ output/*     — ANSI 输出 & 样式                       │
+└──────────────────────────────────────────────────────────┘
 ```
 
-## 组件协议
+## 布局系统
 
-所有组件都是 `component` 结构体，字段：
+基于权重比例分配空间，返回 `layout`，可嵌套。
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `render` | `(focused? x y w h → void)` | 绘制函数，框架传入视口坐标 |
-| `handler` | `(type data mods → void)` | 事件处理，由 `build-input` 构造 |
-| `focusable?` | bool | 是否可获取键盘焦点 |
-| `show?` | bool | 是否可见 |
-| `w` `h` | natural | 期望尺寸（0=自动） |
-| `dirty` | box | 标记需要重绘 |
-| `render?` | `#f` 或 hook | 每帧检查是否需要标记 dirty |
+```racket
+(layout-row (thing weight) ...)   ;; 垂直排列
+(layout-col (thing weight) ...)   ;; 水平排列
+(border inner #:title "..." ...)  ;; 套边框
+(screen (thing weight) ...)       ;; 填满终端
+space                              ;; 空白占位
+```
 
-## 布局
+`thing` 可以是 component、`space`、或嵌套的 `layout`。嵌套 layout 需要套一层权重：`((layout-row ...) weight)`。
 
-`run-app` 接受 `(list (list component x y w h) ...)`，坐标原点是终端左上角 `(1, 1)`。
+详见 [layout.md](layout.md)。
 
-组件按列表顺序绘制——后面的覆盖前面的。鼠标事件按**逆序**分发（上层优先）。
+## 组件
 
-## 样式
-
-预定义语义化样式，见 `base/io/output-styles.rkt`：
-
-| 类别 | 样式名 |
+| 组件 | 文档 |
 |---|---|
-| 基础色 | `red green blue yellow cyan magenta white` |
-| 语义 | `error warning info success` |
-| 输入 | `input-normal input-focus input-error` |
-| 光标 | `cursor selection` |
-| 文本 | `title subtitle heading` |
-| 按钮 | `button button-hover button-pressed button-disabled` |
-| 状态栏 | `status-bar status-good status-warning status-bad` |
+| `make-text` | [text.md](text.md) |
+| `make-input` | [input.md](input.md) |
+| `make-button` | [button.md](button.md) |
+| `make-output` | [output.md](output.md) |
+| `make-border` | [border.md](border.md) |
 
-自定义样式：`(style-define! 'my-style (color-fg 3) attr-bold)`
+所有组件遵循 [component 协议](component.md)。
 
 ## 事件循环
 
-- **阻塞模式** (`run-app specs`): 等同 `ncurses getch()`
-- **非阻塞模式** (`run-app specs #:noblock? #t`): 等同 `ncurses timeout(0) getch()`
+- **阻塞模式** (`run-app spec`): 等同 `ncurses getch()`
+- **非阻塞模式** (`run-app-noblock spec`): 等同 `ncurses timeout(0) getch()`
+
+`run-app` 接受 `layout`（resize 自动重算）或裸 `spec-list`（固定坐标）。
