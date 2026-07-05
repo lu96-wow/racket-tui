@@ -5,23 +5,22 @@
 ;;
 ;;   space   = '---  空白占位
 ;;
-;;   (h (thing w) ...)  → lay   水平
-;;   (v (thing w) ...)  → lay   垂直
-;;   (border inner ...) → lay   套边框，内缩 (1,1,-2,-2)
+;;   (h (thing w) ...)  → layout   水平
+;;   (v (thing w) ...)  → layout   垂直
+;;   (border inner ...) → layout   套边框，内缩 (1,1,-2,-2)
 ;;   (screen (thing w) ...) → spec-list   填终端
 ;;
 ;;   算法: max(1, floor(span × w / sum))  当 w > 0
 ;;         保证 weight>0 的组件至少分到 1 行/列
 ;; ═══════════════════════════════════════════════════════════════════════════
 
-(require "../base/terminal/resize.rkt"
-         "widgets/border.rkt")
+(require "widgets/border.rkt")
 
-(provide space screen h v border lay? lay-resolve)
+(provide space screen h v border layout? layout-resolve)
 
 (define space '---)
 
-(struct lay (resolve) #:transparent)
+(struct layout (resolve) #:transparent)
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; distribute
@@ -43,10 +42,10 @@
            (define base (quotient (* span weight) sum))
            (define size (if (and (zero? base) (> weight 0)) 1 base))
            (define subs
-             (cond [(lay? thing)
+             (cond [(layout? thing)
                     (if vertical?
-                        ((lay-resolve thing) x offset tw size)
-                        ((lay-resolve thing) offset y size th))]
+                        ((layout-resolve thing) x offset tw size)
+                        ((layout-resolve thing) offset y size th))]
                    [(eq? thing space) '()]
                    [else
                     (list (list thing
@@ -65,13 +64,13 @@
 (define-syntax h
   (syntax-rules ()
     [(_ (thing w) ...)
-     (lay (lambda (x y tw th)
+     (layout (lambda (x y tw th)
             (distribute 'h x y tw th (list (cons thing w) ...))))]))
 
 (define-syntax v
   (syntax-rules ()
     [(_ (thing w) ...)
-     (lay (lambda (x y tw th)
+     (layout (lambda (x y tw th)
             (distribute 'v x y tw th (list (cons thing w) ...))))]))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
@@ -88,9 +87,9 @@
                 #:down-style  [down-style  'info]
                 #:left-style  [left-style  'info]
                 #:right-style [right-style 'info])
-  (lay (lambda (x y w h)
+  (layout (lambda (x y w h)
          (append
-          ((lay-resolve inner) (add1 x) (add1 y) (- w 2) (- h 2))
+          ((layout-resolve inner) (add1 x) (add1 y) (- w 2) (- h 2))
           (list (list (make-border
                        #:title title
                        #:up? up? #:down? down?
@@ -108,5 +107,5 @@
 (define-syntax screen
   (syntax-rules ()
     [(_ (thing wt) ...)
-     (let-values ([(term-h term-w) (get-window-size)])
-       (distribute 'v 1 1 term-w term-h (list (cons thing wt) ...)))]))
+     (layout (lambda (x y tw th)
+               (distribute 'v x y tw th (list (cons thing wt) ...))))]))

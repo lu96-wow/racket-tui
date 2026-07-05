@@ -13,6 +13,7 @@
 (require "../base/main.rkt"
          "../base/io/build-input.rkt"
          "component.rkt"
+         "layout.rkt"
          "run/render.rkt"
          "run/focus.rkt"
          "run/mouse.rkt"
@@ -41,13 +42,8 @@
 
 (define-for-syntax (collect-specs specs-stx)
   (define origs (syntax->list specs-stx))
-  (if (and (= (length origs) 1)
-           (let ([o (car origs)])
-             (or (identifier? o)
-                 (and (pair? (syntax-e o))
-                      (identifier? (car (syntax-e o)))
-                      (eq? 'list (syntax-e (car (syntax-e o))))))))
-      (car origs)
+  (if (= (length origs) 1)
+      (car origs)   ;; 单参数原样透传：变量、list、或 screen 等宏调用
       (let ([wrapped (map wrap-spec origs)])
         #`(list #,@wrapped))))
 
@@ -76,20 +72,28 @@
        #'(run-app-nobuffer* specs #:noblock? #t))]))
 
 ;; ═══════════════════════════════════════════════════
-;; 内部 — 以下逻辑完全不动
+;; 内部
 
-(define (run-app* specs #:noblock? [noblock? #f])
-  (with-tui (run-loop specs noblock?)))
+(define (run-app* arg #:noblock? [noblock? #f])
+  (with-tui (run-loop arg noblock?)))
 
-(define (run-app-nobuffer* specs #:noblock? [noblock? #f])
-  (with-tui-nobuffer (run-loop specs noblock?)))
+(define (run-app-nobuffer* arg #:noblock? [noblock? #f])
+  (with-tui-nobuffer (run-loop arg noblock?)))
 
-(define (run-loop specs noblock?)
+(define (run-loop arg noblock?)
     (cursor-hide)
     (define (unbox* v) (if (box? v) (unbox v) v))
 
+    ;; ── 解析输入: layout 或 spec-list ──
+    (define layout (and (layout? arg) arg))
+    (define (resolve!) (if layout
+                           (let-values ([(h w) (get-window-size)])
+                             ((layout-resolve layout) 1 1 w h))
+                           arg))
+    (define specs-box (box (resolve!)))
+
     ;; ── 状态 ──
-    (define focus (box (for/or ([s specs])
+    (define focus (box (for/or ([s (unbox specs-box)])
                          (define comp (car s))
                          (and (component-show? comp)
                               (component-focusable? comp)
@@ -100,18 +104,28 @@
     (define render-cache (make-hasheq))
     (define last-focused (make-hasheq))
 
+    ;; resize 回调: 重算 + 清缓存 + 标记全部 dirty
+    (define (recalc!)
+      (when layout
+        (set-box! specs-box (resolve!))
+        (hash-clear! last-bounds)
+        (hash-clear! render-cache)
+        (hash-clear! last-focused)
+        (for ([s (unbox specs-box)])
+          (set-box! (component-dirty (car s)) #t))))
+
     ;; ── 模块组装 ──
     (define render-all
-      (make-renderer specs unbox* focus last-bounds render-cache last-focused))
+      (make-renderer specs-box unbox* focus last-bounds render-cache last-focused))
 
     (define global
-      (make-global specs unbox* focus quit?))
+      (make-global specs-box unbox* focus quit?))
 
     (define mouse-router
-      (make-mouse-router specs unbox* mouse-focus))
+      (make-mouse-router specs-box unbox* mouse-focus))
 
     (define dispatch-and-render
-      (make-dispatcher specs focus render-all))
+      (make-dispatcher specs-box recalc! focus render-all))
 
     ;; ── 启动 ──
     (render-all)

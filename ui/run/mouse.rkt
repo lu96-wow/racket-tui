@@ -1,19 +1,13 @@
 #lang racket
 ;; 鼠标路由 — 空间分发 + capture
-;;
-;; 职责:
-;;   - press: 按坐标 hit-test → 锁定 mouse-focus → 分发到命中组件
-;;   - release: 发给 mouse-focus (有则清除), 无则 hit-test 兜底
-;;   - move/scroll: mouse-focus 优先, 否则 hit-test
-;;   - 不依赖键盘 focus, 完全独立
 
 (require "../component.rkt")
 
 (provide make-mouse-router)
 
-(define (make-mouse-router specs unbox* mouse-focus)
+(define (make-mouse-router specs-box unbox* mouse-focus)
   (define (find-component-at mx my)
-    (for/or ([s (reverse specs)])
+    (for/or ([s (reverse (unbox specs-box))])
       (match-let ([(list comp xb yb wb hb) s])
         (define cx (unbox* xb))
         (define cy (unbox* yb))

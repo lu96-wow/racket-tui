@@ -2,6 +2,7 @@
 ;; 渲染引擎 — 单次 write-bytes，零闪烁
 ;;
 ;; 职责:
+;;   - 从 specs-box 读取当前组件列表（resize 后可能变化）
 ;;   - 预扫描组件 bounds/可见性 是否稳定
 ;;   - 稳定时跳过 screen-clear，只重绘脏/焦点变化组件
 ;;   - 不稳定时全量清屏 + 缓存回放
@@ -12,15 +13,15 @@
 
 (provide make-renderer)
 
-(define (make-renderer specs unbox* focus last-bounds render-cache last-focused)
+(define (make-renderer specs-box unbox* focus last-bounds render-cache last-focused)
   (define (render-all)
+    (define specs (unbox specs-box))
     (define-values (cur-rows cur-cols) (get-window-size))
 
     (define (fits? x y w h)
       (and (<= x cur-cols) (<= y cur-rows)
            (>= (+ x w -1) 1) (>= (+ y h -1) 1)))
 
-    ;; 预扫描：所有组件 bounds/可见性 都没变 → 跳过 screen-clear
     (define all-bounds-stable?
       (for/and ([s specs])
         (match-let ([(list comp xb yb wb hb) s])
@@ -36,7 +37,6 @@
                 [(or last visible?) #f]
                 [else #t]))))
 
-    ;; 所有输出累积到此 buffer
     (define out (open-output-bytes))
 
     (unless all-bounds-stable?
@@ -92,7 +92,6 @@
           [else
            (void)])))
 
-    ;; 一次性输出全部
     (define all-bs (get-output-bytes out))
     (write-bytes all-bs)
     (flush-output))
