@@ -6,17 +6,22 @@
 
 ```racket
 #lang racket
-(require "ui/main.rkt")
+(require tui/ui
+         tui/base/io/output-color)
 
-(define t-title  (make-text #:text " Demo " #:style 'heading))
-(define t-body   (make-text #:text " body " #:style 'info))
-(define t-footer (make-text #:text " q to quit " #:style 'dim))
+(style-define! 'bg-title  (color256-bg 237) (color256-fg 255))
+(style-define! 'bg-body   (color256-bg 235) (color256-fg 250))
+(style-define! 'bg-footer (color256-bg 240) (color256-fg 255))
+
+(define t-title  (make-text #:text " Demo " #:style 'bg-title))
+(define t-body   (make-text #:text " body " #:style 'bg-body))
+(define t-footer (make-text #:text " q to quit " #:style 'bg-footer))
 
 (run-app
-  (screen
-   (t-title 1)
-   (t-body 6)
-   (t-footer 1)))
+ (screen
+  (t-title 1)
+  (t-body 6)
+  (t-footer 1)))
 ```
 
 按 `q` 退出。resize 终端窗口时布局自动重算。

@@ -6,11 +6,16 @@
 
 ```racket
 #lang racket
-(require tui/ui/main)
+(require tui/ui
+         tui/base/io/output-color)
 
-(define t-title  (make-text #:text " Demo " #:style 'heading))
-(define t-body   (make-text #:text " body " #:style 'info))
-(define t-footer (make-text #:text " q to quit " #:style 'dim))
+(style-define! 'bg-title  (color256-bg 237) (color256-fg 255))
+(style-define! 'bg-body   (color256-bg 235) (color256-fg 250))
+(style-define! 'bg-footer (color256-bg 240) (color256-fg 255))
+
+(define t-title  (make-text #:text " Demo " #:style 'bg-title))
+(define t-body   (make-text #:text " body " #:style 'bg-body))
+(define t-footer (make-text #:text " q to quit " #:style 'bg-footer))
 
 (run-app
  (screen
@@ -330,7 +335,7 @@ Toggle 开关组件。详见 [ui-doc/bool-button.md](../ui-doc/bool-button.md)�
 
 ```racket
 #lang racket
-(require tui/ui/main tui/base/io/output-color)
+(require tui/ui tui/base/io/output-color)
 
 (style-define! 'bg (color256-bg 235) (color256-fg 255))
 (style-define! 'input-style (color256-bg 236) (color256-fg 255))
@@ -353,7 +358,7 @@ Toggle 开关组件。详见 [ui-doc/bool-button.md](../ui-doc/bool-button.md)�
 
 ```racket
 #lang racket
-(require tui/ui/main)
+(require tui/ui)
 
 (define last-action (box "none"))
 
