@@ -88,8 +88,10 @@
                 #:left-style  [left-style  'info]
                 #:right-style [right-style 'info])
   (layout (lambda (x y w h)
+         (define iw (max 0 (- w 2)))
+         (define ih (max 0 (- h 2)))
          (append
-          ((layout-resolve inner) (add1 x) (add1 y) (- w 2) (- h 2))
+          ((layout-resolve inner) (add1 x) (add1 y) iw ih)
           (list (list (make-border
                        #:title title
                        #:up? up? #:down? down?

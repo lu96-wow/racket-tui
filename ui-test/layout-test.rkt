@@ -5,12 +5,12 @@
          "../base/io/output-color.rkt")
 
 ;; ── 样式 ──
-(style-define! 'bg-title  (color256-bg 237) (color256-fg 255))
-(style-define! 'bg-panel  (color256-bg 235) (color256-fg 250))
+(style-define! 'bg-title (color256-bg 237) (color256-fg 255))
+(style-define! 'bg-panel (color256-bg 235) (color256-fg 250))
 (style-define! 'bg-status (color256-bg 240) (color256-fg 255))
 
 ;; ── 组件 ──
-(define t-title  (make-text #:text " Demo App " #:style 'bg-title))
+(define t-title (make-text #:text " Demo App " #:style 'bg-title))
 
 ;; 输出面板
 (define-values (out-log log-api) (make-output #:style 'bg-panel))
@@ -27,15 +27,15 @@
 
 ;; 输入 + 状态
 (define input-field (make-input #:placeholder "type command..."))
-(define t-status  (make-text #:text " status " #:style 'bg-status))
+(define t-status (make-text #:text " status " #:style 'bg-status))
 
 ;; ── 布局 ──
 (run-app-noblock
   (screen
-   (t-title 1)
-   ((layout-col
-     (file-panel 1)
-     (space 1)
-     (log-panel 1)) 6)
-   (input-field 1)
-   (t-status 1)))
+    (t-title 1)
+    ((layout-col
+       (file-panel 1)
+       (space 1)
+       (log-panel 1)) 6)
+    ((layout-col (input-field 1) (space 3)) 3)
+    (t-status 1)))
