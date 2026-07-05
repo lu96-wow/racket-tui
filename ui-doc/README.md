@@ -43,6 +43,7 @@
 │  ├─ make-text     — 静态/动态文本                         │
 │  ├─ make-input    — 文本输入框                            │
 │  ├─ make-button   — 按钮                                 │
+│  ├─ make-bool-button — 布尔开关                          │
 │  ├─ make-output   — 可滚动输出面板（折叠块）               │
 │  └─ make-border   — 边框组件                              │
 ├──────────────────────────────────────────────────────────┤
@@ -77,6 +78,7 @@ space                              ;; 空白占位
 | `make-text` | [text.md](text.md) |
 | `make-input` | [input.md](input.md) |
 | `make-button` | [button.md](button.md) |
+| `make-bool-button` | [bool-button.md](bool-button.md) |
 | `make-output` | [output.md](output.md) |
 | `make-border` | [border.md](border.md) |
 

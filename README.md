@@ -337,6 +337,26 @@ If you need finer-grained control over event types, you can also use the low-lev
 
 More examples can be found in the `test/` directory.
 
+## UI Framework
+
+A component-based UI framework built on top of the terminal abstraction. See [ui/README.md](ui/README.md) for detailed documentation.
+
+```racket
+(require tui/ui/main)
+
+(define t-title  (make-text #:text " Demo " #:style 'heading))
+(define t-footer (make-text #:text " q to quit " #:style 'dim))
+
+(run-app
+ (screen
+  (t-title 1)
+  (t-footer 1)))
+```
+
+Components: `make-text`, `make-input`, `make-button`, `make-bool-button`, `make-output`, `make-border`.
+
+Layout: `screen`, `layout-row`, `layout-col`, `border`, `space`.
+
 ## Flush Mode
 
 ```racket
