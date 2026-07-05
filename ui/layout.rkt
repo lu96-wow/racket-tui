@@ -5,8 +5,8 @@
 ;;
 ;;   space   = '---  空白占位
 ;;
-;;   (h (thing w) ...)  → layout   水平
-;;   (v (thing w) ...)  → layout   垂直
+;;   (layout-row (thing w) ...)  → layout   垂直
+;;   (layout-col (thing w) ...)  → layout   水平
 ;;   (border inner ...) → layout   套边框，内缩 (1,1,-2,-2)
 ;;   (screen (thing w) ...) → spec-list   填终端
 ;;
@@ -16,7 +16,7 @@
 
 (require "widgets/border.rkt")
 
-(provide space screen h v border layout? layout-resolve)
+(provide space screen layout-row layout-col border layout? layout-resolve)
 
 (define space '---)
 
@@ -61,17 +61,17 @@
 ;; h / v
 ;; ═══════════════════════════════════════════════════════════════════════════
 
-(define-syntax h
-  (syntax-rules ()
-    [(_ (thing w) ...)
-     (layout (lambda (x y tw th)
-            (distribute 'h x y tw th (list (cons thing w) ...))))]))
-
-(define-syntax v
+(define-syntax layout-row
   (syntax-rules ()
     [(_ (thing w) ...)
      (layout (lambda (x y tw th)
             (distribute 'v x y tw th (list (cons thing w) ...))))]))
+
+(define-syntax layout-col
+  (syntax-rules ()
+    [(_ (thing w) ...)
+     (layout (lambda (x y tw th)
+            (distribute 'h x y tw th (list (cons thing w) ...))))]))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; border
