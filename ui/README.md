@@ -71,7 +71,7 @@
 
 `spec` 可以是 `layout`（resize 自动重算）或裸 `(comp x y w h)`（固定坐标）。
 
-多个裸 spec 会自动展开：
+裸 spec 会自动展开：
 
 ```racket
 (run-app
