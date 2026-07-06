@@ -82,20 +82,28 @@
 
 (define (run-loop arg noblock?)
     (cursor-hide)
-    (define (unbox* v) (if (box? v) (unbox v) v))
+    
+    ;; ── 辅助 ──
+    (define (maybe-unbox v) (if (box? v) (unbox v) v))
+
+    ;; 从 spec 的 boxed 宽/高解析: 0 → 取组件期望尺寸
+    (define (resolve-size spec-boxed comp-accessor comp)
+      (define v (maybe-unbox spec-boxed))
+      (if (zero? v) (comp-accessor comp) v))
 
     ;; ── 解析输入: layout 或 spec-list ──
     (define layout (and (layout? arg) arg))
-    (define (resolve!) (if layout
-                           (let-values ([(h w) (get-window-size)])
-                             ((layout-resolve layout) 1 1 w h))
-                           arg))
-    (define specs-box (box (resolve!)))
+    (define (compute-specs)
+      (if layout
+          (let-values ([(h w) (get-window-size)])
+            ((layout-resolve layout) 1 1 w h))
+          arg))
+    (define specs-box (box (compute-specs)))
 
     ;; ── 状态 ──
-    (define focus (box (for/or ([s (unbox specs-box)])
-                         (define comp (car s))
-                         (and (component-show? comp)
+    (define focus (box (for/or ([spec (unbox specs-box)])
+                         (define comp (car spec))
+                         (and (component-visible? comp)
                               (component-focusable? comp)
                               comp))))
     (define quit?        (box #f))
@@ -107,22 +115,22 @@
     ;; resize 回调: 重算 + 清缓存 + 标记全部 dirty
     (define (recalc!)
       (when layout
-        (set-box! specs-box (resolve!))
+        (set-box! specs-box (compute-specs))
         (hash-clear! last-bounds)
         (hash-clear! render-cache)
         (hash-clear! last-focused)
-        (for ([s (unbox specs-box)])
-          (set-box! (component-dirty (car s)) #t))))
+        (for ([spec (unbox specs-box)])
+          (set-box! (component-dirty (car spec)) #t))))
 
     ;; ── 模块组装 ──
     (define render-all
-      (make-renderer specs-box unbox* focus last-bounds render-cache last-focused))
+      (make-renderer specs-box maybe-unbox resolve-size focus last-bounds render-cache last-focused))
 
     (define global
-      (make-global specs-box unbox* focus quit?))
+      (make-global specs-box maybe-unbox resolve-size focus quit?))
 
     (define mouse-router
-      (make-mouse-router specs-box unbox* mouse-focus))
+      (make-mouse-router specs-box maybe-unbox resolve-size mouse-focus))
 
     (define dispatch-and-render
       (make-dispatcher specs-box recalc! focus render-all))

@@ -36,7 +36,7 @@
                      #:auto-scroll? [auto? #t]
                      #:bar-width   [bar-width 1])
 
-  (define show-box (if (boolean? show?) (box show?) show?))
+  (define show-box (ensure-show-box show?))
   (define model   (make-output-model #:max-lines max-lines))
   (define dirty   (box #t))
   (define scroll  (box 0))

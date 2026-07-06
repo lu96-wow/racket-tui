@@ -6,7 +6,7 @@ Toggle 开关组件，点击或按 Enter/Space 切换状态。
 
 ```racket
 (make-bool-button
-  #:label      "Option"      ; 显示文字
+  #:text       "Option"      ; 显示文字
   #:initial?   #f            ; 初始状态，默认 #f
   #:on-change  (λ (v) ...)   ; 状态变化回调，参数为新的布尔值
   #:on-style   'success      ; 开 样式，默认 'success
@@ -41,12 +41,12 @@ Toggle 开关组件，点击或按 Enter/Space 切换状态。
 ## 示例
 
 ```racket
-(define b1 (make-bool-button #:label "Auto-save"
+(define b1 (make-bool-button #:text "Auto-save"
                              #:initial? #t
                              #:on-change (λ (v)
                                            (printf "auto-save: ~a\n" v))))
 
-(define b2 (make-bool-button #:label "Debug"
+(define b2 (make-bool-button #:text "Debug"
                              #:on-style 'error
                              #:off-style 'warning
                              #:on-change (λ (v)

@@ -30,18 +30,6 @@
                      (if in-thumb? thumb-style track-style)
                      (if in-thumb? thumb-str track-str)))))
 
-  (define (thumb-pos sy h total)
-    (define thumb-h (max 1 (quotient (* h h) total)))
-    (define thumb-y (quotient (* sy (- h thumb-h)) (max 1 (- total h))))
-    (values thumb-y thumb-h))
-
-  (define (scroll-from-thumb-y thumb-y h total)
-    ;; 从滑块顶部位置反算 scroll
-    (define thumb-h (max 1 (quotient (* h h) total)))
-    (define range (max 1 (- total h)))
-    (define range-px (max 1 (- h thumb-h)))
-    (max 0 (min (quotient (* thumb-y range) range-px) range)))
-
   ;; 鼠标 y 坐标 → scroll 值（用浮点避免整数累积误差）
   (define (my->scroll my y h total)
     (define thumb-h (max 1 (quotient (* h h) total)))

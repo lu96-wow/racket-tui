@@ -193,7 +193,7 @@ Toggle 开关组件。详见 [ui-doc/bool-button.md](../ui-doc/bool-button.md)�
 
 ```racket
 (make-bool-button
- #:label      "Option"      ; 显示文字
+ #:text       "Option"      ; 显示文字
  #:initial?   #f            ; 初始状态
  #:on-change  (λ (v) ...)   ; 状态变化回调，参数为布尔值
  #:on-style   'success      ; 开 样式

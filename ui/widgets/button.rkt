@@ -13,7 +13,7 @@
                      #:style [style 'button]
                      #:show? [show? (box #t)])
   (define label (string-append " " text " "))
-  (define show-box (if (boolean? show?) (box show?) show?))
+  (define show-box (ensure-show-box show?))
   (define pressed? (box #f))
   (define dirty    (box #t))
 

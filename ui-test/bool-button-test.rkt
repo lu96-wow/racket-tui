@@ -16,12 +16,12 @@
 (define (log label v)
   (append api (format "[~a] ~a\n" (if v "x" " ") label)))
 
-(define b1 (make-bool-button #:label "Option A"
+(define b1 (make-bool-button #:text "Option A"
                              #:on-change (λ (v) (log "Option A" v))))
-(define b2 (make-bool-button #:label "Option B"
+(define b2 (make-bool-button #:text "Option B"
                              #:initial? #t
                              #:on-change (λ (v) (log "Option B" v))))
-(define b3 (make-bool-button #:label "Option C"
+(define b3 (make-bool-button #:text "Option C"
                              #:on-style 'error
                              #:off-style 'warning
                              #:on-change (λ (v) (log "Option C" v))))

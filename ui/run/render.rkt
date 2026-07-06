@@ -13,23 +13,23 @@
 
 (provide make-renderer)
 
-(define (make-renderer specs-box unbox* focus last-bounds render-cache last-focused)
+(define (make-renderer specs-box maybe-unbox resolve-size focus last-bounds render-cache last-focused)
   (define (render-all)
     (define specs (unbox specs-box))
     (define-values (cur-rows cur-cols) (get-window-size))
 
-    (define (fits? x y w h)
+    (define (fits-in-screen? x y w h)
       (and (<= x cur-cols) (<= y cur-rows)
            (>= (+ x w -1) 1) (>= (+ y h -1) 1)))
 
     (define all-bounds-stable?
-      (for/and ([s specs])
-        (match-let ([(list comp xb yb wb hb) s])
-          (define x (unbox* xb))
-          (define y (unbox* yb))
-          (define w (let ([v (unbox* wb)]) (if (zero? v) (component-w comp) v)))
-          (define h (let ([v (unbox* hb)]) (if (zero? v) (component-h comp) v)))
-          (define visible? (and (component-visible? comp) (fits? x y w h)))
+      (for/and ([spec specs])
+        (match-let ([(list comp xb yb wb hb) spec])
+          (define x (maybe-unbox xb))
+          (define y (maybe-unbox yb))
+          (define w (resolve-size wb component-w comp))
+          (define h (resolve-size hb component-h comp))
+          (define visible? (and (component-visible? comp) (fits-in-screen? x y w h)))
           (define last (hash-ref last-bounds comp #f))
           (cond [(and last visible?)
                  (and (= x (first last)) (= y (second last))
@@ -42,14 +42,14 @@
     (unless all-bounds-stable?
       (write-bytes format-screen-clear out))
 
-    (for ([s specs])
-      (match-let ([(list comp xb yb wb hb) s])
-        (define x (unbox* xb))
-        (define y (unbox* yb))
-        (define w (unbox* wb))
-        (define h (unbox* hb))
+    (for ([spec specs])
+      (match-let ([(list comp xb yb wb hb) spec])
+        (define x (maybe-unbox xb))
+        (define y (maybe-unbox yb))
+        (define w (resolve-size wb component-w comp))
+        (define h (resolve-size hb component-h comp))
 
-        (define visible? (and (component-visible? comp) (fits? x y w h)))
+        (define visible? (and (component-visible? comp) (fits-in-screen? x y w h)))
         (define last (hash-ref last-bounds comp #f))
         (define focused-now? (eq? comp (unbox focus)))
 

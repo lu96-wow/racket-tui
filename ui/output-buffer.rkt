@@ -21,7 +21,6 @@
          output-model-end-block!
          output-model-toggle-block!
          output-model-block-folded?
-         output-model-render-slots
          compute-prefix-sum extract-visible-slots prefix-find
          wrap-text string-display-width)
 
@@ -210,14 +209,6 @@
                        (iter (add1 li) (- rem take) a)
                        (collect (add1 j) end
                                 (cons (list-ref wrapped j) a))))))])))
-
-(define (output-model-render-slots model w scroll-y h)
-  (define p (compute-prefix-sum model w))
-  (define n (output-model-count model))
-  (define total (vector-ref p n))
-  (define sy (max 0 (min scroll-y (max 0 (- total h)))))
-  (define-values (slots li) (extract-visible-slots model p sy h))
-  (values slots total sy))
 
 ;; ═══════════════════════════════════════════════════════
 ;; 追加文本

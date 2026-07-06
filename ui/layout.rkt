@@ -29,19 +29,19 @@
 (define (distribute dir x y tw th items)
   (define vertical? (eq? dir 'v))
   (define span (if vertical? th tw))
-  (define sum (apply + (map cdr items)))
+  (define total-weight (apply + (map cdr items)))
 
-  (if (or (zero? sum) (null? items))
+  (if (or (zero? total-weight) (null? items))
       '()
-      (let loop ([items items]
+      (let loop ([remaining items]
                  [offset (if vertical? y x)]
                  [acc '()])
-        (match items
+        (match remaining
           ['() acc]
           [(cons (cons thing weight) rest)
-           (define base (quotient (* span weight) sum))
+           (define base (quotient (* span weight) total-weight))
            (define size (if (and (zero? base) (> weight 0)) 1 base))
-           (define subs
+           (define child-specs
              (cond [(layout? thing)
                     (if vertical?
                         ((layout-resolve thing) x offset tw size)
@@ -53,9 +53,9 @@
                                 (if vertical? offset y)
                                 (if vertical? tw size)
                                 (if vertical? size th)))]))
-           (loop (cdr items)
+           (loop rest
                  (+ offset size)
-                 (append acc subs))]))))
+                 (append acc child-specs))]))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; h / v
@@ -103,11 +103,10 @@
                       x y w h))))))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
-;; screen
+;; screen — 语法上等同于 layout-row; 语义上表示填满终端
 ;; ═══════════════════════════════════════════════════════════════════════════
 
 (define-syntax screen
   (syntax-rules ()
     [(_ (thing wt) ...)
-     (layout (lambda (x y tw th)
-               (distribute 'v x y tw th (list (cons thing wt) ...))))]))
+     (layout-row (thing wt) ...)]))

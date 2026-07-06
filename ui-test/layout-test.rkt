@@ -25,7 +25,7 @@
                                               (append-styled log-api
                                                              (format "> ~a\n" text) 'info))))
 
-(define bool-auto (make-bool-button #:label "auto-scroll"
+(define bool-auto (make-bool-button #:text "auto-scroll"
                                     #:initial? #t
                                     #:on-change (λ (v)
                                                   (if v (scroll-end log-api) (void)))))

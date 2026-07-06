@@ -46,7 +46,7 @@
                     #:nofocus-style [nofocus-style 'input-normal]
                     #:show? [show? (box #t)])
 
-  (define show-box (if (boolean? show?) (box show?) show?))
+  (define show-box (ensure-show-box show?))
 
   ;; ═══════════════════════════════════════════════════════
   ;; 状态 (Layer 1: buffer / Layer 2: 渲染上下文)

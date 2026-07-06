@@ -50,7 +50,7 @@
                           #:h-align [h-align 'left]
                           #:show? [show? (box #t)])
   (define str-len (string-length str))
-  (define show-box (if (boolean? show?) (box show?) show?))
+  (define show-box (ensure-show-box show?))
   (component
    (λ (focused? x y w h)
      (render-text str style h-align x y w h))
@@ -67,7 +67,7 @@
                           #:show? [show? (box #t)])
   (define dirty (box #t))
   (define cache (box (proc)))
-  (define show-box (if (boolean? show?) (box show?) show?))
+  (define show-box (ensure-show-box show?))
   (component
    (λ (focused? x y w h)
      (render-text (unbox cache) style h-align x y w h))
@@ -87,7 +87,7 @@
                            #:style [style 'info]
                            #:h-align [h-align 'left]
                            #:show? [show? (box #t)])
-  (define show-box (if (boolean? show?) (box show?) show?))
+  (define show-box (ensure-show-box show?))
   (cond
     [(string? val)
      (make-text/static #:text val #:style style #:h-align h-align #:show? show-box)]

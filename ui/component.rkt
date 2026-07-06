@@ -6,7 +6,8 @@
          component-w component-h component-dirty
          component-render?
          component-visible?
-         component-show! component-hide! component-toggle!)
+         component-show! component-hide! component-toggle!
+         ensure-show-box)
 
 ;; render    : (λ (focused? x y w h) → void)   x,y,w,h 0-based, 调度器传入
 ;; handler   : (λ (type data mods) → void)     build-input 构造
@@ -18,6 +19,10 @@
 ;;             每帧 needs-redraw? 之前调用；组件自行比对内容、置 dirty
 (struct component
   (render handler focusable? show? w h dirty render?) #:transparent)
+
+;; 规范化 show? → box（所有组件统一使用）
+(define (ensure-show-box show?)
+  (if (boolean? show?) (box show?) show?))
 
 ;; 统一的可见性检查
 (define (component-visible? comp)
