@@ -43,7 +43,15 @@
 (define-for-syntax (collect-specs specs-stx)
   (define origs (syntax->list specs-stx))
   (if (= (length origs) 1)
-      (car origs)   ;; 单参数原样透传：变量、list、或 screen 等宏调用
+      (let ([single (car origs)])
+        (cond [(identifier? single) single]        ;; 变量
+              [(not (pair? (syntax-e single))) single]
+              [(and (identifier? (car (syntax-e single)))
+                    (eq? 'list (syntax-e (car (syntax-e single)))))
+               single]                             ;; 显式 (list ...)
+              [(= (length (syntax->list single)) 5)
+               #`(list #,(wrap-spec single))]         ;; (comp x y w h) → spec-list
+              [else single]))                      ;; screen/border 等
       (let ([wrapped (map wrap-spec origs)])
         #`(list #,@wrapped))))
 

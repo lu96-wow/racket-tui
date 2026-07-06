@@ -15,7 +15,6 @@
          output-model-put-string-in-block!
          output-model-put-styled-string-in-block!
          output-model-clear!
-         output-model-line-count
          output-model-toggle-fold!
          output-model-begin-block!
          output-model-end-block!
@@ -80,8 +79,6 @@
       (for ([i (in-range (- cnt excess) cnt)])
         (vector-set! ls i (make-output-line)))
       (set-output-model-count! m (- cnt excess)))))
-
-(define (output-model-line-count m) (output-model-count m))
 
 ;; ═══════════════════════════════════════════════════════
 ;; 换行 & 显示宽度

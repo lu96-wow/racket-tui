@@ -113,7 +113,7 @@
       (define cw (content-width))
       (define bar-col (+ x cw))
       (define p (compute-prefix-sum model cw))
-      (define total (vector-ref p (output-model-line-count model)))
+      (define total (vector-ref p (output-model-count model)))
       (when (and (unbox auto) (not (= total (unbox last-total))))
         (set-box! scroll (max 0 (- total h))))
       (set-box! last-total total)
@@ -142,7 +142,7 @@
     (let ([cw (content-width)] [h (unbox vp-h)])
       (when (and (> cw 0) (> h 0))
         (let* ([p (compute-prefix-sum model cw)]
-               [total (vector-ref p (output-model-line-count model))]
+               [total (vector-ref p (output-model-count model))]
                [cur (unbox scroll)]
                [max-sy (max 0 (- total h))]
                [new-sy (max 0 (min (+ cur delta) max-sy))])
