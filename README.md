@@ -335,7 +335,7 @@ If you need finer-grained control over event types, you can also use the low-lev
   (loop-input render-and-handle))
 ```
 
-More examples can be found in the `test/` directory.
+More examples can be found in the `demo/` directory.
 
 ## UI Framework
 

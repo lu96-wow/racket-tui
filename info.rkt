@@ -7,6 +7,5 @@
 (define license '(MIT))
 
 (define collection "tui")
-(define depends '("base"))
 (define build-deps '("racket-lib"))
-(define compile-omit-paths '("test" "ui-test"))
+(define compile-omit-paths '("demo" "ui-demo"))
