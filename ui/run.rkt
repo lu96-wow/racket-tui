@@ -18,7 +18,8 @@
          "run/focus.rkt"
          "run/mouse.rkt"
          "run/dispatch.rkt"
-         (for-syntax racket/base))
+         (for-syntax racket/base
+                     "layout.rkt"))
 
 (provide run-app run-app-noblock
          run-app-nobuffer run-app-nobuffer-noblock)
@@ -40,6 +41,12 @@
      (with-syntax ([(e ...) (syntax->list arg)])
        #'(list e ...))]))
 
+(define-for-syntax (layout-form? stx)
+  (and (pair? (syntax-e stx))
+       (identifier? (car (syntax-e stx)))
+       (ormap (λ (id) (free-identifier=? (car (syntax-e stx)) id))
+              (list #'screen #'layout-row #'layout-col #'border))))
+
 (define-for-syntax (collect-specs specs-stx)
   (define origs (syntax->list specs-stx))
   (if (= (length origs) 1)
@@ -49,9 +56,10 @@
               [(and (identifier? (car (syntax-e single)))
                     (eq? 'list (syntax-e (car (syntax-e single)))))
                single]                             ;; 显式 (list ...)
+              [(layout-form? single) single]       ;; screen/layout-row/layout-col/border
               [(= (length (syntax->list single)) 5)
                #`(list #,(wrap-spec single))]         ;; (comp x y w h) → spec-list
-              [else single]))                      ;; screen/border 等
+              [else single]))                      ;; 其他
       (let ([wrapped (map wrap-spec origs)])
         #`(list #,@wrapped))))
 
