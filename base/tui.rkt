@@ -86,6 +86,7 @@
   (display PASTE-DISABLE)
   (flush-output))
 
+;;切换alt缓冲
 (define-syntax-rule (with-tui body ...)
   (let ([exn #f])
     (dynamic-wind
@@ -99,6 +100,7 @@
          (eprintf "Error: ~a\n" (exn-message exn))
          (raise exn))))))
 
+;;不切换alt缓冲
 (define-syntax-rule (with-tui-nobuffer body ...)
   (let ([exn #f])
     (dynamic-wind
@@ -112,6 +114,7 @@
          (eprintf "Error: ~a\n" (exn-message exn))
          (raise exn))))))
 
+;;不切换alt缓冲。保留终端回显
 (define-syntax-rule (with-tui-nobuffer-echo body ...)
   (let ([exn #f])
     (dynamic-wind
