@@ -1,6 +1,6 @@
-# ui — 声明式 UI 核心
+# ui — 声明式 UI 层
 
-这是对 `ui/` 的声明式重写（核心部分）。**只含核心，不含组件**（`text`/`button`/`input`/`list` 等延后到组件层）。
+Elm 风格的声明式 TUI 框架：单一不可变 state + 纯 view + 消息归约。含全部常用组件。
 
 ## 数据流
 
@@ -138,6 +138,7 @@ state ──view──▶ widget ──layout──▶ element ──render─�
 - 内容在 app state（`#:lines`）；追加日志由 `update` 在 state 里加行
 - 支持 `(cons text style)` 单行样式；滚动偏移是 keyed local state
 - `fold-block`：头行可点击折叠/展开（`#:folded` 是 app state 的 block-id 列表，点击产生 `#:on-toggle-fold` 消息）；支持嵌套
+- 长行自动换行（1 字符 = 1 格）；折叠头换行后仅第一行可点击
 - ↑↓/Home/End/PageUp/PageDown/滚轮/滚动条拖动滚动；`#:auto-scroll?` 新行时自动滚到底
 
 ### text-area（多行输入）

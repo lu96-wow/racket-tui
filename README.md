@@ -339,30 +339,41 @@ More examples can be found in the `demo/` directory.
 
 ## UI Framework
 
-A component-based UI framework built on top of the terminal abstraction. See [ui/README.md](ui/README.md) for detailed documentation.
+声明式 UI 层（Elm 风格：state / update / view / message）。详见 [ui/README.md](ui/README.md) 与 [ui/API.md](ui/API.md)。
 
 ```racket
-(require tui/ui
-         tui/base/io/output-color)
+#lang racket
+(require tui/ui)
 
-(style-define! 'bg-title  (color256-bg 237) (color256-fg 255))
-(style-define! 'bg-body   (color256-bg 235) (color256-fg 250))
-(style-define! 'bg-footer (color256-bg 240) (color256-fg 255))
+(struct model (count) #:transparent)
 
-(define t-title  (make-text #:text " Demo " #:style 'bg-title))
-(define t-body   (make-text #:text " body " #:style 'bg-body))
-(define t-footer (make-text #:text " q to quit " #:style 'bg-footer))
+(define (update st msg)
+  (match msg
+    ['inc (struct-copy model st [count (add1 (model-count st))])]
+    [_ st]))
+
+(define (view st)
+  (vstack
+   (child (text (format "count: ~a" (model-count st)) #:style 'heading)
+          #:min 1 #:max 1)
+   (child (hstack
+           (child (button "Inc" #:on-activate 'inc #:key 'inc-btn) #:weight 1)
+           (child (button "Quit" #:on-activate msg-quit #:key 'quit-btn) #:weight 1))
+          #:min 3)))
 
 (run-app
- (screen
-  (t-title 1)
-  (t-body 6)
-  (t-footer 1)))
+ #:init   (model 0)
+ #:update update
+ #:view   view
+ #:keymap (list (cons #\q msg-quit)
+                (cons 'tab msg-focus-next)))
 ```
 
-Components: `make-text`, `make-input`, `make-button`, `make-bool-button`, `make-output`, `make-border`.
+组件：`text` `button` `bool-button` `input` `text-area` `list-box` `output`（含折叠 + 换行）。
 
-Layout: `screen`, `layout-row`, `layout-col`, `border`, `space`.
+容器：`vstack` `hstack` `panel` `rect`；子节点用 `child` 设权重/min/max。
+
+调试：`(display-surface surf)` 输出 ASCII 快照。测试：`racket ui-demo/run-tests.rkt`。
 
 ## Flush Mode
 
