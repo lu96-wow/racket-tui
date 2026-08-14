@@ -1,10 +1,10 @@
 #lang racket
 
 ;; list + scrollbar 交互 demo
-;; 运行: racket ui-rebuild-demo/list-demo.rkt
+;; 运行: racket ui-demo/list-demo.rkt
 ;; ↑↓ 选择；鼠标滚轮/滚动条拖动 滚动；q 退出
 
-(require "../ui-rebuild/main.rkt")
+(require "../ui/main.rkt")
 
 (struct model (selected) #:transparent)
 (define items (for/list ([i (in-range 1 21)]) (format "item ~a" i)))

@@ -1,9 +1,9 @@
 #lang racket
 
-;; output 折叠块测试
-;; 运行: racket ui-rebuild-demo/fold-test.rkt
+;; output 折叠块测试（宽 12，cw=11，避免头行换行干扰）
+;; 运行: racket ui-demo/fold-test.rkt
 
-(require "../ui-rebuild/main.rkt"
+(require "../ui/main.rkt"
          "../base/io/input.rkt")
 
 (define failures (box 0))
@@ -28,20 +28,22 @@
 
 ;; ── 展开 ──
 (define-values (s1 e1 c1)
-  (render-one (output #:lines lines #:folded '() #:key 'o) 3 8))
-(check "展开渲染" (plain s1) "▼ Error \ne1      \ne2      ")
+  (render-one (output #:lines lines #:folded '() #:key 'o) 3 12))
+(check "展开渲染" (plain s1)
+       "▼ Errors    \ne1          \ne2          ")
 
 ;; ── 折叠 ──
 (define-values (s2 e2 c2)
-  (render-one (output #:lines lines #:folded '(e) #:key 'o) 3 8))
-(check "折叠渲染" (plain s2) "▶ Error \n        \n        ")
+  (render-one (output #:lines lines #:folded '(e) #:key 'o) 3 12))
+(check "折叠渲染" (plain s2)
+       "▶ Errors    \n            \n            ")
 
 ;; ── 点击折叠头 → toggle 消息 ──
 (define captured (box #f))
 (define w3 (output #:lines lines #:folded '()
                    #:on-toggle-fold (λ (id) (set-box! captured id) id)
                    #:key 'o))
-(define-values (s3 e3 c3) (render-one w3 3 8))
+(define-values (s3 e3 c3) (render-one w3 3 12))
 (define evt (hash-ref (widget-props w3) 'on-event))
 (check "点击头 → 消息"
        (evt w3 'mouse (list 'press 'left 0 0 '()) (element-rect e3) (widget-ctx w3 c3))
@@ -56,19 +58,19 @@
                 "o2"))))
 
 (define-values (s4 e4 c4)
-  (render-one (output #:lines nested #:folded '() #:key 'o) 5 8))
+  (render-one (output #:lines nested #:folded '() #:key 'o) 5 12))
 (check "嵌套展开" (plain s4)
-       "▼ Outer \no1      \n▼ Inner \ni1      \no2      ")
+       "▼ Outer     \no1          \n▼ Inner     \ni1          \no2          ")
 
 (define-values (s5 e5 c5)
-  (render-one (output #:lines nested #:folded '(inner) #:key 'o) 5 8))
+  (render-one (output #:lines nested #:folded '(inner) #:key 'o) 5 12))
 (check "嵌套只折 inner" (plain s5)
-       "▼ Outer \no1      \n▶ Inner \no2      \n        ")
+       "▼ Outer     \no1          \n▶ Inner     \no2          \n            ")
 
 (define-values (s6 e6 c6)
-  (render-one (output #:lines nested #:folded '(outer) #:key 'o) 5 8))
+  (render-one (output #:lines nested #:folded '(outer) #:key 'o) 5 12))
 (check "折 outer 隐藏全部 body" (plain s6)
-       "▶ Outer \n        \n        \n        \n        ")
+       "▶ Outer     \n            \n            \n            \n            ")
 
 ;; ── 汇总 ──
 (if (zero? (unbox failures))

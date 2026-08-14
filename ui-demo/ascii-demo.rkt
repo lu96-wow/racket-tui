@@ -1,9 +1,9 @@
 #lang racket
 
 ;; ASCII 调试快照 demo — 不进入 raw 模式，纯离线渲染 + 打印
-;; 运行: racket ui-rebuild-demo/ascii-demo.rkt
+;; 运行: racket ui-demo/ascii-demo.rkt
 
-(require "../ui-rebuild/main.rkt")
+(require "../ui/main.rkt")
 
 ;; ── 小工具：一个文本 leaf ──
 (define (fill! surf x y w h style)

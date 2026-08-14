@@ -1,9 +1,9 @@
 #lang racket
 
 ;; list / scrollbar 测试
-;; 运行: racket ui-rebuild-demo/list-test.rkt
+;; 运行: racket ui-demo/list-test.rkt
 
-(require "../ui-rebuild/main.rkt"
+(require "../ui/main.rkt"
          "../base/io/input.rkt")
 
 (define failures (box 0))

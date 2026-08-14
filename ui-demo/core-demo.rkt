@@ -3,7 +3,7 @@
 ;; 声明式 UI 核心验证 demo
 ;; 只用 core（leaf + 容器），不依赖任何组件。
 
-(require "../ui-rebuild/main.rkt"
+(require "../ui/main.rkt"
          "../base/io/input.rkt")
 
 ;; ── 应用状态 ──

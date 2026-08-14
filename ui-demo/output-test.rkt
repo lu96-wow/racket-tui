@@ -1,73 +1,95 @@
 #lang racket
 
+;; output 测试
+;; 运行: racket ui-demo/output-test.rkt
+
 (require "../ui/main.rkt"
-         "../base/io/output-color.rkt")
+         "../base/io/input.rkt")
 
-(style-define! 'panel-dim (color256-bg 234) (color256-fg 250))
-(style-define! 'panel-blue (color256-bg 17) (color256-fg 231))
-(style-define! 'input-style (color256-bg 236) (color256-fg 255))
-(style-define! 'error-style (color256-bg 88) (color256-fg 231) attr-bold)
-(style-define! 'ok-style (color256-bg 22) (color256-fg 231) attr-bold)
+(define failures (box 0))
+(define (check label got want)
+  (if (equal? got want)
+      (printf "PASS  ~a\n" label)
+      (begin
+        (set-box! failures (add1 (unbox failures)))
+        (printf "FAIL  ~a\n  got : ~v\n  want: ~v\n" label got want))))
 
-(define-values (out1 api1) (make-output #:max-lines 100 #:style 'panel-dim))
-(define-values (out2 api2) (make-output #:max-lines 100 #:style 'panel-blue))
+(define (render-one w rows cols)
+  (define e (resolve w 0 0 cols rows))
+  (define rctx (make-render-ctx #:local-table (make-hasheq)))
+  (define surf (make-surface rows cols))
+  (render-element! e surf rctx)
+  (values surf e rctx))
 
-(define inp (make-input #:style 'input-style
-                        #:nofocus-style 'panel-dim
-                        #:placeholder "type here..."
-                        #:on-submit (λ (txt) (for ([ch (in-string (format "→ ~a\n" txt))])
-                                               (append api1 (string ch))))))
+(define (plain s) (surface->ascii s #:mode 'plain))
 
-(define (type api str #:delay [d 0.04])
-  (for ([ch (in-string str)])
-    (append api (string ch))
-    (sleep d)))
+;; ── 自动滚动到末尾（10 行，视口高 3）──
+(define out1 (output #:lines (map number->string (range 10)) #:key 'o))
+(define-values (s1 e1 c1) (render-one out1 3 6))
+(check "output 自动滚动到底"
+       (plain s1)
+       "7    │\n8    │\n9    █")
 
-(define (type-styled api str style #:delay [d 0.04])
-  (for ([ch (in-string str)])
-    (append-styled api (string ch) style)
-    (sleep d)))
+;; ── 样式行 ──
+(define out2 (output #:lines (list "a" (cons "err" 'error) "c")
+                     #:style 'info #:auto-scroll? #f #:key 'o2))
+(define-values (s2 e2 c2) (render-one out2 3 6))
+(check "output 样式行"
+       (surface->ascii s2 #:mode 'grid #:space-char #\·)
+       (string-join
+        '("Legend (2 styles + default):"
+          "  . default"
+          "  A error"
+          "  B info"
+          "style: BBBBBB"
+          "text : a·····"
+          "style: AAABBB"
+          "text : err···"
+          "style: BBBBBB"
+          "text : c·····")
+        "\n"))
 
-(thread
-  (λ ()
-    (sleep 0.3)
-    (type api1 "Panel 1 (gray #234)\n")
-    (for ([i (in-range 1 12)])
-      (type api1 (format "  log ~a: ok\n" i)))
-    (sleep 0.3)
-    (type api2 "Panel 2 (blue #17)\n")
-    (for ([i (in-range 1 20)])
-      (type api2 (format "  event ~a: pending\n" i)))
-    (sleep 0.5)
-    (type api1 "─── done ───\n")
-    (type api2 "─── done ───\n")
+;; ── 滚动事件 ──
+(define oevt (hash-ref (widget-props out1) 'on-event))
+(define orect (element-rect e1))
+(define octx (widget-ctx out1 c1))
 
-    (sleep 0.3)
-    (type-styled api2 "[ERROR] connection refused\n" 'error-style)
-    (type-styled api2 "[OK]    retrying in 3s...\n" 'ok-style)
+(check "初始 scroll=7（已 auto-scroll）"
+       (car (hash-ref octx 'local)) 7)
 
-    (sleep 0.3)
-    (type-styled api2 "▼ Errors (click)" 'error-style)
-    (type api2 "\n")
-    (void (begin-fold api2))
-    (for ([i (in-range 1 6)])
-      (type-styled api2 (format "error ~a: something went wrong\n" i) 'panel-blue))
-    (end-fold api2)
-    (sleep 0.3)
-    (type-styled api2 "--- block closed ---\n" 'panel-blue)
+(oevt out1 'up #f orect octx)
+(check "up → scroll=6"
+       (car (hash-ref (widget-ctx out1 c1) 'local)) 6)
 
-    (sleep 0.3)
-    (type-styled api2 "▼ Warnings" 'ok-style)
-    (type api2 "\n")
-    (void (begin-fold api2))
-    (for ([i (in-range 1 4)])
-      (type-styled api2 (format "warning ~a: low memory\n" i) 'panel-blue))
-    (end-fold api2)
+(oevt out1 'home #f orect octx)
+(check "home → scroll=0"
+       (car (hash-ref (widget-ctx out1 c1) 'local)) 0)
 
-    (sleep 0.3)
-    (type api2 "all done.\n")))
+(oevt out1 'end #f orect octx)
+(check "end → scroll=7"
+       (car (hash-ref (widget-ctx out1 c1) 'local)) 7)
 
-(run-app-noblock
-  (out1 1 1 40 12)
-  (out2 43 1 36 12)
-  (inp 1 14 30 2))
+;; ── 滚动条拖拽 ──
+(check "press 滚动条 → dragging"
+       (oevt out1 'mouse (list 'press 'left 5 0 '()) orect octx)
+       #f)
+(check "press 后 dragging?"
+       (let ([l (hash-ref (widget-ctx out1 c1) 'local)]) (caddr l))
+       #t)
+(oevt out1 'mouse (list 'move 'left 5 0 '()) orect octx)
+(oevt out1 'mouse (list 'release 'left 5 0 '()) orect octx)
+(check "release 后 dragging? 清除"
+       (let ([l (hash-ref (widget-ctx out1 c1) 'local)]) (caddr l))
+       #f)
+
+;; ── 长行自动换行（width 6, cw 5）──
+(define-values (sw ew cw_)
+  (render-one (output #:lines (list "abcdefghij") #:auto-scroll? #f #:key 'w) 3 6))
+(check "长行换行" (plain sw) "abcde \nfghij \n      ")
+
+;; ── 汇总 ──
+(if (zero? (unbox failures))
+    (printf "\nALL TESTS PASSED\n")
+    (begin
+      (printf "\n~a TEST(S) FAILED\n" (unbox failures))
+      (exit 1)))

@@ -1,10 +1,10 @@
 #lang racket
 
 ;; text + button 组件交互 demo
-;; 运行: racket ui-rebuild-demo/button-demo.rkt
+;; 运行: racket ui-demo/button-demo.rkt
 ;; 按键: Enter/Space/点击 = 激活按钮; Tab/Shift-Tab = 切焦点; q = 退出
 
-(require "../ui-rebuild/main.rkt")
+(require "../ui/main.rkt")
 
 (struct model (count last) #:transparent)
 

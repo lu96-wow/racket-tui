@@ -5,7 +5,7 @@
 ;; UI 测试运行器 — 运行本目录下所有 *-test.rkt / *-tests.rkt
 ;;
 ;; 用法（任意目录下均可）:
-;;   racket ui-rebuild-demo/run-tests.rkt
+;;   racket ui-demo/run-tests.rkt
 ;;
 ;; 每个测试文件独立进程运行，互不影响；退出码非 0 计为失败。
 

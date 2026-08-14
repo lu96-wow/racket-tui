@@ -1,6 +1,6 @@
-# ui-rebuild API 文档
+# ui API 文档
 
-声明式 TUI 层。入口：`(require tui/ui-rebuild)`。
+声明式 TUI 层。入口：`(require tui/ui)`。
 
 数据流：
 
@@ -244,5 +244,5 @@ line 类型：
 ## 四、测试
 
 ```bash
-racket ui-rebuild-demo/run-tests.rkt   # 运行全部 8 个测试文件
+racket ui-demo/run-tests.rkt   # 运行全部 8 个测试文件
 ```

@@ -1,332 +1,122 @@
 #lang racket
 
-;; ═══════════════════════════════════════════════════════════════════════════
-;; Input 组件 — 两层架构
+;; input — 声明式单行文本输入框
 ;;
-;; Layer 1 (gap-buffer.rkt): 数据 + 编辑 + 查询 — 纯逻辑，零渲染依赖
-;; Layer 2 (本模块):         渲染 + 滚动 + 事件绑定 — 只读 buffer，写屏幕
+;; (input #:value "hello"                       ; 当前文本（来自 app state）
+;;        #:on-change (λ (t) (list 'input t))   ; 编辑时产生消息（新文本）
+;;        #:on-submit (λ (t) (list 'submit t))  ; Enter 时产生消息
+;;        #:style 'input-focus
+;;        #:nofocus-style 'input-normal
+;;        #:placeholder "..."
+;;        #:key #f)
 ;;
-;; 核心原则:
-;;   1. 编辑操作只改 buffer, 设置 dirty 标记, 绝不碰滚动/渲染
-;;   2. 渲染只读 buffer, 计算滚动确保光标始终可见, 写屏幕
-;;   3. 滚动偏移由渲染统一计算, 编辑后自动修正
-;;   4. 水平滚动"惰性": 只有光标贴边时才移
-;;
-;; ═══════════════════════════════════════════════════════════════════════════
-;; 渲染边界情况:
-;;
-;;  R01. 空缓冲区 + 聚焦 → 显示光标在 (x, y)
-;;  R02. 空缓冲区 + 无焦点 → 显示 placeholder
-;;  R03. 光标在换行符上 → 显示高亮空格
-;;  R04. 光标在行尾 (total-len) → 显示高亮空格
-;;  R05. 行长 > 视口宽 → 水平滚动, 光标贴边触发
-;;  R06. 行数 > 视口高 → 垂直滚动, 光标出界触发
-;;  R07. 输入换行符 (多行模式) → 光标下移, 必要时滚动
-;;  R08. CJK 宽字符在视口边缘 → 正确裁剪, 不显示半字符
-;;  R09. 视口尺寸变化 → 重新计算滚动
-;;  R10. 光标始终在视口内 → 渲染保证 scroll-y ≤ cursor-line < scroll-y + h
-;;     且 scroll-x ≤ cursor-col < scroll-x + w (cursor-width 预留)
-;;
-;; ═══════════════════════════════════════════════════════════════════════════
+;; 文本在 app state（单一数据源）；光标位置是 keyed local state（需 #:key）。
+;; 编辑用纯字符串操作计算新文本，不持有可变 buffer。
 
-(require "../component.rkt"
-         "../gap-buffer.rkt"
-         "../../base/io/build-input.rkt"
-         "../../base/io/output-styles.rkt"
-         "../../base/io/output-color.rkt"
-         "../../base/io/output.rkt")
+(require "../widget.rkt"
+         "../surface.rkt"
+         "../../base/io/input.rkt")
 
-(provide make-input)
+(provide input)
 
-(define (make-input #:placeholder [placeholder ""]
-                    #:on-submit [on-submit void]
-                    #:on-change [on-change void]
-                    #:initial-text [initial-text ""]
-                    #:style [style 'input-focus]
-                    #:nofocus-style [nofocus-style 'input-normal]
-                    #:show? [show? (box #t)])
+(define (input #:value      [value ""]
+               #:on-change  [on-change (λ (t) #f)]
+               #:on-submit  [on-submit (λ (t) #f)]
+               #:style      [style 'input-focus]
+               #:nofocus-style [nofocus-style 'input-normal]
+               #:placeholder [placeholder ""]
+               #:key        [key #f])
+  (leaf #:key key
+        #:local (λ () (string-length value))
+        #:focusable? #t
+        #:render
+        (λ (w rect ctx surf)
+          (render-input value
+                        (cursor-value ctx value)
+                        (focused? ctx w)
+                        style nofocus-style placeholder rect surf))
+        #:on-event
+        (λ (w type data rect ctx)
+          (define cur (cursor-value ctx value))
+          (cond
+            [(eq? type 'enter) (on-submit value)]
+            [(eq? type 'backspace) (edit-backspace value cur ctx on-change)]
+            [(eq? type 'delete)    (edit-delete value cur ctx on-change)]
+            [(eq? type 'left)  (move! ctx (max 0 (sub1 cur))) #f]
+            [(eq? type 'right) (move! ctx (min (string-length value) (add1 cur))) #f]
+            [(eq? type 'home)  (move! ctx 0) #f]
+            [(eq? type 'end)   (move! ctx (string-length value)) #f]
+            [(eq? type 'space) (insert! value cur " " ctx on-change)]
+            [(char? type)      (insert! value cur (string type) ctx on-change)]
+            [(eq? type 'mouse)
+             (and (mouse-press? data)
+                  (mouse-set-cursor value rect (mouse-x data) ctx))]
+            [else #f]))))
 
-  (define show-box (ensure-show-box show?))
+;; ── 编辑（纯字符串操作 + 更新光标 local state）──
 
-  ;; ═══════════════════════════════════════════════════════
-  ;; 状态 (Layer 1: buffer / Layer 2: 渲染上下文)
-  ;; ═══════════════════════════════════════════════════════
+(define (cursor-value ctx value)
+  (min (hash-ref ctx 'local 0) (string-length value)))
 
-  ;; ── Layer 1: 纯数据 ──
-  (define buf (box (make-gap-buffer initial-text)))
-  (define dirty (box #t))
+(define (move! ctx new-cur)
+  ((hash-ref ctx 'set-local!) new-cur))
 
-  ;; ── Layer 2: 渲染上下文 (由 render 读写, 编辑操作不碰) ──
-  (define scroll-y (box 0))
-  (define scroll-x (box 0))
-  (define vp-x (box 0)) (define vp-y (box 0))
-  (define vp-w (box 0)) (define vp-h (box 0))
+(define (insert! value cur s ctx on-change)
+  (define new-text
+    (string-append (substring value 0 cur) s (substring value cur)))
+  ((hash-ref ctx 'set-local!) (+ cur (string-length s)))
+  (on-change new-text))
 
-  ;; ═══════════════════════════════════════════════════════
-  ;; Layer 1: 编辑操作 — 只改 buffer, 设置 dirty
-  ;; ═══════════════════════════════════════════════════════
+(define (edit-backspace value cur ctx on-change)
+  (when (> cur 0)
+    (define new-text
+      (string-append (substring value 0 (sub1 cur)) (substring value cur)))
+    ((hash-ref ctx 'set-local!) (sub1 cur))
+    (on-change new-text)))
 
-  (define (edit! thunk)
-    (thunk)
-    (set-box! dirty #t)
-    (on-change (buffer-text (unbox buf))))
+(define (edit-delete value cur ctx on-change)
+  (when (< cur (string-length value))
+    (define new-text
+      (string-append (substring value 0 cur) (substring value (add1 cur))))
+    ((hash-ref ctx 'set-local!) cur)
+    (on-change new-text)))
 
-  (define (do-insert str)
-    (define norm (regexp-replace* #rx"\r\n|\r" str "\n"))
-    (unless (equal? norm "")
-      (edit! (λ () (buffer-insert! (unbox buf) norm)))))
+(define (mouse-set-cursor value rect mx ctx)
+  (match-let ([(list x y w h) rect])
+    (define cur (cursor-value ctx value))
+    (define scroll (if (< cur w) 0 (- cur (sub1 w))))
+    (define new-cur (min (string-length value) (+ scroll (- mx x))))
+    ((hash-ref ctx 'set-local!) new-cur)
+    #f))
 
-  (define (do-backspace)
-    (when (> (buffer-cursor-pos (unbox buf)) 0)
-      (edit! (λ () (buffer-backspace! (unbox buf))))))
+(define (focused? ctx w)
+  (equal? (hash-ref ctx 'focus-key #f) (widget-key w)))
 
-  (define (do-delete)
-    (define b (unbox buf))
-    (when (< (buffer-cursor-pos b) (buffer-total-len b))
-      (edit! (λ () (buffer-delete! b)))))
+;; ── 渲染 ──
 
-  (define (do-move-left)
-    (define b (unbox buf))
-    (when (> (buffer-cursor-pos b) 0)
-      (buffer-move-left b)
-      (set-box! dirty #t)))
+(define (render-input value cursor focused? style nofocus-style placeholder rect surf)
+  (match-let ([(list x y w h) rect])
+    (when (and (> w 0) (> h 0))
+      (define st (if focused? style nofocus-style))
+      (for ([r (in-range h)])
+        (surface-put-string! surf (+ y r) x (make-string w #\space) st))
 
-  (define (do-move-right)
-    (define b (unbox buf))
-    (when (< (buffer-cursor-pos b) (buffer-total-len b))
-      (buffer-move-right b)
-      (set-box! dirty #t)))
+      (define len (string-length value))
+      (define cur (min cursor len))
+      ;; 水平滚动：保证光标可见
+      (define scroll (if (< cur w) 0 (- cur (sub1 w))))
+      (define visible (substring value scroll (min len (+ scroll w))))
+      (define display
+        (cond
+          [(and (zero? len) (positive? (string-length placeholder)) (not focused?))
+           (let ([p placeholder])
+             (if (> (string-length p) w) (substring p 0 w) p))]
+          [else visible]))
 
-  (define (do-move-up)
-    (define b (unbox buf))
-    (when (> (buffer-cursor-line b) 0)
-      (buffer-move-up b)
-      (set-box! dirty #t)))
+      (surface-put-string! surf y x display st)
 
-  (define (do-move-down)
-    (define b (unbox buf))
-    (when (< (add1 (buffer-cursor-line b)) (buffer-line-count b))
-      (buffer-move-down b)
-      (set-box! dirty #t)))
-
-  (define (do-move-home)
-    (define b (unbox buf))
-    (define ls (buffer-line-start b (buffer-cursor-line b)))
-    (unless (= (buffer-cursor-pos b) ls)
-      (buffer-move-home b)
-      (set-box! dirty #t)))
-
-  (define (do-move-end)
-    (define b (unbox buf))
-    (buffer-move-end b)
-    (set-box! dirty #t))
-
-  ;; ── 鼠标 → 光标 ──
-  (define (mouse->cursor mx my)
-    (define b (unbox buf))
-    (define sy (unbox scroll-y))
-    (define sx (unbox scroll-x))
-    (define li (+ sy (- my (unbox vp-y))))
-    (define n (buffer-line-count b))
-    (define tl (buffer-total-len b))
-
-    (define pos
-      (cond
-        [(< li 0) 0]
-        [(>= li n) tl]
-        [else
-         (define lstart (buffer-line-start b li))
-         (define lend (buffer-line-end b li))
-         ;; 鼠标相对视口的 display-width 列
-         (define rx (- mx (unbox vp-x)))
-         ;; 将 display-width 列 + 当前水平滚动 → 目标 display-width 列
-         (define target-col (+ sx rx))
-         ;; 在当前行找最接近的位置
-         (let loop ([p lstart] [col 0])
-           (cond
-             [(>= p lend) p]
-             [(>= col target-col) p]
-             [else (loop (add1 p) (+ col (buffer-char-display-width-at b p)))]))]))
-
-    (when (not (= pos (buffer-cursor-pos b)))
-      (buffer-move-to b pos)
-      (set-box! dirty #t)))
-
-  ;; ═══════════════════════════════════════════════════════
-  ;; Layer 2: 滚动计算 — 确保光标始终在视口内
-  ;; ═══════════════════════════════════════════════════════
-
-  (define (compute-scroll! b focused? w h)
-    (define tl (buffer-total-len b))
-    (define li (buffer-cursor-line b))
-    (define n (buffer-line-count b))
-    (define lstart (buffer-line-start b li))
-    (define lend (buffer-line-end b li))
-
-    ;; ── 垂直滚动 ──
-    ;; 保证: scroll-y ≤ li < scroll-y + h
-    (define old-sy (unbox scroll-y))
-    (define max-sy (max 0 (- n h)))
-    (define new-sy
-      (cond
-        [(< li old-sy) li] ; 光标在视口上方
-        [(>= li (+ old-sy h)) (add1 (- li h))] ; 光标在视口下方
-        [(> old-sy max-sy) max-sy] ; 缓冲区缩小后 clamp
-        [else old-sy]))
-    (unless (= new-sy old-sy)
-      (set-box! scroll-y new-sy))
-
-    ;; ── 水平滚动 (仅光标所在行) ──
-    ;; 保证: scroll-x ≤ cursor-col < scroll-x + w, 且光标有 1 格余量
-    (define old-sx (unbox scroll-x))
-    (define new-sx
-      (cond
-        [(zero? tl) 0] ;; 空缓冲区
-
-        ;; 计算当前行的总 display-width
-        [else
-         (define line-width
-           (let loop ([p lstart] [lw 0])
-             (if (>= p lend) lw
-                 (loop (add1 p) (+ lw (buffer-char-display-width-at b p))))))
-
-         ;; 光标 display-width 列及宽度
-         (define cur-col (buffer-cursor-display-col b))
-         (define cur-w
-           (if (and (< (buffer-cursor-pos b) tl)
-                    (not (char=? (buffer-char-at b (buffer-cursor-pos b)) #\newline)))
-               (buffer-char-display-width-at b (buffer-cursor-pos b))
-               1)) ;; 换行符或末尾 → 宽度为 1 的空格
-
-         (define cur-end (+ cur-col cur-w))
-
-         (cond
-           ;; 行宽小于视口 → 不滚动
-           [(<= line-width w) 0]
-
-           ;; 光标左侧贴边 → 滚动到光标左侧
-           [(< cur-col old-sx)
-            (max 0 cur-col)]
-
-           ;; 光标右侧贴边 → 滚动使光标完整可见 (预留 1 格)
-           [(> cur-end (+ old-sx w -1))
-            (max 0 (min cur-col (- cur-end w)))]
-
-           ;; 无贴边 → 保持; 但若光标实际已超出旧 sx (缓冲区扩大后) → clamp
-           [(> old-sx cur-col)
-            (max 0 cur-col)]
-
-           [else old-sx])]))
-
-    (unless (= new-sx old-sx)
-      (set-box! scroll-x new-sx)))
-
-  ;; ═══════════════════════════════════════════════════════
-  ;; Layer 2: 渲染 — 只读 buffer, 写屏幕
-  ;; ═══════════════════════════════════════════════════════
-
-  (define (render focused? x y w h)
-    ;; 保存视口参数
-    (set-box! vp-x x) (set-box! vp-y y)
-    (set-box! vp-w w) (set-box! vp-h h)
-
-    (define b (unbox buf))
-    (define tl (buffer-total-len b))
-    (define n (buffer-line-count b))
-    (define cur-li (buffer-cursor-line b))
-    (define cur-pos (buffer-cursor-pos b))
-
-    ;; ── 1. 计算滚动 (确保光标可见) ──
-    (compute-scroll! b focused? w h)
-    (define sy (unbox scroll-y))
-    (define sx (unbox scroll-x))
-
-    ;; ── 2. 渲染: format-* 一次性构建 bytes ──
-    (define (emit row col name val)
-      (write-bytes (format-styled-at! row col name val)))
-
-    (cond
-      [(and (zero? tl) (not focused?)
-            (positive? (string-length placeholder)))
-       (for ([sr (in-range h)])
-         (emit (+ y sr) x nofocus-style (make-string w #\space)))
-       (define disp (if (> (string-length placeholder) w)
-                        (substring placeholder 0 w) placeholder))
-       (emit y x nofocus-style disp)]
-
-      [(zero? tl)
-       (for ([sr (in-range h)])
-         (emit (+ y sr) x nofocus-style (make-string w #\space)))
-       (when focused?
-         (emit y x 'cursor " "))]
-
-      [else
-       (for ([sr (in-range h)])
-         (emit (+ y sr) x nofocus-style (make-string w #\space)))
-
-       (for ([sr (in-range h)])
-         (define li (+ sy sr))
-         (when (< li n)
-           (define line-start (buffer-line-start b li))
-           (define line-end   (buffer-line-end b li))
-           (define is-cur-line (= li cur-li))
-
-           (define line-str
-             (call-with-output-string
-              (λ (out)
-                (let loop ([p line-start] [col 0])
-                  (when (< p line-end)
-                    (define cw (buffer-char-display-width-at b p))
-                    (define cr (+ col cw))
-                    (cond
-                      [(<= cr sx) (loop (add1 p) cr)]
-                      [(>= col (+ sx w)) (void)]
-                      [else
-                       (define display-ch
-                         (if (char=? (buffer-char-at b p) #\newline)
-                             #\space
-                             (buffer-char-at b p)))
-                       (write-char display-ch out)
-                       (loop (add1 p) cr)]))))))
-
-           (define line-style (if focused? style nofocus-style))
-           (emit (+ y sr) x line-style line-str)
-
-           (when (and focused? is-cur-line)
-             (define cur-col-x (buffer-cursor-display-col b))
-             (define sx-cur (- cur-col-x sx))
-             (when (and (>= sx-cur 0) (< sx-cur w))
-               (define cch
-                 (if (and (< cur-pos tl)
-                          (not (char=? (buffer-char-at b cur-pos) #\newline)))
-                     (string (buffer-char-at b cur-pos))
-                     " "))
-               (emit (+ y sr) (+ x sx-cur) 'cursor cch)))))]))
-
-  ;; ═══════════════════════════════════════════════════════
-  ;; 事件绑定
-  ;; ═══════════════════════════════════════════════════════
-
-  (define handler
-    (build-input
-     #:char       (λ (ch) (when (<= 32 ch 126) (do-insert (string (integer->char ch)))))
-     #:utf-char   do-insert
-     #:backspace  do-backspace
-     #:delete     do-delete
-     #:left       do-move-left
-     #:right      do-move-right
-     #:up         do-move-up
-     #:down       do-move-down
-     #:home       do-move-home
-     #:end        do-move-end
-     #:enter      (λ () (on-submit (buffer-text (unbox buf))))
-     #:escape     (λ () (do-insert "\n"))
-     #:paste      (λ (data) (do-insert (bytes->string/utf-8 data)))
-     #:mouse-press (λ (btn mx my mods) (when (eq? btn 'left) (mouse->cursor mx my)))
-     #:mouse-move  (λ (mx my mods) (mouse->cursor mx my))))
-
-  ;; ═══════════════════════════════════════════════════════
-  ;; 组件封装
-  ;; ═══════════════════════════════════════════════════════
-
-  (component render handler #t show-box 0 1 dirty #f))
+      ;; 光标（高亮光标处字符；末尾则高亮空格）
+      (when (and focused? (>= (- cur scroll) 0) (< (- cur scroll) w))
+        (define ccol (+ x (- cur scroll)))
+        (define cch (if (< cur len) (string-ref value cur) #\space))
+        (surface-put! surf y ccol cch 'cursor)))))

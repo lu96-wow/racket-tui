@@ -1,56 +1,36 @@
 #lang racket
-;; scrollbar 子组件 — 通用滚动条，不持有滚动状态，只持拖拽状态
 
-(require "../../base/io/output-styles.rkt"
-         "../../base/io/output-color.rkt"
-         "../../base/io/output.rkt")
+;; scrollbar — 滚动条渲染 + 拖拽换算（纯函数，不持有状态）
+;;
+;; 滚动位置由使用方（如 list/output）的 keyed local state 保存。
+;; 这里只提供渲染和"鼠标 y → scroll"的换算。
 
-(provide make-scrollbar
-         scrollbar-render scrollbar-press scrollbar-move scrollbar-release
-         scrollbar?)
+(require "../surface.rkt")
 
-(struct scrollbar (render press move release dragging?)
-  #:mutable #:transparent)
+(provide scrollbar-render
+         scrollbar-scroll-from-y
+         scrollbar-metrics)
 
-(define (make-scrollbar #:track-style [track-style 'scroll-track]
-                        #:thumb-style [thumb-style 'scroll-thumb]
-                        #:width [w 1])
-  (define dragging? (box #f))
+;; 返回 (thumb-h track-range range) 三个中间量
+(define (scrollbar-metrics h total)
+  (define thumb-h (max 1 (quotient (* h h) total)))
+  (define range (max 1 (- total h)))
+  (define track-range (max 1 (- h thumb-h)))
+  (values thumb-h track-range range))
 
-  (define bar-w (max 1 w))  ; scrollbar pixel width
+;; 在 (x,y) 处画宽 w 高 h 的滚动条
+(define (scrollbar-render surf x y w h total scroll)
+  (when (and (> w 0) (> h 0) (> total h))
+    (define-values (thumb-h track-range range) (scrollbar-metrics h total))
+    (define thumb-y (quotient (* (min scroll range) track-range) range))
+    (for ([r (in-range h)])
+      (define in-thumb? (<= thumb-y r (+ thumb-y thumb-h -1)))
+      (surface-put-string! surf (+ y r) x
+        (make-string w (if in-thumb? #\█ #\│))
+        (if in-thumb? 'scroll-thumb 'scroll-track)))))
 
-  (define (render x y h total sy)
-    (define thumb-h (max 1 (quotient (* h h) total)))
-    (define thumb-y (quotient (* sy (- h thumb-h)) (max 1 (- total h))))
-    (define track-str (make-string bar-w #\│))
-    (define thumb-str (make-string bar-w #\█))
-    (for ([row (in-range h)])
-      (define in-thumb? (<= thumb-y row (+ thumb-y thumb-h -1)))
-      (write-bytes (format-styled-at (+ y row) x
-                     (if in-thumb? thumb-style track-style)
-                     (if in-thumb? thumb-str track-str)))))
-
-  ;; 鼠标 y 坐标 → scroll 值（用浮点避免整数累积误差）
-  (define (my->scroll my y h total)
-    (define thumb-h (max 1 (quotient (* h h) total)))
-    (define range-px (max 1 (- h thumb-h)))
-    (define range (max 1 (- total h)))
-    (define rel (- my y))
-    (max 0 (min (inexact->exact (round (/ (* rel range) range-px 1.0))) range)))
-
-  (define (press my y h total sy)
-    (if (and (> total h) (<= y my (+ y h -1)))
-        (begin
-          (set-box! dragging? #t)
-          (values (my->scroll my y h total) #t))
-        (values sy #f)))
-
-  (define (move my y h total sy)
-    (if (and (unbox dragging?) (> total h))
-        (values (my->scroll my y h total) #t)
-        (values sy #f)))
-
-  (define (release)
-    (set-box! dragging? #f))
-
-  (scrollbar render press move release dragging?))
+;; 鼠标 y 坐标 → scroll 值
+(define (scrollbar-scroll-from-y my y h total)
+  (define-values (thumb-h track-range range) (scrollbar-metrics h total))
+  (define rel (- my y))
+  (max 0 (min (inexact->exact (round (/ (* rel range) track-range 1.0))) range)))

@@ -1,7 +1,7 @@
 #lang racket
 
 ;; 全组件手动测试 demo
-;; 运行: racket ui-rebuild-demo/all-components-demo.rkt
+;; 运行: racket ui-demo/all-components-demo.rkt
 ;;
 ;; 包含: text / list-box / output(折叠) / input / text-area / bool-button / button
 ;; 交互:
@@ -13,7 +13,7 @@
 ;;   Submit/Clear 按钮、Enabled 开关
 ;;   q 退出
 
-(require "../ui-rebuild/main.rkt")
+(require "../ui/main.rkt")
 
 (struct model (items selected log folded name notes enabled? last-action)
   #:transparent)

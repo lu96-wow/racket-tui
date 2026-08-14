@@ -1,9 +1,9 @@
 #lang racket
 
 ;; 核心单元测试 — 不依赖终端，用 surface->ascii / 布局 / 局部状态断言
-;; 运行: racket ui-rebuild-demo/core-tests.rkt
+;; 运行: racket ui-demo/core-tests.rkt
 
-(require "../ui-rebuild/main.rkt")
+(require "../ui/main.rkt")
 
 (define failures (box 0))
 

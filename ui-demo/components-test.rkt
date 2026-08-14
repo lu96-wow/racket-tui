@@ -1,9 +1,9 @@
 #lang racket
 
 ;; text / button 组件测试 — 离线断言
-;; 运行: racket ui-rebuild-demo/components-test.rkt
+;; 运行: racket ui-demo/components-test.rkt
 
-(require "../ui-rebuild/main.rkt"
+(require "../ui/main.rkt"
          "../base/io/input.rkt")
 
 (define failures (box 0))

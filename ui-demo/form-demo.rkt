@@ -1,10 +1,10 @@
 #lang racket
 
 ;; input + bool-button + button 组合 demo
-;; 运行: racket ui-rebuild-demo/form-demo.rkt
+;; 运行: racket ui-demo/form-demo.rkt
 ;; 在输入框打字（初始聚焦）、Enter 提交、Tab 切到开关/按钮、q 退出
 
-(require "../ui-rebuild/main.rkt")
+(require "../ui/main.rkt")
 
 (struct model (name toggle log) #:transparent)
 

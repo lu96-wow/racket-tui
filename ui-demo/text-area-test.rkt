@@ -1,9 +1,9 @@
 #lang racket
 
 ;; text-area（多行输入）测试
-;; 运行: racket ui-rebuild-demo/text-area-test.rkt
+;; 运行: racket ui-demo/text-area-test.rkt
 
-(require "../ui-rebuild/main.rkt"
+(require "../ui/main.rkt"
          "../base/io/input.rkt")
 
 (define failures (box 0))

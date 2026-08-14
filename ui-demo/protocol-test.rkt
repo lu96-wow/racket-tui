@@ -1,9 +1,9 @@
 #lang racket
 
 ;; widget 协议测试 — 用 input / output 验证 leaf 协议
-;; 运行: racket ui-rebuild-demo/protocol-test.rkt
+;; 运行: racket ui-demo/protocol-test.rkt
 
-(require "../ui-rebuild/main.rkt"
+(require "../ui/main.rkt"
          "../base/io/input.rkt")
 
 (define failures (box 0))

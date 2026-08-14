@@ -1,215 +1,196 @@
 #lang racket
 
-(require "../component.rkt"
-         "../output-buffer.rkt"
+;; output — 声明式可滚动日志面板（支持折叠块 + 长行自动换行）
+;;
+;; (output #:lines (list "log1"
+;;                       (fold-block 'errors (cons "Errors" 'error) (list "e1" "e2"))
+;;                       "a very long line ...")
+;;         #:folded '()
+;;         #:on-toggle-fold (λ (id) msg)
+;;         #:style 'info
+;;         #:auto-scroll? #t
+;;         #:scrollbar-width 1
+;;         #:key #f)
+;;
+;; - 内容在 app state；折叠状态也是 app state
+;; - 滚动偏移是 keyed local state（需 #:key）
+;; - 长行按内容宽度自动换行（1 字符 = 1 格）
+;; - 折叠头换行后只有第一行可点击
+
+(require "../widget.rkt"
+         "../surface.rkt"
          "./scrollbar.rkt"
-         "../../base/io/build-input.rkt"
-         "../../base/io/output-color.rkt"
-         "../../base/io/output-styles.rkt"
-         "../../base/io/output.rkt")
+         "../../base/io/input.rkt")
 
-(provide make-output
-         output-api output-api?
-         ;; 函数式 API: (append api "str") (append-styled api "str" 'style) ...
-         append append-styled clear scroll-end
-         fold begin-fold end-fold toggle-fold
-         output-model-put-string! output-model-put-char!
-         output-model-put-styled-string! output-model-put-styled-char!
-         output-model-put-string-in-block! output-model-put-styled-string-in-block!
-         output-model-clear! output-model-toggle-fold!)
+(provide output
+         fold-block fold-block? fold-block-id fold-block-header fold-block-body)
 
-(struct output-api (append! append-styled! clear! scroll-end!
-                    fold! begin-fold! end-fold! toggle-fold!) #:transparent)
+(struct fold-block (id header body) #:transparent)
 
-(define (append api . args)         (apply (output-api-append! api) args))
-(define (append-styled api . args)  (apply (output-api-append-styled! api) args))
-(define (clear api)                 ((output-api-clear! api)))
-(define (scroll-end api)           ((output-api-scroll-end! api)))
-(define (fold api . args)           (apply (output-api-fold! api) args))
-(define (begin-fold api)           ((output-api-begin-fold! api)))
-(define (end-fold api)             ((output-api-end-fold! api)))
-(define (toggle-fold api . args)    (apply (output-api-toggle-fold! api) args))
+(define (output #:lines [lines '()]
+                #:folded [folded '()]
+                #:on-toggle-fold [on-toggle-fold (λ (id) #f)]
+                #:style [style 'info]
+                #:auto-scroll? [auto? #t]
+                #:scrollbar-width [bar-w 1]
+                #:key [key #f])
+  (leaf #:key key
+        #:local (λ () (list 0 0 #f))   ; (scroll last-total dragging?)
+        #:focusable? #t
+        #:render
+        (λ (w rect ctx surf)
+          (render-output lines folded style auto? bar-w rect ctx surf))
+        #:on-event
+        (λ (w type data rect ctx)
+          (output-event lines folded on-toggle-fold bar-w rect ctx type data))))
 
-(define (make-output #:max-lines   [max-lines #f]
-                     #:style       [style 'info]
-                     #:show?       [show? (box #t)]
-                     #:auto-scroll? [auto? #t]
-                     #:bar-width   [bar-width 1])
+;; ── 逻辑行（折叠展开后，未换行）──
+(struct vrow (text style block-id header?) #:transparent)
 
-  (define show-box (ensure-show-box show?))
-  (define model   (make-output-model #:max-lines max-lines))
-  (define dirty   (box #t))
-  (define scroll  (box 0))
-  (define auto    (box auto?))
-  (define vp-w (box 80)) (define vp-h (box 24))
-  (define vp-x (box 1))  (define vp-y (box 1))
-  (define last-total (box 0))
-  (define active-block-id (box #f))
-  (define block-stack (box '()))       ;; 嵌套折叠栈
+;; ── 显示行（换行后）──
+;; block-id 非 #f 表示这一显示行是折叠头（可点击）
+(struct drow (text style block-id) #:transparent)
 
-  (define (content-width) (max 1 (- (unbox vp-w) bar-width)))
-  (define sb (make-scrollbar #:width bar-width))
+(define (line->text-style l)
+  (cond
+    [(string? l) (cons l #f)]
+    [(and (pair? l) (string? (car l))) (cons (car l) (cdr l))]
+    [else (cons (~a l) #f)]))
 
-  (define (active-bid) (and (pair? (unbox block-stack)) (car (unbox block-stack))))
+(define (flatten-lines lines folded)
+  (apply append (map (λ (l) (flatten-line l folded)) lines)))
 
-  ;; ── 基础 ──
+(define (flatten-line l folded)
+  (cond
+    [(fold-block? l)
+     (define id (fold-block-id l))
+     (define folded? (member id folded))
+     (define hdr (line->text-style (fold-block-header l)))
+     (define title (if folded?
+                       (string-append "▶ " (car hdr))
+                       (string-append "▼ " (car hdr))))
+     (cons (vrow title (cdr hdr) id #t)
+           (if folded? '() (flatten-lines (fold-block-body l) folded)))]
+    [else
+     (define ts (line->text-style l))
+     (list (vrow (car ts) (cdr ts) #f #f))]))
 
-  (define (append! str)
-    (define bid (active-bid))
-    (if bid
-        (output-model-put-string-in-block! model str style bid)
-        (output-model-put-string! model str))
-    (set-box! dirty #t))
+;; 按字符换行（1 字符 = 1 格）
+(define (wrap-line text cw)
+  (define len (string-length text))
+  (cond
+    [(zero? len) (list "")]
+    [else
+     (let loop ([pos 0] [acc '()])
+       (cond
+         [(>= pos len) (reverse acc)]
+         [else
+          (define end (min (+ pos cw) len))
+          (loop end (cons (substring text pos end) acc))]))]))
 
-  (define (append-styled! str st)
-    (define bid (active-bid))
-    (if bid
-        (output-model-put-styled-string-in-block! model str st bid)
-        (output-model-put-styled-string! model str st))
-    (set-box! dirty #t))
+(define (display-rows lines folded cw)
+  (apply append
+         (map (λ (r) (wrap-vrow r cw))
+              (flatten-lines lines folded))))
 
-  (define (clear!)
-    (output-model-clear! model) (set-box! scroll 0)
-    (set-box! block-stack '())
-    (set-box! active-block-id #f)
-    (set-box! last-total 0) (set-box! dirty #t))
+(define (wrap-vrow r cw)
+  (define chunks (wrap-line (vrow-text r) cw))
+  (for/list ([ch (in-list chunks)] [i (in-naturals)])
+    (drow ch (vrow-style r) (and (= i 0) (vrow-block-id r)))))
 
-  (define (scroll-end!)
-    (set-box! auto #t) (set-box! scroll 0) (set-box! dirty #t))
+;; ── 局部状态 ──
 
-  ;; ── 折叠 ──
+(define (out-scroll ctx)     (let ([l (hash-ref ctx 'local #f)]) (if (pair? l) (car l) 0)))
+(define (out-last-total ctx) (let ([l (hash-ref ctx 'local #f)]) (if (and (pair? l) (pair? (cdr l))) (cadr l) 0)))
+(define (out-dragging? ctx)  (let ([l (hash-ref ctx 'local #f)]) (and (pair? l) (pair? (cdr l)) (pair? (cddr l)) (caddr l))))
 
-  (define (begin-fold!)
-    (define parent (active-bid))
-    (define bid (output-model-begin-block! model parent))
-    (set-box! block-stack (cons bid (unbox block-stack)))
-    (set-box! dirty #t) bid)
+(define (out-set! ctx scroll last-total dragging?)
+  ((hash-ref ctx 'set-local!) (list scroll last-total dragging?)))
 
-  (define (end-fold!)
-    (when (pair? (unbox block-stack))
-      (define bid (car (unbox block-stack)))
-      (set-box! block-stack (cdr (unbox block-stack)))
-      (output-model-end-block! model bid))
-    (set-box! dirty #t))
+(define (clamp v lo hi) (max lo (min v hi)))
 
-  (define (toggle-fold! bid)
-    (output-model-toggle-block! model bid)
-    (let ([cw (content-width)] [h (unbox vp-h)])
-      (when (and (> cw 0) (> h 0))
-        (let ([total (vector-ref (compute-prefix-sum model cw)
-                                 (output-model-count model))])
-          (set-box! scroll (max 0 (min (unbox scroll) (max 0 (- total h))))))))
-    (set-box! dirty #t))
+;; ── 渲染 ──
 
-  (define (fold! idx)
-    (output-model-toggle-fold! model idx) (set-box! dirty #t))
-
-  ;; ── 渲染 ──
-
-  (define (render focused? x y w h)
-    (set-box! vp-w w) (set-box! vp-h h)
-    (set-box! vp-x x) (set-box! vp-y y)
+(define (render-output lines folded style auto? bar-w rect ctx surf)
+  (match-let ([(list x y w h) rect])
     (when (and (> w 0) (> h 0))
-      (define cw (content-width))
-      (define bar-col (+ x cw))
-      (define p (compute-prefix-sum model cw))
-      (define total (vector-ref p (output-model-count model)))
-      (when (and (unbox auto) (not (= total (unbox last-total))))
-        (set-box! scroll (max 0 (- total h))))
-      (set-box! last-total total)
-      (define sy (max 0 (min (unbox scroll) (max 0 (- total h)))))
-      (define-values (slots _li) (extract-visible-slots model p sy h))
-      (for ([row (in-range h)])
-        (define txt (if (< row (length slots)) (list-ref slots row) ""))
-        (define pad (- cw (string-display-width txt)))
-        (define line (if (> pad 0) (string-append txt (make-string pad #\space)) txt))
-        (define s (slot-style model p sy row style))
-        (write-bytes (format-styled-at (+ y row) x s line)))
+      (define cw (max 1 (- w bar-w)))
+      (define rows (display-rows lines folded cw))
+      (define total (length rows))
+      (define last-total (out-last-total ctx))
+      (define scroll (out-scroll ctx))
+      (define sy
+        (if (and auto? (not (= total last-total)))
+            (max 0 (- total h))
+            (clamp scroll 0 (max 0 (- total h)))))
+
+      (for ([r (in-range h)])
+        (surface-put-string! surf (+ y r) x (make-string w #\space) style))
+
+      (for ([r (in-range h)])
+        (define i (+ sy r))
+        (when (< i total)
+          (define row (list-ref rows i))
+          (surface-put-string! surf (+ y r) x
+            (drow-text row) (or (drow-style row) style))))
+
+      (out-set! ctx sy total (out-dragging? ctx))
+
       (when (> total h)
-        ((scrollbar-render sb) bar-col y h total sy))))
+        (scrollbar-render surf (+ x cw) y bar-w h total sy)))))
 
-  (define (slot-style model prefix sy row style)
-    (let* ([ls (output-model-lines model)]
-           [n (output-model-count model)]
-           [li (prefix-find prefix (+ sy row))])
-      (if (and (< li n) (>= li 0))
-          (or (output-line-style (vector-ref ls li)) style)
-          style)))
+;; ── 事件 ──
 
-  ;; ── 滚动 ──
+(define (output-event lines folded on-toggle-fold bar-w rect ctx type data)
+  (match-let ([(list x y w h) rect])
+    (define cw (max 1 (- w bar-w)))
+    (define rows (display-rows lines folded cw))
+    (define total (length rows))
+    (define max-scroll (max 0 (- total h)))
+    (define scroll (out-scroll ctx))
+    (cond
+      [(eq? type 'up)       (out-set! ctx (clamp (sub1 scroll) 0 max-scroll) total #f) #f]
+      [(eq? type 'down)     (out-set! ctx (clamp (add1 scroll) 0 max-scroll) total #f) #f]
+      [(eq? type 'pageup)   (out-set! ctx (clamp (- scroll h) 0 max-scroll) total #f) #f]
+      [(eq? type 'pagedown) (out-set! ctx (clamp (+ scroll h) 0 max-scroll) total #f) #f]
+      [(eq? type 'home)     (out-set! ctx 0 total #f) #f]
+      [(eq? type 'end)      (out-set! ctx max-scroll total #f) #f]
+      [(eq? type 'mouse)    (output-mouse rows on-toggle-fold bar-w rect ctx type data)]
+      [else #f])))
 
-  (define (scroll-by! delta)
-    (let ([cw (content-width)] [h (unbox vp-h)])
-      (when (and (> cw 0) (> h 0))
-        (let* ([p (compute-prefix-sum model cw)]
-               [total (vector-ref p (output-model-count model))]
-               [cur (unbox scroll)]
-               [max-sy (max 0 (- total h))]
-               [new-sy (max 0 (min (+ cur delta) max-sy))])
-          (unless (= new-sy cur)
-            (set-box! scroll new-sy) (set-box! dirty #t)
-            (set-box! auto (>= new-sy max-sy)))))))
+(define (output-mouse rows on-toggle-fold bar-w rect ctx type data)
+  (match-let ([(list x y w h) rect])
+    (define total (length rows))
+    (define max-scroll (max 0 (- total h)))
+    (define cw (max 1 (- w bar-w)))
+    (define bar-col (+ x cw))
+    (cond
+      [(mouse-press? data)
+       (define mx (mouse-x data)) (define my (mouse-y data))
+       (cond
+         [(and (>= mx bar-col) (< mx (+ x w)))
+          (out-set! ctx (scrollbar-scroll-from-y my y h total) total #t)
+          #f]
+         [else
+          (define i (+ (out-scroll ctx) (- my y)))
+          (when (and (>= i 0) (< i total))
+            (define row (list-ref rows i))
+            (define bid (drow-block-id row))
+            (when bid (on-toggle-fold bid)))])]
 
-  ;; ── 点击 ──
+      [(mouse-move? data)
+       (when (out-dragging? ctx)
+         (out-set! ctx (scrollbar-scroll-from-y (mouse-y data) y h total) total #t)
+         #f)]
 
-  (define (click-line mx my)
-    (let ([w (unbox vp-w)] [h (unbox vp-h)]
-          [x (unbox vp-x)] [y (unbox vp-y)])
-      (and (> w 0) (> h 0) (<= x mx (+ x w -1)) (<= y my (+ y h -1))
-           (let* ([cw (content-width)]
-                  [p (compute-prefix-sum model cw)]
-                  [total (vector-ref p (output-model-count model))]
-                  [sy (max 0 (min (unbox scroll) (max 0 (- total h))))]
-                  [li (prefix-find p (+ sy (- my y)))]
-                  [ls (output-model-lines model)]
-                  [n (output-model-count model)])
-             (and (< li n) (vector-ref ls li))))))
+      [(mouse-release? data)
+       (out-set! ctx (out-scroll ctx) total #f)
+       #f]
 
-  ;; ── 滚动条点击/拖拽 ──
+      [(mouse-scroll? data)
+       (define dir (caddr data))
+       (define delta (if (eq? dir 'up) -3 3))
+       (out-set! ctx (clamp (+ (out-scroll ctx) delta) 0 max-scroll) total #f)
+       #f]
 
-  (define (sb-ctx)
-    (values (unbox vp-y) (unbox vp-h)
-            (vector-ref (compute-prefix-sum model (content-width))
-                        (output-model-count model))
-            (unbox scroll)))
-
-  (define (sb-press my)
-    (call-with-values sb-ctx
-      (λ (y h total sy)
-        (let-values ([(new-sy ok?) ((scrollbar-press sb) my y h total sy)])
-          (when ok? (set-box! scroll new-sy) (set-box! dirty #t))))))
-
-  (define (sb-move my)
-    (call-with-values sb-ctx
-      (λ (y h total sy)
-        (let-values ([(new-sy ok?) ((scrollbar-move sb) my y h total sy)])
-          (when ok? (set-box! scroll new-sy) (set-box! dirty #t))))))
-
-  (define (sb-release) ((scrollbar-release sb)))
-
-  ;; ── 事件 ──
-
-  (define handler
-    (build-input
-     #:up           (λ () (scroll-by! -1))
-     #:down         (λ () (scroll-by!  1))
-     #:pageup       (λ () (scroll-by! (- (unbox vp-h))))
-     #:pagedown     (λ () (scroll-by! (unbox vp-h)))
-     #:home         (λ () (set-box! scroll 0) (set-box! auto #f) (set-box! dirty #t))
-     #:end          (λ () (set-box! scroll 0) (set-box! auto #t) (set-box! dirty #t))
-     #:mouse-scroll (λ (dir x y mods) (scroll-by! (if (eq? dir 'up) -3 3)))
-     #:mouse-press  (λ (btn mx my mods)
-                      (set-box! auto #f)
-                      (when (eq? btn 'left)
-                        (let ([bar-col (+ (unbox vp-x) (content-width))])
-                          (if (= mx bar-col)
-                              (sb-press my)
-                              (let ([line (click-line mx my)])
-                                (when (and line (output-line-block-header? line))
-                                  (toggle-fold! (output-line-block-id line))))))))
-     #:mouse-move   (λ (mx my mods) (sb-move my))
-     #:mouse-release (λ (btn mx my mods) (when (eq? btn 'left) (sb-release)))))
-
-  (values (component render handler #t show-box 0 1 dirty #f)
-          (output-api append! append-styled! clear! scroll-end!
-                      fold! begin-fold! end-fold! toggle-fold!)))
+      [else #f])))
