@@ -1,6 +1,7 @@
 #lang racket
 
 (require "terminal/base.rkt"
+         "terminal/resize.rkt"
          "io/input.rkt"
          "io/output.rkt"
          "io/output-color.rkt"
@@ -43,7 +44,8 @@
   (enable-mouse!)
   (enable-bracketed-paste!))
 
-;; dynamic-wind 保证 tui-exit 必定执行, resize 线程随进程退出自然回收
+;; dynamic-wind 保证 tui-exit 必定执行
+;; resize-monitor-stop 关闭 signalfd 并恢复信号掩码
 (define (tui-exit)
   (disable-bracketed-paste!)
   (disable-mouse!)
@@ -51,6 +53,7 @@
   (style-reset)
   (buffer-alt-disable)
   (exit-raw-mode!)
+  (resize-monitor-stop)
   (reset-newline-var))
 
 (define (tui-exit-no-buffer)
@@ -59,6 +62,7 @@
   (cursor-show)
   (style-reset)
   (exit-raw-mode!)
+  (resize-monitor-stop)
   (reset-newline-var))
 
 ;; 退出逻辑与 tui-exit-no-buffer 相同，exit-raw-mode! 恢复保存的 termios 即可

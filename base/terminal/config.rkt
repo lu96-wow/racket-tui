@@ -22,11 +22,7 @@
 ;; 粘贴数据通常成块到达, 较长超时容忍网络延迟
 (define PASTE-READ-TIMEOUT 1.0)
 
-;; 窗口大小轮询间隔 (秒)
-(define RESIZE-POLL-INTERVAL 0.1)  ; 100ms
-
 ;; ════════════════════════════════════════════════════════════════
 
 (provide ESCDELAY CSI-MAX-BYTES PASTE-MAX-BYTES
-         UTF8-READ-TIMEOUT PASTE-READ-TIMEOUT
-         RESIZE-POLL-INTERVAL)
+         UTF8-READ-TIMEOUT PASTE-READ-TIMEOUT)

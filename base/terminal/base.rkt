@@ -45,16 +45,12 @@
 
 ;; ════════════════════════════════════════════════════════════════
 ;; sync 多路复用 — Racket 等价于 select(STDIN, resize_fd)
+;; stdin 事件在此定义; resize 事件见 terminal/resize.rkt (signalfd)
 ;; 与调度器协作, green thread 可正常运行
 ;; ════════════════════════════════════════════════════════════════
 
 (define (make-stdin-evt)
   (read-bytes-evt 1 (current-input-port)))
-
-(define resize-channel (make-channel))
-
-(define (resize-notify! data)
-  (channel-put resize-channel data))
 
 ;; ════════════════════════════════════════════════════════════════
 ;; 终端模式管理
@@ -108,5 +104,5 @@
 (provide terminal? enter-raw-mode! exit-raw-mode!
          enter-raw-mode-keep-echo!
          call-with-terminal-reply
-         make-stdin-evt resize-channel resize-notify!
+         make-stdin-evt
          STDIN_FILENO)

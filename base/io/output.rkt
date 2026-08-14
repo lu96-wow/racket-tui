@@ -88,6 +88,26 @@
 (define (put-256-bg n v)
   (put-bytes (format-256-bg n v)))
 
+;; ── 独立 SGR 输出（不带内容、不带位置）──
+;; 对应 format-*-base，直接输出纯转义序列
+;; 例: (put-fg-base 1) (put-bold) (put-256-bg-base 208)
+(define (put-fg-base n) (put-bytes (format-fg-base n)))
+(define (put-bg-base n) (put-bytes (format-bg-base n)))
+(define (put-rgb-fg-base r g b) (put-bytes (format-rgb-fg-base r g b)))
+(define (put-rgb-bg-base r g b) (put-bytes (format-rgb-bg-base r g b)))
+(define (put-rgb-fg-bg-base fr fg fb br bg bb)
+  (put-bytes (format-rgb-fg-bg-base fr fg fb br bg bb)))
+(define (put-256-fg-base n) (put-bytes (format-256-fg-base n)))
+(define (put-256-bg-base n) (put-bytes (format-256-bg-base n)))
+
+;; 属性直接输出（不带内容、不带位置）
+(define (put-bold)      (put-bytes format-bold))
+(define (put-dim)       (put-bytes format-dim))
+(define (put-italic)    (put-bytes format-italic))
+(define (put-underline) (put-bytes format-underline))
+(define (put-blink)     (put-bytes format-blink))
+(define (put-reverse)   (put-bytes format-reverse))
+
 ;; 绝对位置输出
 (define (put-at row col v)
   (put-bytes (format-content-at row col v)))
@@ -107,4 +127,7 @@
          buffer-alt-enable buffer-alt-disable
          current-cursor-row current-cursor-col
          set-immediate-mode! set-buffered-mode! flush!
-         put-fg put-bg put-rgb-fg put-rgb-bg put-256-fg put-256-bg)
+         put-fg put-bg put-rgb-fg put-rgb-bg put-256-fg put-256-bg
+         put-fg-base put-bg-base put-rgb-fg-base put-rgb-bg-base
+         put-rgb-fg-bg-base put-256-fg-base put-256-bg-base
+         put-bold put-dim put-italic put-underline put-blink put-reverse)

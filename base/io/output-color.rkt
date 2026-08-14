@@ -72,11 +72,8 @@
   (put-bytes (bytes-append style-bytes (format-content v) format-reset)))
 
 (define (put-styled-at row col name v)
-  (define old-r current-cursor-row)
-  (define old-c current-cursor-col)
-  (cursor-move row col)
-  (put-styled name v)
-  (cursor-move old-r old-c))
+  ;; 与 format-styled-at 保持一致: DECSC/DECRC 由终端恢复光标
+  (put-bytes (format-styled-at row col name v)))
 
 (define (put-styled-at! row col name v)
   (cursor-move row col)
@@ -87,14 +84,11 @@
   (bytes-append style-bytes (format-content v) format-reset))
 
 (define (format-styled-at row col name v)
-  (define old-r current-cursor-row)
-  (define old-c current-cursor-col)
-  (set-cursor! row col)
-  (let ([bs (bytes-append (format-cursor-move row col)
-                          (format-styled name v)
-                          (format-cursor-move old-r old-c))])
-    (set-cursor! old-r old-c)
-    bs))
+  ;; 终端自保存/恢复光标，不依赖内置追踪状态
+  (bytes-append format-cursor-save
+                (format-cursor-move row col)
+                (format-styled name v)
+                format-cursor-restore))
 
 (define (format-styled-at! row col name v)
   (set-cursor! row col)
@@ -185,14 +179,11 @@
   (bytes-append format-reverse (format-content v) format-reset))
 
 (define (format-styled-attr-at row col fmt-fn v)
-  (define old-r current-cursor-row)
-  (define old-c current-cursor-col)
-  (set-cursor! row col)
-  (let ([bs (bytes-append (format-cursor-move row col)
-                          (fmt-fn v)
-                          (format-cursor-move old-r old-c))])
-    (set-cursor! old-r old-c)
-    bs))
+  ;; DECSC/DECRC 由终端保存/恢复光标，不依赖内置追踪状态
+  (bytes-append format-cursor-save
+                (format-cursor-move row col)
+                (fmt-fn v)
+                format-cursor-restore))
 
 (define (format-styled-attr-at! row col fmt-fn v)
   (set-cursor! row col)

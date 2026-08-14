@@ -184,27 +184,18 @@
          (values EVENT-UTF8 (bytes-append (bytes first) rest) #f)]
         [else (values EVENT-KEY (bytes first) #f)]))
 
-;; resize 监控 — green thread 100ms 轮询, 变化时写 resize-channel 唤醒 sync
-;; sync 统一等 stdin-evt + resize-channel, 调度器协作, 零 CPU
+;; resize 监控 — 见 terminal/resize.rkt: signalfd 事件, 无轮询线程
+;; read-event 的 sync 统一等 stdin-evt + resize-evt, 调度器协作, 零 CPU
 
-(define (resize-monitor-start)
-  (let-values ([(r c) (get-window-size)])
-    (thread (λ () (let loop ([pr r] [pc c])
-                    (sleep RESIZE-POLL-INTERVAL)
-                    (let-values ([(nr nc) (get-window-size)])
-                      (when (and nr nc (or (not (= nr pr)) (not (= nc pc))))
-                        (resize-notify! (cons nr nc)))
-                      (loop (or nr pr) (or nc pc))))))))
-
-;; read-event — sync 统一等 stdin 和 resize channel
+;; read-event — sync 统一等 stdin 和 resize 事件
 ;; 阻塞模式, 零 CPU, 等价于 ncurses getch()
 (define (read-event)
-  (define evt (sync (make-stdin-evt) resize-channel))
+  (define evt (sync (make-stdin-evt) (make-resize-evt)))
   (cond [(bytes? evt)
          ;; stdin 来了 1 个字节
          (read-event-impl (bytes-ref evt 0))]
         [(pair? evt)
-         ;; resize channel: (rows . cols)
+         ;; resize 事件: (rows . cols)
          (values EVENT-RESIZE evt #f)]
         [else (values EVENT-NULL (bytes) #f)]))
 
@@ -212,7 +203,7 @@
 ;; 无事件时 evt 为 #f (sync/timeout 返回), 返回 EVENT-NULL
 (define (read-event-noblock)
   ;; sync/timeout 避免 CPU 空转，~60fps 足够流式刷新
-  (define evt (sync/timeout 0.016 (make-stdin-evt) resize-channel))
+  (define evt (sync/timeout 0.016 (make-stdin-evt) (make-resize-evt)))
   (cond [(bytes? evt)
          (read-event-impl (bytes-ref evt 0))]
         [(pair? evt)
@@ -317,8 +308,7 @@
 
 ;; 导出
 
-(provide resize-monitor-start
-         read-event read-event-noblock
+(provide read-event read-event-noblock
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?
          event-del? event-insert? event-home? event-end? event-pageup? event-pagedown?

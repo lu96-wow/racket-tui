@@ -5,6 +5,7 @@
 (provide format-content
          format-cursor-move format-cursor-up format-cursor-down
          format-cursor-right format-cursor-left format-cursor-col
+         format-cursor-save format-cursor-restore
          format-cursor-home format-cursor-hide format-cursor-show
          format-screen-clear format-screen-clear-below format-screen-clear-above
          format-line-clear format-line-clear-right format-line-clear-left
@@ -39,6 +40,8 @@
         [else (string->bytes/utf-8 (format "~a" v))]))
 
 ;; 基础 ANSI 序列（直接返回字节串）
+(define format-cursor-save #"\e7")     ; DECSC - 保存光标位置
+(define format-cursor-restore #"\e8")  ; DECRC - 恢复光标位置
 (define format-cursor-home #"\e[H")
 (define format-cursor-hide #"\e[?25l")
 (define format-cursor-show #"\e[?25h")
@@ -138,17 +141,14 @@
 (require "../terminal/cursor-state.rkt")
 
 ;; 辅助函数：带颜色的 format-at 通用实现
+;; 使用 DECSC/DECRC 由终端保存/恢复光标，不依赖内置追踪状态
 (define (format-color-at row col color-bytes v)
-  (define old-r current-cursor-row)
-  (define old-c current-cursor-col)
-  (set-cursor! row col)                              ; 更新到目标位置
-  (let ([bs (bytes-append (format-cursor-move row col)
-                          color-bytes
-                          (format-content v)
-                          format-reset
-                          (format-cursor-move old-r old-c))])
-    (set-cursor! old-r old-c)                        ; 恢复到旧位置
-    bs))
+  (bytes-append format-cursor-save
+                (format-cursor-move row col)
+                color-bytes
+                (format-content v)
+                format-reset
+                format-cursor-restore))
 
 (define (format-color-at! row col color-bytes v)
   (set-cursor! row col)                              ; 更新到目标位置
@@ -158,15 +158,12 @@
                 format-reset))
 
 ;; content（无颜色，不需 reset）
+;; 同样使用 DECSC/DECRC 保存/恢复光标，不依赖内置追踪状态
 (define (format-content-at row col v)
-  (define old-r current-cursor-row)
-  (define old-c current-cursor-col)
-  (set-cursor! row col)
-  (let ([bs (bytes-append (format-cursor-move row col)
-                          (format-content v)
-                          (format-cursor-move old-r old-c))])
-    (set-cursor! old-r old-c)
-    bs))
+  (bytes-append format-cursor-save
+                (format-cursor-move row col)
+                (format-content v)
+                format-cursor-restore))
 
 (define (format-content-at! row col v)
   (set-cursor! row col)
