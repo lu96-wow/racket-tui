@@ -8,4 +8,4 @@
 
 (define collection "tui")
 (define build-deps '("racket-lib"))
-(define compile-omit-paths '("demo" "ui-demo"))
+(define compile-omit-paths '("demo" "ui-demo" "ui-rebuild-demo"))
