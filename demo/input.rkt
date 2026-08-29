@@ -10,9 +10,10 @@
 ;;   Alt+x              → alt 'x'        (ESC x)
 ;;   Ctrl+x             → ctrl #\X       (控制字节)
 ;;   Ctrl+Alt+x         → mod-seq        (xterm: ESC [ 27;7;120~)
-;;   Ctrl+方向键 / Alt+方向键 / Shift+方向键 → mod-seq (xterm: ESC [ 1;5A / 1;3A / 1;2A)
+;;   Ctrl+方向键 / Alt+方向键 / Shift+方向键 / Ctrl+Alt+Shift+方向键
+;;                     → mod-seq        (xterm: ESC [ 1;5A / 1;3A / 1;2A / 1;8A)
 ;;   Tab / Shift+Tab / Enter / 独立 Esc
-;;   鼠标点击/移动/滚轮、中键粘贴
+;;   鼠标点击/移动/滚轮（含 Shift/Ctrl+点击）、中键粘贴
 ;;   注: F1-F12 不映射 — 桌面环境会吞键，终端收不到
 ;; ════════════════════════════════════════════════════════════════
 (require "../main.rkt")
@@ -47,6 +48,16 @@
                                  (and (caddr mods) "Shift")))])  
         (if (null? parts) "无" (string-join parts "+")))))
 
+;; mod-seq data 的键名（修饰 CSI 形式: ESC [ 1;5A 的 final 字母）
+(define (mod-seq-key-name data)
+  (define n (bytes-length data))
+  (define final (and (> n 2) (bytes-ref data (sub1 n))))
+  (case final
+    [(65) "Up"] [(66) "Down"] [(67) "Right"] [(68) "Left"]
+    [(72) "Home"] [(70) "End"]
+    [(90) "Tab"]                    ; Shift+Tab 的修饰形式
+    [else (format "byte ~a" (if final final 0))]))
+
 (define (describe type data mods)
   (cond
     [(event-null? type)   "null"]
@@ -61,12 +72,16 @@
      (let ([b (alt->char data)])
        (if b (format "Alt+~a" (integer->char b)) "Alt+?"))]
     [(event-mod-seq? type)
-     (let ([ch (mod-seq->char data)])
-       (format "~a~a~a~a"
-               (if (car mods) "Ctrl+" "")
-               (if (cadr mods) "Alt+" "")
-               (if (caddr mods) "Shift+" "")
-               (if ch (integer->char ch) "?")))]
+     (define prefix (string-append
+                     (if (car mods) "Ctrl+" "")
+                     (if (cadr mods) "Alt+" "")
+                     (if (caddr mods) "Shift+" "")))
+     (define last (and (> (bytes-length data) 0)
+                       (bytes-ref data (sub1 (bytes-length data)))))
+     (if (= last 126)   ; 以 ~ 结尾 = modifyOtherKeys 字符型
+         (let ([ch (mod-seq->char data)])
+           (format "~a~a" prefix (if ch (integer->char ch) "?")))
+         (format "~a~a" prefix (mod-seq-key-name data)))]
     [(event-key? type)
      (define b (event->byte data))
      (cond [(and b (= b 9))  "Tab"]
@@ -105,7 +120,7 @@
  (λ ()
    (screen-clear)
    (put-styled 'title "═══ 输入事件调试器 (read-event) ═══") (put-newline)
-   (put-styled 'info "按 q 退出 · 试试 F1-F12 / Alt+x / Ctrl+Alt+x / 方向键 / 鼠标 / 粘贴") (put-newline)
+   (put-styled 'info "按 q 退出 · 组合键: Alt+x / Ctrl+方向键 / Ctrl+Alt+x · 鼠标 / 粘贴") (put-newline)
    (put-newline)
    (define running? #t)
    (define count 0)
