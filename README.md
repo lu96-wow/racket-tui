@@ -2,12 +2,17 @@
 
 A terminal UI library for Racket — mouse, true color, bracketed paste, window resize.
 
+> **Linux only.** 本项目直接绑定 Linux 的 `termios` / `signalfd` / `ioctl`，不兼容其他系统。
+> 在非 Linux 上 `(require tui)` 会因 FFI 符号（`tcgetattr` / `signalfd`）不存在而在加载时报错。
+
 ![Demo](a.gif)
 
 ## Install
 
 ```bash
 raco pkg install https://github.com/lu96-wow/racket-tui.git
+or
+raco pkg install racket-tui
 ```
 
 包名由 `info.rkt` 指定为 `tui`，安装后：
@@ -380,14 +385,14 @@ More examples can be found in the `demo/` directory.
 | `-at` | Positioned parameter | `put-at`, `cursor-move` |
 | `-at!` | Positioned parameter + side effects | `put-at!` |
 
-## Cross-Architecture
+## Linux FFI 常量（硬编码）
 
-`base/base.rkt` contains `struct termios` layout and constants obtained from the system at build time. To regenerate for a different architecture (e.g., ARM, 32-bit), run:
+`base/terminal/base.rkt` 的 `struct termios` 布局与标志位常量直接硬编码，不再需要编译 C 程序生成。这些值在 Linux 上是固定的：
 
-```bash
-racket base/env-build-base/build-base.rkt
-```
+- **标志位**（`ICANON` `ECHO` `ISIG` `IEXTEN` `IXON` `OPOST` `ICRNL` `INLCR` `IGNCR` `OCRNL` `ONLCR`、`VMIN` `VTIME`、`TCSAFLUSH`）：来自内核 `asm-generic/termbits.h`，在 x86/arm/aarch64/riscv/ppc/mips/sparc 上一致
+- **结构体偏移**（`iflag=0` `oflag=4` `lflag=12` `c_cc=17`）：glibc 与 musl 一致
+- **`TERMIOS-SIZE=60`**：glibc 为 60（NCCS=32），musl 为 36（NCCS=19）；固定用 60 对两者都安全（缓冲区不小于 libc 实际读写长度）
 
-This compiles a small C program (`base/env-build-base/dump-termios.c`) that outputs `sizeof(struct termios)`, field offsets, and flag values, then generates `base/base.rkt` from `base/env-build-base/base.rkt.template`.
+唯一例外是 alpha 架构（termios 布局不同），本项目不面向它。若移植到非 Linux/非常规架构，只需修改 `base/terminal/base.rkt` 顶部常量。
 
 > Note: Only tested in xterm / qterminal.
