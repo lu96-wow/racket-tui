@@ -3,7 +3,8 @@
 (require "../main.rkt")
 
 (with-tui-nobuffer
-    (cursor-hide)
+ (λ ()
+   (cursor-hide)
 
   ;; 标题
   (put-string "╔══════════════════════════════════════════════╗") (put-newline)
@@ -46,4 +47,4 @@
     (when (= (modulo (+ n 1) 32) 0) (put-newline)))
   (put-newline)
 
-  (sleep 5))
+  (sleep 5)))

@@ -2,8 +2,9 @@
 (require "../main.rkt" "../base/io/output-styles.rkt")
 
 (with-tui-nobuffer
-    (set-buffered-mode!)
-  (cursor-hide)
+ (λ ()
+   (set-buffered-mode!)
+   (cursor-hide)
   ;; 批量构建整个界面
   (define screen
     (bytes-append
@@ -47,4 +48,4 @@
               (put-at 1 2 "Theme changed")
               (loop)]
              [else (loop)])]
-      [else (loop)])))
+      [else (loop)]))))

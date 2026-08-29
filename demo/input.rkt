@@ -3,8 +3,9 @@
          "../base/io/build-input.rkt")
 
 (with-tui-nobuffer
-  (screen-clear)
-  (put-string "╔══════════════════════════════════════╗") (put-newline)
+ (λ ()
+   (screen-clear)
+   (put-string "╔══════════════════════════════════════╗") (put-newline)
   (put-string "║   输入 API 测试 (build-input 简化版)   ║") (put-newline)
   (put-string "║   按 q 退出                           ║") (put-newline)
   (put-string "╚══════════════════════════════════════╝") (put-newline)
@@ -176,4 +177,4 @@
     (when running?
       (let-values ([(type data mods) (read-event)])
         (handler type data mods))
-      (loop))))
+      (loop)))))

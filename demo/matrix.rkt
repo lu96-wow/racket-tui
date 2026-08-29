@@ -55,9 +55,10 @@
   frame-buffer)
 
 (with-tui
-    (cursor-hide)
-  (screen-clear)
-  (let-values ([(rows cols) (get-window-size)])
+ (λ ()
+   (cursor-hide)
+   (screen-clear)
+   (let-values ([(rows cols) (get-window-size)])
 
     (define active-cols (for/list ([c (in-range 0 cols 3)]) c))
     (define drops (make-vector cols -10))
@@ -99,4 +100,4 @@
         (put-bytes frame)
 
         (sleep 0.06)
-        (loop)))))
+        (loop))))))

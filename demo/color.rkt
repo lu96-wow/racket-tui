@@ -16,7 +16,8 @@
 ;; └─────────────────────────────────────────────┘
 
 (with-tui
-    (screen-clear)
+ (λ ()
+   (screen-clear)
 
   ;; === 预设样式 ===
   (put-at 1 2 "=== 预设样式 ===")
@@ -68,4 +69,4 @@
                   (= (event->byte data) (char->integer #\t)))
              (screen-clear)
              (loop)]
-            [else (loop)]))))
+            [else (loop)])))))

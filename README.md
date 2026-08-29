@@ -39,23 +39,25 @@ raco pkg install --link
 
 ;; Method 1: Direct output (immediately displayed)
 (with-tui
-  (screen-clear)
-  (cursor-hide)
-  (put-rgb-fg 255 100 0 "Hello TUI!")
-  (put-at 5 10 "Direct output")
-  (sleep 2))
+ (λ ()
+   (screen-clear)
+   (cursor-hide)
+   (put-rgb-fg 255 100 0 "Hello TUI!")
+   (put-at 5 10 "Direct output")
+   (sleep 2)))
 
 ;; Method 2: Batch output with put-format-bytes (auto collect + flush)
 ;; format-reset only needs to be called once at the end
 (with-tui
-  (screen-clear)
-  (put-format-bytes
-   (format-cursor-move 5 10)
-   (format-rgb-fg 0 255 0) #"Green text"
-   (format-cursor-move 6 10)
-   (format-256-fg 46) #"Bright green"
-   format-reset)
-  (sleep 2))
+ (λ ()
+   (screen-clear)
+   (put-format-bytes
+    (format-cursor-move 5 10)
+    (format-rgb-fg 0 255 0) #"Green text"
+    (format-cursor-move 6 10)
+    (format-256-fg 46) #"Bright green"
+    format-reset)
+   (sleep 2)))
 ```
 
 ## Output System
@@ -261,18 +263,26 @@ If you need finer-grained control over event types, you can also use the low-lev
 
 ## Lifecycle Management
 
+`with-tui` / `with-tui-nobuffer` / `with-tui-nobuffer-echo` 是**普通函数**，接受一个 thunk（lambda）。
+内部用 `dynamic-wind` 保证 body 无论正常返回还是抛异常都执行清理；body 的异常会自然向外传播，
+不会静默吞掉。`tui-exit` 的每个清理步骤都是防御性的：某一步失败只打印 warning，不中断其余清理。
+
 ```racket
 (with-tui
-  (screen-clear)
-  (put "Hello")
-  (read-event))
+ (λ ()
+   (screen-clear)
+   (put "Hello")
+   (read-event)))
 
 (tui-init)
 (tui-exit)
 
 (with-tui-nobuffer
-  (put "Output in main buffer"))
+ (λ () (put "Output in main buffer")))
 ```
+
+> ⚠️ 不要在 body 里用 `(exit)` 退出——`exit` 会直接终止进程，**不会**运行清理（终端会留在 raw 模式/alt buffer）。
+> 需要退出时用 `running?` 标志 + `loop-input/stop`（见下方 Complete Example）。
 
 ## Buffer
 
@@ -281,23 +291,24 @@ If you need finer-grained control over event types, you can also use the low-lev
 (require tui)
 
 (with-tui-nobuffer
-    (define buffer-content
-      (list
-       format-screen-clear
-       (format-cursor-move 0 0)
-       (format-rgb-fg 255 255 0) #"=== Demo ===" format-reset
-       (format-cursor-move 2 0)
-       (format-rgb-fg 0 255 0) #"Line 1" format-reset
-       (format-cursor-move 3 0)
-       (format-rgb-fg 0 255 0) #"Line 2" format-reset
-       (format-cursor-move 4 0)
-       (format-rgb-fg 0 255 0) #"Line 3" format-reset))
+ (λ ()
+   (define buffer-content
+     (list
+      format-screen-clear
+      (format-cursor-move 0 0)
+      (format-rgb-fg 255 255 0) #"=== Demo ===" format-reset
+      (format-cursor-move 2 0)
+      (format-rgb-fg 0 255 0) #"Line 1" format-reset
+      (format-cursor-move 3 0)
+      (format-rgb-fg 0 255 0) #"Line 2" format-reset
+      (format-cursor-move 4 0)
+      (format-rgb-fg 0 255 0) #"Line 3" format-reset))
 
-  ;; Concatenate all byte strings
-  (define screen (apply bytes-append buffer-content))
+   ;; Concatenate all byte strings
+   (define screen (apply bytes-append buffer-content))
 
-  ;; Output all at once
-  (put-bytes screen))
+   ;; Output all at once
+   (put-bytes screen)))
 ```
 
 ## Complete Example
@@ -322,58 +333,28 @@ If you need finer-grained control over event types, you can also use the low-lev
   (put-bytes buffer))
 
 (with-tui
-    (cursor-hide)
-  (define handler
-    (build-input
-      #:char (lambda (ch)
-               (when (= ch (char->integer #\q))
-                 (exit)))))  ;; press q to quit
-  ;; Wrap handler to render before each event
-  (define (render-and-handle type data mods)
-    (handler type data mods)
-    (draw-ui))
-  (loop-input render-and-handle))
+ (λ ()
+   (cursor-hide)
+   (define running? #t)
+   (define handler
+     (build-input
+       #:char (lambda (ch)
+                (when (= ch (char->integer #\q))
+                  (set! running? #f)))))  ;; press q to quit
+   ;; Wrap handler to render before each event
+   (define (render-and-handle type data mods)
+     (handler type data mods)
+     (draw-ui))
+   (loop-input/stop (not running?) render-and-handle)))
 ```
 
 More examples can be found in the `demo/` directory.
 
-## UI Framework
+## UI Framework (WIP)
 
-声明式 UI 层（Elm 风格：state / update / view / message）。详见 [ui/README.md](ui/README.md) 与 [ui/API.md](ui/API.md)。
+声明式 UI 层（Elm 风格：state / update / view / message）已从本仓库移除，正在重新设计中。
 
-```racket
-#lang racket
-(require tui/ui)
-
-(struct model (count) #:transparent)
-
-(define (update st msg)
-  (match msg
-    ['inc (struct-copy model st [count (add1 (model-count st))])]
-    [_ st]))
-
-(define (view st)
-  (vstack
-   (child (text (format "count: ~a" (model-count st)) #:style 'heading)
-          #:min 1 #:max 1)
-   (child (hstack
-           (child (button "Inc" #:on-activate 'inc #:key 'inc-btn) #:weight 1)
-           (child (button "Quit" #:on-activate msg-quit #:key 'quit-btn) #:weight 1))
-          #:min 3)))
-
-(run-app
- #:init   (model 0)
- #:update update
- #:view   view
- #:keymap (list (cons #\q msg-quit)
-                (cons 'tab msg-focus-next)))
-```
-
-组件：`text` `button` `bool-button` `input` `text-area` `list-box` `output`（含折叠 + 换行）。
-
-容器：`vstack` `hstack` `panel` `rect`；子节点用 `child` 设权重/min/max。
-
-调试：`(display-surface surf)` 输出 ASCII 快照。测试：`racket ui-demo/run-tests.rkt`。
+当前版本只提供底层终端能力（输出 / 输入 / 颜色 / 光标 / 缓冲），上层组件框架（`button`、`input`、`text-area`、`list-box` 等）与运行循环 `run-app` 暂不提供。
 
 ## Flush Mode
 

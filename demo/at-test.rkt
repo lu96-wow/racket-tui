@@ -3,7 +3,8 @@
 (require "../main.rkt")
 
 (with-tui
-    (screen-clear)
+ (λ ()
+   (screen-clear)
 
   ;; 画边框参照
   (define w 70)
@@ -38,4 +39,4 @@
 
   (cursor-move 23 0)
   (put "Test done. Press any key...")
-  (sleep 2))
+  (sleep 2)))

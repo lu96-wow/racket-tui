@@ -4,9 +4,10 @@
          "../base/io/build-input.rkt")
 
 (with-tui-nobuffer
-    (screen-clear)
+ (λ ()
+   (screen-clear)
 
-  (define running? #t)
+   (define running? #t)
 
   (define handler
     (build-input
@@ -35,4 +36,4 @@
     (when running?
       (let-values ([(type data mods) (read-event)])
         (handler type data mods))
-      (loop))))
+      (loop)))))

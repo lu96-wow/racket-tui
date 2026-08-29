@@ -39,7 +39,8 @@
 ;; ============================================================
 
 (with-tui
-    (screen-clear)
+ (λ ()
+   (screen-clear)
   (cursor-show)
 
   ;; -------- 标题 --------
@@ -364,4 +365,4 @@
     (define-values (type data mods) (read-event))
     (unless (or (event-key? type) (event-null? type)
                 (and (event-ctrl? type) (= (bytes-ref data 0) 3)))
-      (loop))))
+      (loop)))))

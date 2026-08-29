@@ -3,7 +3,8 @@
 (require "../main.rkt")
 
 (with-tui-nobuffer
-    (cursor-hide)
+ (λ ()
+   (cursor-hide)
 
   ;; 标题
   (put-string "╔══════════════════════════════════════════════╗") (put-newline)
@@ -97,4 +98,4 @@
   (put-newline)
   (put-newline)
 
-  (sleep 5))
+  (sleep 5)))
