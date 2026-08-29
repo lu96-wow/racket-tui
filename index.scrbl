@@ -573,10 +573,10 @@ Like @racket[format-styled], but without the trailing reset.
           [#:end on-end (or/c (-> any) #f) #f]
           [#:pageup on-pageup (or/c (-> any) #f) #f]
           [#:pagedown on-pagedown (or/c (-> any) #f) #f]
-          [#:mouse-press on-mouse-press (or/c (-> symbol? exact-nonnegative-integer? exact-nonnegative-integer? (listof symbol?) any) #f) #f]
-          [#:mouse-release on-mouse-release (or/c (-> symbol? exact-nonnegative-integer? exact-nonnegative-integer? (listof symbol?) any) #f) #f]
-          [#:mouse-move on-mouse-move (or/c (-> exact-nonnegative-integer? exact-nonnegative-integer? (listof symbol?) any) #f) #f]
-          [#:mouse-scroll on-mouse-scroll (or/c (-> symbol? exact-nonnegative-integer? exact-nonnegative-integer? (listof symbol?) any) #f) #f]
+          [#:mouse-press on-mouse-press (or/c (-> symbol? exact-nonnegative-integer? exact-nonnegative-integer? (list/c boolean? boolean? boolean?) any) #f) #f]
+          [#:mouse-release on-mouse-release (or/c (-> symbol? exact-nonnegative-integer? exact-nonnegative-integer? (list/c boolean? boolean? boolean?) any) #f) #f]
+          [#:mouse-move on-mouse-move (or/c (-> exact-nonnegative-integer? exact-nonnegative-integer? (list/c boolean? boolean? boolean?) any) #f) #f]
+          [#:mouse-scroll on-mouse-scroll (or/c (-> symbol? exact-nonnegative-integer? exact-nonnegative-integer? (list/c boolean? boolean? boolean?) any) #f) #f]
           [#:paste on-paste (or/c (-> bytes? any) #f) #f]
           [#:resize on-resize (or/c (-> exact-positive-integer? exact-positive-integer? any) #f) #f]
           [#:null on-null (or/c (-> any) #f) #f]
@@ -600,6 +600,73 @@ Modified events (@tt{mod-seq}) split into two categories:
         go to @racket[#:mod-key] with a key symbol such as @racket['up] or
         @racket['home]. If @racket[#:mod-key] is not provided they fall back
         to @racket[#:mod-char].}
+]
+
+@subsubsection{Callback arguments}
+
+All keywords are optional; an event without a matching callback falls
+through to @racket[#:any], or is ignored if @racket[#:any] is absent.
+Callback argument types:
+
+@tabular[#:sep @hspace[1]
+  (list (list @bold{Keyword} @bold{Callback} @bold{Argument types})
+        (list @racket[#:char] @racket[(ch)] @elem{@racket[ch] --- @racket[integer?], ASCII value 0-255 (e.g. 97 = @tt{a}).})
+        (list @racket[#:utf-char] @racket[(str)] @elem{@racket[str] --- @racket[string?], one UTF-8 character (e.g. @tt{"你"}).})
+        (list @racket[#:ctrl] @racket[(ch)] @elem{@racket[ch] --- @racket[char?], @racket[#\A] to @racket[#\Z] for Ctrl+A to Ctrl+Z.})
+        (list @racket[#:alt] @racket[(ch)] @elem{@racket[ch] --- @racket[char?], the character typed with Alt.})
+        (list @racket[#:mod-char] @racket[(ch ctrl? alt? shift?)] @elem{@racket[ch] --- @racket[char?]; @racket[ctrl?] @racket[alt?] @racket[shift?] --- @racket[boolean?], each modifier pressed.})
+        (list @racket[#:mod-key] @racket[(key ctrl? alt? shift?)] @elem{@racket[key] --- @racket[symbol?], one of @racket['up] @racket['down] @racket['left] @racket['right] @racket['home] @racket['end] @racket['pageup] @racket['pagedown] @racket['insert] @racket['del] @racket['backtab]; plus the three @racket[boolean?] modifiers.})
+        (list @racket[#:tab] @racket[()] "No arguments")
+        (list @racket[#:backtab] @racket[()] "Shift+Tab, no arguments")
+        (list @racket[#:space] @racket[()] "No arguments")
+        (list @racket[#:enter] @racket[()] "No arguments")
+        (list @racket[#:backspace] @racket[()] "No arguments")
+        (list @racket[#:escape] @racket[()] "No arguments")
+        (list @racket[#:up] @racket[()] "Arrow up, no arguments")
+        (list @racket[#:down] @racket[()] "No arguments")
+        (list @racket[#:left] @racket[()] "No arguments")
+        (list @racket[#:right] @racket[()] "No arguments")
+        (list @racket[#:delete] @racket[()] "No arguments")
+        (list @racket[#:insert] @racket[()] "No arguments")
+        (list @racket[#:home] @racket[()] "No arguments")
+        (list @racket[#:end] @racket[()] "No arguments")
+        (list @racket[#:pageup] @racket[()] "No arguments")
+        (list @racket[#:pagedown] @racket[()] "No arguments")
+        (list @racket[#:mouse-press] @racket[(button x y mods)] @elem{@racket[button] --- @racket[symbol?], @racket['left] @racket['middle] @racket['right]; @racket[x] @racket[y] --- @racket[exact-nonnegative-integer?] coordinates; @racket[mods] --- @racket[(list/c boolean? boolean? boolean?)] = @racket[(list ctrl? alt? shift?)].})
+        (list @racket[#:mouse-release] @racket[(button x y mods)] "Same as #:mouse-press")
+        (list @racket[#:mouse-move] @racket[(x y mods)] @elem{@racket[x] @racket[y] --- coordinates; @racket[mods] --- modifier triple.})
+        (list @racket[#:mouse-scroll] @racket[(dir x y mods)] @elem{@racket[dir] --- @racket[symbol?], @racket['up] or @racket['down].})
+        (list @racket[#:paste] @racket[(data)] @elem{@racket[data] --- @racket[bytes?], pasted content.})
+        (list @racket[#:resize] @racket[(rows cols)] @elem{@racket[rows] @racket[cols] --- @racket[exact-positive-integer?].})
+        (list @racket[#:null] @racket[()] "No input available (noblock loop)")
+        (list @racket[#:any] @racket[(type data mods)] @elem{@racket[type] --- @racket[symbol?]; @racket[data] --- @racket[bytes?]; @racket[mods] --- @racket[(or/c #f (list/c boolean? boolean? boolean?))]. Fallback for every unhandled event.}))
+]
+
+@subsubsection{Example}
+
+@racketblock[
+(define handler
+  (build-input
+    #:char     (lambda (ch)      (printf "key '~a'\n" (integer->char ch)))
+    #:ctrl     (lambda (ch)      (printf "Ctrl+~a\n" ch))
+    #:mod-char (lambda (ch ctrl? alt? shift?)
+                 (printf "~a~a~a~a\n"
+                         (if ctrl? "Ctrl+" "")
+                         (if alt? "Alt+" "")
+                         (if shift? "Shift+" "")
+                         ch))
+    #:mod-key  (lambda (key ctrl? alt? shift?)
+                 (printf "~a~a~a~a\n"
+                         (if ctrl? "Ctrl+" "")
+                         (if alt? "Alt+" "")
+                         (if shift? "Shift+" "")
+                         key))
+    #:mouse-press (lambda (button x y mods)
+                    (printf "~a ~a (~a,~a)\n"
+                            (car mods)  ;; ctrl?
+                            button x y))
+    #:paste  (lambda (data) (printf "pasted ~a bytes\n" (bytes-length data)))
+    #:resize (lambda (rows cols) (printf "~ax~a\n" rows cols))))
 ]
 }
 

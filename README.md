@@ -280,23 +280,26 @@ All keyword arguments are optional. Supported events:
 
 | Argument | Callback Signature | Description |
 |----------|-------------------|-------------|
-| `#:char` | `(lambda (ch) ...)` | Regular key, ch is the ASCII value |
-| `#:utf-char` | `(lambda (str) ...)` | UTF-8 character |
-| `#:ctrl` | `(lambda (ch) ...)` | Ctrl+letter, ch is `#\A`-`#\Z` |
-| `#:alt` | `(lambda (ch) ...)` | Alt+letter |
-| `#:mod-char` | `(lambda (ch ctrl? alt? shift?) ...)` | 修饰的字符（Ctrl+Alt+x） |
-| `#:mod-key` | `(lambda (key ctrl? alt? shift?) ...)` | 修饰的导航键（Ctrl+Up 等）；key 是 `'up` `'down` `'left` `'right` `'home` `'end` `'pageup` `'pagedown` `'insert` `'del` `'backtab` |
-| `#:tab` / `#:backtab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | Special keys |
-| `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | Arrow keys |
-| `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | Function keys |
-| `#:mouse-press` | `(lambda (button x y modifiers) ...)` | Mouse press, button is `'left`/`'middle`/`'right` |
-| `#:mouse-release` | `(lambda (button x y modifiers) ...)` | Mouse release |
-| `#:mouse-move` | `(lambda (x y modifiers) ...)` | Mouse move |
-| `#:mouse-scroll` | `(lambda (dir x y modifiers) ...)` | Scroll wheel, dir is `'up`/`'down` |
-| `#:paste` | `(lambda (data) ...)` | Bracketed paste, data is bytes |
-| `#:resize` | `(lambda (rows cols) ...)` | Window resize |
-| `#:null` | `(lambda () ...)` | No input event |
-| `#:any` | `(lambda (type data mods) ...)` | Fallback callback |
+| `#:char` | `(lambda (ch) ...)` | Regular key; `ch` 是 **integer**（ASCII 值，如 97=`a`） |
+| `#:utf-char` | `(lambda (str) ...)` | UTF-8 字符；`str` 是 **string**（如 `"你"`） |
+| `#:ctrl` | `(lambda (ch) ...)` | Ctrl+字母；`ch` 是 **char**，`#\A`-`#\Z` |
+| `#:alt` | `(lambda (ch) ...)` | Alt+字母；`ch` 是 **char** |
+| `#:mod-char` | `(lambda (ch ctrl? alt? shift?) ...)` | 修饰的字符（Ctrl+Alt+x）；`ch` 是 **char**，`ctrl?`/`alt?`/`shift?` 是 **boolean** |
+| `#:mod-key` | `(lambda (key ctrl? alt? shift?) ...)` | 修饰的导航键（Ctrl+Up）；`key` 是 **symbol**（`'up` `'down` `'left` `'right` `'home` `'end` `'pageup` `'pagedown` `'insert` `'del` `'backtab`），三布尔同 `#:mod-char` |
+| `#:tab` / `#:backtab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | Special keys，无参数 |
+| `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | Arrow keys，无参数 |
+| `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | Function keys，无参数 |
+| `#:mouse-press` | `(lambda (button x y mods) ...)` | 按下；`button` 是 **symbol**（`'left`/`'middle`/`'right`），`x`/`y` 是 **integer** 坐标，`mods` 是 **(list ctrl? alt? shift?)** 三元组 |
+| `#:mouse-release` | `(lambda (button x y mods) ...)` | 释放；参数同 `#:mouse-press` |
+| `#:mouse-move` | `(lambda (x y mods) ...)` | 移动；`x`/`y` 坐标 + `mods` 三元组 |
+| `#:mouse-scroll` | `(lambda (dir x y mods) ...)` | 滚轮；`dir` 是 **symbol**（`'up`/`'down`） |
+| `#:paste` | `(lambda (data) ...)` | Bracketed paste；`data` 是 **bytes** |
+| `#:resize` | `(lambda (rows cols) ...)` | Window resize；`rows`/`cols` 是 **integer** |
+| `#:null` | `(lambda () ...)` | No input event，无参数 |
+| `#:any` | `(lambda (type data mods) ...)` | Fallback；`type` 是 **symbol**，`data` 是 **bytes**，`mods` 是三元组或 `#f` |
+
+修饰参数（`ctrl?`/`alt?`/`shift?`）都是 **boolean**，可直接 `(if ctrl? ...)` 判断；
+鼠标 `mods` 是 `(list ctrl? alt? shift?)`，取 `(car mods)` 即 ctrl 标志。
 
 Priority order (built-in, users don't need to worry): `null > resize > paste > mouse > tab/space/enter/backspace/escape > arrow keys > function keys > ctrl > alt > mod > utf8 > char > any`
 
