@@ -329,6 +329,34 @@ then apply by name. @racket[style-define!] registers every style in both a
 256-color and a 16-color registry; the active registry is selected by
 @racket[current-registry] (see @racket[use-color-auto!]).
 
+@subsection{Usage}
+
+@racketblock[
+;; define: colors + attributes in any combination, applied in order
+(style-define! 'fancy clr-yellow bclr-blue attr-bold attr-underline)
+
+(put-styled 'fancy "Combined style")     ; styled text, auto reset
+(put-styled-at  5 10 'fancy "fixed")     ; cursor untouched (DECSC/DECRC)
+(put-styled-at! 5 10 'fancy "cursor")    ; updates tracked cursor
+
+;; batching: each format-styled carries its own reset
+(put-format-bytes
+ (format-styled 'title "Title")
+ (format-styled 'info "body text"))
+]
+
+The two registries give automatic 256/16-color fallback: plain
+@racket[color-fg]/@racket[attr-bold] register the same value in both, while
+@racket[color-fg*] and @racket[color-bg*] take separate values for each:
+
+@racketblock[
+(style-define! 'status (color-fg* 46 2) attr-bold)  ; 256: bright green / 16: green
+]
+
+@racket[style->bytes] returns the precomputed escape bytes for a style; it is
+what @racket[format-styled] uses internally. An undefined style name is a
+no-op: it produces empty bytes without raising an error.
+
 @defproc[(style-define! [name symbol?] [spec procedure?] ...) void?]
 Registers @racket[name] from color/attribute thunks such as @racket[color-fg],
 @racket[color-bg], @racket[attr-bold], or @racket[color-fg*].

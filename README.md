@@ -181,19 +181,73 @@ Return byte strings without outputting, used for batch collection:
 
 ## Style System
 
+样式是**命名的颜色+属性集合**：先注册（`style-define!`），后按名使用。
+颜色和属性都是 thunk，按注册顺序依次输出转义序列。
+
+### 定义与使用
+
 ```racket
+;; 定义：颜色 + 属性 任意组合，顺序即应用顺序
 (style-define! 'fancy clr-yellow bclr-blue attr-bold attr-underline)
 
+;; 直接输出带样式文本（自动 reset）
 (put-styled 'fancy "Combined style")
 
-(define fancy-bytes
-  (call-with-output-bytes
-   (λ (out)
-     (parameterize ([current-output-port out])
-       (style-apply! 'fancy)))))
-
-(define styled-text (format-styled fancy-bytes "Styled text"))
+;; 带位置输出
+(put-styled-at  5 10 'fancy "fixed position")  ; 不改变跟踪光标
+(put-styled-at! 5 10 'fancy "updates cursor")  ; 更新跟踪光标
 ```
+
+### 双 registry 自动回退（256 / 16 色）
+
+每个样式同时注册在 256 色表和 16 色表里。`use-color-auto!`（`tui-init` 自动调用）根据 `COLORTERM` 选当前表：
+
+| 构造器 | 256 色终端 | 16 色终端 |
+|--------|-----------|-----------|
+| `clr-*` `bclr-*` `attr-*` | 同值 | 同值 |
+| `(color-fg* c256 c16)` | c256 | c16 |
+
+```racket
+;; 同一样式在不同终端自动选色
+(style-define! 'status (color-fg* 46 2) attr-bold)  ; 256: 亮绿 / 16: 绿
+```
+
+### 批量输出（format 形态）
+
+```racket
+(put-format-bytes
+ (format-styled 'title "Title")
+ (format-styled 'info "body text"))   ; 每个 format-styled 自带 reset
+```
+
+### style->bytes 预计算
+
+```racket
+(define title-bytes (style->bytes 'title))   ; 缓存转义序列，避免重复查找
+(put-bytes (bytes-append title-bytes (format-content "Hi") format-reset))
+```
+
+### 内置样式
+
+库预注册了一批语义化样式，可直接使用：
+
+```racket
+(put-styled 'error "错误")  (put-styled 'warning "警告")
+(put-styled 'info "信息")   (put-styled 'success "成功")
+(put-styled 'title "标题")  (put-styled 'heading "标题行")
+```
+
+完整清单：基本 `red green blue yellow cyan magenta white`；级别 `error warning info success`；
+文本 `title subtitle heading border border-bold`；控件 `button button-hover button-pressed button-disabled`；
+菜单 `menu-item menu-selected menu-key menu-shortcut`；列表 `list-item list-selected list-alternate`；
+对话框 `dialog-title dialog-body dialog-button dialog-highlight`；状态 `status-bar status-good status-warning status-bad`；
+输入 `input-normal input-focus input-error`；其他 `cursor selection scroll-track scroll-thumb`。
+
+### 注意
+
+- 未定义的样式名是 **no-op**（`style-apply!`/`style->bytes` 输出空，不报错）
+- `style-define!` 同名重复定义会覆盖
+- `current-registry` 是 parameter，可用 `parameterize` 临时切换表（`use-16color!`/`use-256color!` 即设置它）
 
 ## Input Design
 
