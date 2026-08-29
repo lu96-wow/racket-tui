@@ -284,7 +284,8 @@ All keyword arguments are optional. Supported events:
 | `#:utf-char` | `(lambda (str) ...)` | UTF-8 character |
 | `#:ctrl` | `(lambda (ch) ...)` | Ctrl+letter, ch is `#\A`-`#\Z` |
 | `#:alt` | `(lambda (ch) ...)` | Alt+letter |
-| `#:mod` | `(lambda (ch ctrl? alt? shift?) ...)` | Ctrl+Alt+Shift+combination |
+| `#:mod-char` | `(lambda (ch ctrl? alt? shift?) ...)` | 修饰的字符（Ctrl+Alt+x） |
+| `#:mod-key` | `(lambda (key ctrl? alt? shift?) ...)` | 修饰的导航键（Ctrl+Up 等）；key 是 `'up` `'down` `'left` `'right` `'home` `'end` `'pageup` `'pagedown` `'insert` `'del` `'backtab` |
 | `#:tab` / `#:backtab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | Special keys |
 | `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | Arrow keys |
 | `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | Function keys |

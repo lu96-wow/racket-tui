@@ -385,6 +385,44 @@
        (or (parse-modify-other-keys-code d)
            (bytes-ref d (sub1 (bytes-length d))))))
 
+;; 解析 CSI 序列第一个数字参数（从下标 2 开始）
+;; 例: ESC [ 5;5~ → 5
+(define (mod-seq-first-param d)
+  (let loop ([i 2] [acc 0])
+    (define b (bytes-ref d i))
+    (if (<= ASCII-DIGIT-START b ASCII-DIGIT-END)
+        (loop (+ i 1) (+ (* acc 10) (- b ASCII-DIGIT-START)))
+        acc)))
+
+;; 从 mod-seq data 提取修饰导航键符号（'up 'down 'home 'end 'left 'right
+;; 'pageup 'pagedown 'insert 'delete 'backtab）。
+;; 字符型（modifyOtherKeys: ESC [ 27;...~）返回 #f。
+(define (mod-seq->key d)
+  (define n (bytes-length d))
+  (define last (and (> n 2) (bytes-ref d (sub1 n))))
+  (cond
+    ;; ESC [ 27;...~ → modifyOtherKeys 字符型
+    [(and (>= n 4)
+          (= (bytes-ref d 0) ESC)
+          (= (bytes-ref d 1) CSI-OPEN)
+          (= (bytes-ref d 2) 50)   ; '2'
+          (= (bytes-ref d 3) 55))  ; '7'
+     #f]
+    ;; ~ 结尾：功能键修饰形式（ESC [ 5;5~ = Ctrl+PgUp 等）
+    [(= last TILDE)
+     (case (mod-seq-first-param d)
+       [(2) KEY-INSERT] [(3) KEY-DELETE]
+       [(5) KEY-PAGEUP] [(6) KEY-PAGEDOWN]
+       [(1) KEY-HOME]   [(4) KEY-END]
+       [else #f])]
+    ;; 字母结尾：方向键 / Home / End / Shift+Tab
+    [else
+     (case last
+       [(65) KEY-UP] [(66) KEY-DOWN] [(67) KEY-RIGHT] [(68) KEY-LEFT]
+       [(72) KEY-HOME] [(70) KEY-END]
+       [(90) KEY-BACKTAB]
+       [else #f])]))
+
 (define (get-resize-rows d) (car d))
 (define (get-resize-cols d) (cdr d))
 (define (get-resize-size d) (values (car d) (cdr d)))
@@ -410,5 +448,5 @@
          scroll-up? scroll-down?
          mouse-x mouse-y get-mouse-pos
          mouse-modifiers
-         ctrl->char alt->char mod-seq->char
+         ctrl->char alt->char mod-seq->char mod-seq->key
          get-resize-rows get-resize-cols get-resize-size event->string event->byte)

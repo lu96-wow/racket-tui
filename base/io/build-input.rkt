@@ -24,7 +24,7 @@
 ;;   #:utf-char   (lambda (str) ...)              str: string
 ;;   #:ctrl       (lambda (ch) ...)               ch: char (#\A-#\Z)
 ;;   #:alt        (lambda (ch) ...)               ch: char
-;;   #:mod        (lambda (ch ctrl? alt?) ...)    Ctrl+Alt+char
+;;   #:mod-char   (lambda (ch ctrl? alt? shift?) ...)  Ctrl+Alt+char
 ;;   #:tab/space/enter/backspace/escape  (lambda () ...)
 ;;   #:up/down/left/right               (lambda () ...)
 ;;   #:delete/insert/home/end/pageup/pagedown  (lambda () ...)
@@ -54,7 +54,8 @@
           #:utf-char [on-utf-char #f]
           #:ctrl [on-ctrl #f]
           #:alt [on-alt #f]
-          #:mod [on-mod #f]
+          #:mod-char [on-mod-char #f]
+          #:mod-key [on-mod-key #f]
           #:tab [on-tab #f]
           #:backtab [on-backtab #f]
           #:space [on-space #f]
@@ -158,11 +159,16 @@
              (if on-alt (on-alt (integer->char b)) (on-any-and-null type data mods))
              (on-any-and-null EVENT-ALT data #f)))]
       [(mod-seq)
-       (let ([ch (mod-seq->char data)])
-         (if ch
-             (if on-mod (on-mod (integer->char ch) (car mods) (cadr mods) (caddr mods))
-                 (on-any-and-null type data mods))
-             (on-any-and-null EVENT-MOD data mods)))]
+       (define key (mod-seq->key data))
+       (define ch (mod-seq->char data))
+       (cond
+         ;; 修饰+导航键 → 精确回调 (key ctrl? alt? shift?)
+         [(and key on-mod-key)
+          (on-mod-key key (car mods) (cadr mods) (caddr mods))]
+         ;; 字符型（或未提供 #:mod-key 时的键型回落）→ #:mod-char
+         [(and ch on-mod-char)
+          (on-mod-char (integer->char ch) (car mods) (cadr mods) (caddr mods))]
+         [else (on-any-and-null type data mods)])]
       [(utf8)
        (let ([str (event->string data)])
          (if (positive? (string-length str))

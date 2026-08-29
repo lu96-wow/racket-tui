@@ -48,15 +48,15 @@
                                  (and (caddr mods) "Shift")))])  
         (if (null? parts) "无" (string-join parts "+")))))
 
-;; mod-seq data 的键名（修饰 CSI 形式: ESC [ 1;5A 的 final 字母）
-(define (mod-seq-key-name data)
-  (define n (bytes-length data))
-  (define final (and (> n 2) (bytes-ref data (sub1 n))))
-  (case final
-    [(65) "Up"] [(66) "Down"] [(67) "Right"] [(68) "Left"]
-    [(72) "Home"] [(70) "End"]
-    [(90) "Tab"]                    ; Shift+Tab 的修饰形式
-    [else (format "byte ~a" (if final final 0))]))
+;; 导航键符号 → 显示名
+(define (describe-key k)
+  (case k
+    [(up) "Up"] [(down) "Down"] [(left) "Left"] [(right) "Right"]
+    [(home) "Home"] [(end) "End"]
+    [(pageup) "PgUp"] [(pagedown) "PgDn"]
+    [(insert) "Insert"] [(del) "Delete"]
+    [(backtab) "Shift+Tab"]
+    [else (format "~a" k)]))
 
 (define (describe type data mods)
   (cond
@@ -76,12 +76,11 @@
                      (if (car mods) "Ctrl+" "")
                      (if (cadr mods) "Alt+" "")
                      (if (caddr mods) "Shift+" "")))
-     (define last (and (> (bytes-length data) 0)
-                       (bytes-ref data (sub1 (bytes-length data)))))
-     (if (= last 126)   ; 以 ~ 结尾 = modifyOtherKeys 字符型
+     (define key (mod-seq->key data))
+     (if key
+         (format "~a~a" prefix (describe-key key))
          (let ([ch (mod-seq->char data)])
-           (format "~a~a" prefix (if ch (integer->char ch) "?")))
-         (format "~a~a" prefix (mod-seq-key-name data)))]
+           (format "~a~a" prefix (if ch (integer->char ch) "?"))))]
     [(event-key? type)
      (define b (event->byte data))
      (cond [(and b (= b 9))  "Tab"]

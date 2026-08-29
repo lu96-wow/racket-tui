@@ -555,7 +555,8 @@ Like @racket[format-styled], but without the trailing reset.
           [#:utf-char on-utf-char (or/c (-> string? any) #f) #f]
           [#:ctrl on-ctrl (or/c (-> char? any) #f) #f]
           [#:alt on-alt (or/c (-> char? any) #f) #f]
-          [#:mod on-mod (or/c (-> char? boolean? boolean? boolean? any) #f) #f]
+          [#:mod-char on-mod-char (or/c (-> char? boolean? boolean? boolean? any) #f) #f]
+          [#:mod-key on-mod-key (or/c (-> symbol? boolean? boolean? boolean? any) #f) #f]
           [#:tab on-tab (or/c (-> any) #f) #f]
           [#:backtab on-backtab (or/c (-> any) #f) #f]
           [#:space on-space (or/c (-> any) #f) #f]
@@ -590,6 +591,16 @@ Event dispatch priority (built in): @tt{null} > @tt{resize} > @tt{paste} >
 @tt{mouse} > tab/backtab/space/enter/backspace/escape > arrows > function
 keys > @tt{ctrl} > @tt{alt} > @tt{mod-seq} > @tt{utf8} > @tt{char} >
 @tt{any}.
+
+Modified events (@tt{mod-seq}) split into two categories:
+@itemize[
+  @item{Modified characters (e.g. Ctrl+Alt+x, encoded as
+        @tt{ESC [ 27;7;120~}) go to @racket[#:mod-char] with the character.}
+  @item{Modified navigation keys (e.g. Ctrl+Up, encoded as @tt{ESC [ 1;5A})
+        go to @racket[#:mod-key] with a key symbol such as @racket['up] or
+        @racket['home]. If @racket[#:mod-key] is not provided they fall back
+        to @racket[#:mod-char].}
+]
 }
 
 @defform[(loop-input handler ...)]{
