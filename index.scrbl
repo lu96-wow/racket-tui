@@ -45,6 +45,105 @@ raco pkg install https://github.com/lu96-wow/racket-tui.git
    (sleep 2)))
 ]
 
+@section{API Conventions}
+
+The whole API follows two naming tables (prefix, suffix) and three rules
+(@tt{put}/@tt{format} symmetry, argument order, three color tiers). Once these
+are known, most function names and signatures can be derived without looking
+them up.
+
+@subsection{Prefix: behavior}
+
+@tabular[#:sep @hspace[1]
+         (list (list @bold{Prefix} @bold{Meaning} @bold{Example})
+               (list @racket[put-] "Immediate terminal output (flushes by default)" @racket[put-string])
+               (list @racket[format-] "Return bytes without outputting; batch with @racket[put-bytes]" @racket[format-cursor-move])
+               (list @elem{@racket[cursor-] @racket[screen-] @racket[line-] @racket[buffer-]} "Cursor / screen / line / alt-buffer operations (immediate)" @racket[cursor-move])
+               (list @racket[clr-] "16-color foreground constructor (shorthand for @racket[(color-fg n)])" @racket[clr-red])
+               (list @racket[bclr-] "16-color background constructor" @racket[bclr-blue])
+               (list @racket[attr-] "SGR attribute constructor (thunk that emits the escape sequence)" @racket[attr-bold])
+               (list @elem{@racket[color-] @racket[color256-] @racket[color-rgb-]} "Color constructors (thunks, for @racket[style-define!])" @racket[color256-fg])
+               (list @racket[style-] "Style system" @racket[style-define!])
+               (list @racket[event-] "Input-event predicates and accessors" @racket[event-key?])
+               (list @racket[current-] "Parameters or tracked cursor variables" @racket[current-cursor-row]))]
+
+@subsection{Suffix: side effects}
+
+@tabular[#:sep @hspace[1]
+         (list (list @bold{Suffix} @bold{Meaning} @bold{Example})
+               (list @racket[!] "Side effects: updates the tracked cursor / terminal mode" @racket[put-at!])
+               (list @racket[?] "Predicate, returns boolean" @racket[terminal?])
+               (list @racket[-at] "Positioned (@racket[row] @racket[col] first); DECSC/DECRC so the tracked cursor is untouched" @racket[put-fg-at])
+               (list @racket[-at!] "Positioned and updates the tracked cursor" @racket[put-fg-at!])
+               (list @racket[-base] "Escape sequence only: no content, no reset" @racket[put-fg-base]))]
+
+@subsection{Rule 1: put / format symmetry}
+
+Almost every capability has both a @tt{put-} form (immediate output) and a
+@tt{format-} form (returns bytes), @bold{with identical arguments}:
+
+@racketblock[
+(put-fg 1 "x")                  ; = (put-bytes (format-fg 1 "x"))
+(put-rgb-fg-at 1 1 255 0 0 "x") ; = (put-bytes (format-rgb-fg-at 1 1 255 0 0 "x"))
+(put-cursor-save)               ; = (put-bytes format-cursor-save)
+]
+
+Exceptions (by design):
+
+@itemize[
+  @item{@racket[put-at] corresponds to @racket[format-content-at] (the
+        @tt{-at} name is the content form).}
+  @item{@racket[format-styled*] exists only in the @tt{format-} form, for
+        batching where one trailing @racket[format-reset] is appended.}
+  @item{Output entry points such as @racket[put] and @racket[put-bytes] have
+        no @tt{format-} twin; @racket[format-content] does the conversion.}
+]
+
+@subsection{Rule 2: argument order}
+
+@itemize[
+  @item{The content @racket[v] (string / bytes / char / number) is always the
+        @bold{last} argument.}
+  @item{Positioned functions take @racket[row] @racket[col] @bold{first}.}
+  @item{Color arguments come in the middle: @racket[n] for 16/256 colors;
+        @racket[r g b] for RGB; @racket[fr fg fb br bg bb] (foreground then
+        background) for foreground+background.}
+]
+
+@racketblock[
+(put-rgb-fg-bg-at row col fr fg fb br bg bb v)  ; the full shape
+]
+
+@subsection{Rule 3: three color tiers are isomorphic}
+
+The 16-color, 256-color and RGB tiers are same-named and same-shaped; only
+the color argument differs (@racket[n] / @racket[n] / @racket[r g b]):
+
+@racketblock[
+(put-fg n v)           (put-256-fg n v)           (put-rgb-fg r g b v)
+(put-fg-at r c n v)    (put-256-fg-at r c n v)    (put-rgb-fg-at r c r g b v)
+(put-fg-base n)        (put-256-fg-base n)        (put-rgb-fg-base r g b)
+]
+
+Knowing any one tier, the other two can be derived.
+
+@subsection{Standard API categories}
+
+@tabular[#:sep @hspace[1]
+         (list (list @bold{Category} @bold{Representative functions})
+               (list "Lifecycle" @elem{@racket[with-tui] @racket[tui-init] @racket[enable-mouse!]})
+               (list "Basic output" @elem{@racket[put] @racket[put-bytes] @racket[put-newline]})
+               (list "Positioned output" @elem{@racket[put-at] @racket[put-at!]})
+               (list "Cursor" @elem{@racket[cursor-move] @racket[put-cursor-save]})
+               (list "Screen / line / buffer" @elem{@racket[screen-clear] @racket[line-clear] @racket[buffer-alt-enable]})
+               (list "Colors" @elem{@racket[put-fg] @racket[put-rgb-fg] @racket[put-256-fg]})
+               (list "Styles" @elem{@racket[style-define!] @racket[put-styled] @racket[color-fg]})
+               (list "Format (returns bytes)" @elem{@racket[format-fg] @racket[format-cursor-move]})
+               (list "Input" @elem{@racket[read-event] @racket[build-input] @racket[loop-input]})
+               (list "Terminal" @elem{@racket[terminal?] @racket[enter-raw-mode!] @racket[get-window-size]})
+               (list "Cursor tracking" @elem{@racket[current-cursor-row] @racket[set-cursor!] @racket[update-cursor!]})
+               (list "Config constants" @elem{@racket[ESCDELAY] @racket[PASTE-MAX-BYTES]}))]
+
 @section{Lifecycle}
 
 All three @tt{with-tui} entry points are @emph{plain functions} taking a
@@ -143,6 +242,10 @@ Like @racket[put-at], but updates the tracked cursor position to
 @defproc[(cursor-home) void?]
 @defproc[(cursor-hide) void?]
 @defproc[(cursor-show) void?]
+@defproc[(put-cursor-save) void?]
+Saves the cursor position (DECSC).
+@defproc[(put-cursor-restore) void?]
+Restores the saved cursor position (DECRC).
 
 @subsection{Screen and lines}
 
@@ -176,6 +279,29 @@ Colors come in three flavors: 16-color ANSI, 256-color, and true color
 @defproc[(put-rgb-fg-bg [fr byte?] [fg byte?] [fb byte?] [br byte?] [bg byte?] [bb byte?] [v any/c]) void?]
 @defproc[(put-256-fg [n (integer-in 0 255)] [v any/c]) void?]
 @defproc[(put-256-bg [n (integer-in 0 255)] [v any/c]) void?]
+@defproc[(put-reset) void?]
+Resets all styling (the @tt{put-} counterpart of @racket[format-reset]).
+
+@subsection{Positioned colors}
+
+The @tt{-at} variants print in color at a fixed position. Like
+@racket[put-at], they use DECSC/DECRC so the tracked cursor is untouched;
+the @tt{-at!} variants update the tracked cursor position instead.
+
+@defproc[(put-fg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 15)] [v any/c]) void?]
+@defproc[(put-fg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 15)] [v any/c]) void?]
+@defproc[(put-bg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 15)] [v any/c]) void?]
+@defproc[(put-bg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 15)] [v any/c]) void?]
+@defproc[(put-rgb-fg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [r byte?] [g byte?] [b byte?] [v any/c]) void?]
+@defproc[(put-rgb-fg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [r byte?] [g byte?] [b byte?] [v any/c]) void?]
+@defproc[(put-rgb-bg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [r byte?] [g byte?] [b byte?] [v any/c]) void?]
+@defproc[(put-rgb-bg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [r byte?] [g byte?] [b byte?] [v any/c]) void?]
+@defproc[(put-rgb-fg-bg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [fr byte?] [fg byte?] [fb byte?] [br byte?] [bg byte?] [bb byte?] [v any/c]) void?]
+@defproc[(put-rgb-fg-bg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [fr byte?] [fg byte?] [fb byte?] [br byte?] [bg byte?] [bb byte?] [v any/c]) void?]
+@defproc[(put-256-fg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 255)] [v any/c]) void?]
+@defproc[(put-256-fg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 255)] [v any/c]) void?]
+@defproc[(put-256-bg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 255)] [v any/c]) void?]
+@defproc[(put-256-bg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 255)] [v any/c]) void?]
 
 @subsection{Escape-only variants}
 
@@ -218,6 +344,29 @@ Returns the escape-sequence bytes for @racket[name].
 Prints @racket[v] in style @racket[name], then resets.
 @defproc[(put-styled-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [name symbol?] [v any/c]) void?]
 @defproc[(put-styled-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [name symbol?] [v any/c]) void?]
+
+@defproc[(put-styled-bold [v any/c]) void?]
+@defproc[(put-styled-bold-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-bold-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-dim [v any/c]) void?]
+@defproc[(put-styled-dim-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-dim-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-italic [v any/c]) void?]
+@defproc[(put-styled-italic-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-italic-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-underline [v any/c]) void?]
+@defproc[(put-styled-underline-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-underline-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-blink [v any/c]) void?]
+@defproc[(put-styled-blink-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-blink-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-reverse [v any/c]) void?]
+@defproc[(put-styled-reverse-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+@defproc[(put-styled-reverse-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
+Attribute-styled output: bold, dim, italic, underline, blink, reverse, each with
+@tt{-at} (fixed position, cursor untouched) and @tt{-at!} (updates tracked
+cursor) variants. The @tt{put-} counterparts of @racket[format-styled-bold]
+and friends.
 
 @subsection{Color and attribute constructors}
 

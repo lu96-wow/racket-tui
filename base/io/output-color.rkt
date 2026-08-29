@@ -79,6 +79,26 @@
   (cursor-move row col)
   (put-styled name v))
 
+;; put-styled-* 属性族（与 format-styled-* 对称）
+(define (put-styled-bold v) (put-bytes (format-styled-bold v)))
+(define (put-styled-bold-at row col v) (put-bytes (format-styled-bold-at row col v)))
+(define (put-styled-bold-at! row col v) (put-bytes (format-styled-bold-at! row col v)))
+(define (put-styled-dim v) (put-bytes (format-styled-dim v)))
+(define (put-styled-dim-at row col v) (put-bytes (format-styled-dim-at row col v)))
+(define (put-styled-dim-at! row col v) (put-bytes (format-styled-dim-at! row col v)))
+(define (put-styled-italic v) (put-bytes (format-styled-italic v)))
+(define (put-styled-italic-at row col v) (put-bytes (format-styled-italic-at row col v)))
+(define (put-styled-italic-at! row col v) (put-bytes (format-styled-italic-at! row col v)))
+(define (put-styled-underline v) (put-bytes (format-styled-underline v)))
+(define (put-styled-underline-at row col v) (put-bytes (format-styled-underline-at row col v)))
+(define (put-styled-underline-at! row col v) (put-bytes (format-styled-underline-at! row col v)))
+(define (put-styled-blink v) (put-bytes (format-styled-blink v)))
+(define (put-styled-blink-at row col v) (put-bytes (format-styled-blink-at row col v)))
+(define (put-styled-blink-at! row col v) (put-bytes (format-styled-blink-at! row col v)))
+(define (put-styled-reverse v) (put-bytes (format-styled-reverse v)))
+(define (put-styled-reverse-at row col v) (put-bytes (format-styled-reverse-at row col v)))
+(define (put-styled-reverse-at! row col v) (put-bytes (format-styled-reverse-at! row col v)))
+
 (define (format-styled name v)
   (define style-bytes (style->bytes name))
   (bytes-append style-bytes (format-content v) format-reset))
@@ -225,6 +245,13 @@
  current-registry use-256color! use-16color! use-color-auto!
  ;; 立即输出
  put-styled put-styled-at put-styled-at!
+ ;; 立即输出属性
+ put-styled-bold put-styled-bold-at put-styled-bold-at!
+ put-styled-dim put-styled-dim-at put-styled-dim-at!
+ put-styled-italic put-styled-italic-at put-styled-italic-at!
+ put-styled-underline put-styled-underline-at put-styled-underline-at!
+ put-styled-blink put-styled-blink-at put-styled-blink-at!
+ put-styled-reverse put-styled-reverse-at put-styled-reverse-at!
  ;; 格式化
  format-styled format-styled-at format-styled-at! format-styled*
  ;; 颜色构造器

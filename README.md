@@ -369,21 +369,88 @@ More examples can be found in the `demo/` directory.
 (flush)                  ;; Manual flush
 ```
 
-## Prefix / Suffix Conventions
+## API Conventions（命名规则）
+
+整个 API 由两张表（前缀、后缀）+ 三条规律（put/format 对称、参数顺序、颜色三档同构）构成。**记住这些规律，就能推导出绝大多数函数名和签名**，不需要逐个查文档。
+
+### Prefix（前缀决定行为模式）
 
 | Prefix | Meaning | Example |
 |--------|---------|---------|
-| `put-` | Immediate terminal output | `put`, `put-string` |
-| `format-` | Return byte string, for use with `put-bytes` | `format-cursor-move` |
-| `clr-` | Color setting (16-color) | `clr-red` |
-| `attr-` | Attribute setting | `attr-bold` |
+| `put-` | 立即输出到终端（默认每次 flush） | `put`, `put-string` |
+| `format-` | 返回 byte string，不输出；配合 `put-bytes` / `put-format-bytes` 批量拼接 | `format-cursor-move` |
+| `cursor-` `screen-` `line-` `buffer-` | 光标 / 屏幕 / 行 / 备用缓冲操作（立即输出） | `cursor-move`, `screen-clear` |
+| `clr-` | 16 色前景构造器（= `(color-fg n)`） | `clr-red` |
+| `bclr-` | 16 色背景构造器（= `(color-bg n)`） | `bclr-blue` |
+| `attr-` | SGR 属性构造器（输出对应转义序列的 thunk） | `attr-bold` |
+| `color-` `color256-` `color-rgb-` | 颜色构造器（返回 thunk，供 `style-define!` 使用） | `color-fg`, `color256-fg` |
+| `style-` | 样式系统（定义 / 应用 / 重置 / 取字节） | `style-define!`, `style->bytes` |
+| `event-` | 输入事件谓词 / 访问器 | `event-key?`, `mouse-x` |
+| `current-` | 参数（`current-registry`）或光标跟踪变量（`current-cursor-row/col`） | `current-cursor-row` |
+
+### Suffix（后缀决定副作用）
 
 | Suffix | Meaning | Example |
 |--------|---------|---------|
-| `!` | Has side effects (changes cursor position) | `put-at!`, `style-define!` |
-| `?` | Predicate, returns boolean | `event-key?`, `terminal?` |
-| `-at` | Positioned parameter | `put-at`, `cursor-move` |
-| `-at!` | Positioned parameter + side effects | `put-at!` |
+| `!` | 有副作用：更新光标跟踪状态 / 修改终端模式 | `put-at!`, `style-define!`, `set-buffered-mode!` |
+| `?` | 谓词，返回 boolean | `event-key?`, `terminal?` |
+| `-at` | 带位置参数（`row col` 在最前）；用 DECSC/DECRC 由终端保存/恢复光标，**不改变**跟踪光标 | `put-fg-at`, `format-styled-at` |
+| `-at!` | 带位置 + **更新**跟踪光标 | `put-fg-at!`, `put-at!` |
+| `-base` | 纯转义序列：不带内容、不带 reset | `put-fg-base`, `format-rgb-fg-base` |
+
+### 规律一：put / format 对称
+
+同一个能力几乎都有 `put-`（立即输出）和 `format-`（返回 bytes）两种形态，**参数完全一致**：
+
+```racket
+(put-fg 1 "x")                  ; = (put-bytes (format-fg 1 "x"))
+(put-rgb-fg-at 1 1 255 0 0 "x") ; = (put-bytes (format-rgb-fg-at 1 1 255 0 0 "x"))
+(put-cursor-save)               ; = (put-bytes format-cursor-save)
+```
+
+例外（设计使然）：
+- `put-at` ↔ `format-content-at`（名字不同，`-at` 即 content 形态）
+- `format-styled*` 只有 format 形态（批量拼接时末尾统一 `format-reset`，put 形态无意义）
+- `put` / `put-bytes` 等输出入口无 format 对应，`format-content` 承担类型转换
+
+### 规律二：参数顺序
+
+1. **内容 `v`（string / bytes / char / 数字）永远是最后一个参数**
+2. **定位函数的 `row col` 永远在最前**
+3. 颜色参数在中间：16/256 色是 `n`；RGB 是 `r g b`；前景+背景是 `fr fg fb br bg bb`（6 个，先前景后背景）
+
+```racket
+(put-rgb-fg-bg-at row col fr fg fb br bg bb v)  ; 完整形态示例
+```
+
+### 规律三：颜色三档同构
+
+16 色 / 256 色 / RGB 三档同名同构，只有颜色参数不同（`n` / `n` / `r g b`）：
+
+```racket
+(put-fg n v)           (put-256-fg n v)           (put-rgb-fg r g b v)
+(put-fg-at r c n v)    (put-256-fg-at r c n v)    (put-rgb-fg-at r c r g b v)
+(put-fg-base n)        (put-256-fg-base n)        (put-rgb-fg-base r g b)
+```
+
+知道任意一档的形态，就能推导出另外两档。
+
+### 标准 API 分类
+
+| Category | 代表函数 |
+|----------|---------|
+| 生命周期 | `with-tui` / `with-tui-nobuffer` / `with-tui-nobuffer-echo`（接 thunk）、`tui-init` / `tui-exit` 家族、`enable-mouse!` / `enable-bracketed-paste!` |
+| 基础输出 | `put` `put-bytes` `put-string` `put-char` `put-byte` `put-newline` `put-format-bytes` |
+| 定位输出 | `put-at` `put-at!` 及所有 `-at` / `-at!` 变体 |
+| 光标 | `cursor-move` `cursor-up` `cursor-hide` `cursor-show`、`put-cursor-save` / `put-cursor-restore` |
+| 屏幕 / 行 / 缓冲 | `screen-clear*` `line-clear*` `buffer-alt-enable/disable` |
+| 颜色 | `put-fg/bg` `put-rgb-*` `put-256-*`（含 `-base`、`-at`、`-at!` 三档变体） |
+| 样式 | `style-define!` `style-apply!` `style-reset` `style->bytes`、`put-styled*` / `format-styled*`、构造器 `color-*` `attr-*` `clr-*` `bclr-*` |
+| 格式（返回 bytes） | 所有 `format-*` |
+| 输入 | `read-event` `read-event-noblock`、`event-*` 谓词、`build-input` `loop-input` `loop-input/stop` |
+| 终端 | `terminal?` `enter-raw-mode!` `exit-raw-mode!` `get-window-size` `resize-monitor-start/stop` |
+| 光标跟踪 | `current-cursor-row` `current-cursor-col` `set-cursor!` `get-cursor` `update-cursor!` |
+| 配置常量 | `ESCDELAY` `CSI-MAX-BYTES` `PASTE-MAX-BYTES` `UTF8-READ-TIMEOUT` `PASTE-READ-TIMEOUT` |
 
 ## Linux FFI 常量（硬编码）
 

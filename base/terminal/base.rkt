@@ -3,7 +3,7 @@
 (require ffi/unsafe racket/bytes)
 
 (unless (eq? 'linux
-             (system-type 'os)) (error "only linux could use"))
+             (system-type 'os*)) (error "only linux could use"))
 ;; ════════════════════════════════════════════════════════════════
 ;; FFI 绑定 — termios / isatty（Linux libc）
 ;;

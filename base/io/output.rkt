@@ -82,6 +82,9 @@
 (define (put-rgb-bg r g b v)
   (put-bytes (format-rgb-bg r g b v)))
 
+(define (put-rgb-fg-bg fr fg fb br bg bb v)
+  (put-bytes (format-rgb-fg-bg fr fg fb br bg bb v)))
+
 (define (put-256-fg n v)
   (put-bytes (format-256-fg n v)))
 
@@ -115,6 +118,35 @@
 (define (put-at! row col v)
   (put-bytes (format-content-at! row col v)))
 
+;; 彩色定位输出（与 format-*-at 对称，DECSC/DECRC 由终端保存/恢复光标）
+(define (put-fg-at row col n v) (put-bytes (format-fg-at row col n v)))
+(define (put-fg-at! row col n v) (put-bytes (format-fg-at! row col n v)))
+(define (put-bg-at row col n v) (put-bytes (format-bg-at row col n v)))
+(define (put-bg-at! row col n v) (put-bytes (format-bg-at! row col n v)))
+(define (put-rgb-fg-at row col r g b v)
+  (put-bytes (format-rgb-fg-at row col r g b v)))
+(define (put-rgb-fg-at! row col r g b v)
+  (put-bytes (format-rgb-fg-at! row col r g b v)))
+(define (put-rgb-bg-at row col r g b v)
+  (put-bytes (format-rgb-bg-at row col r g b v)))
+(define (put-rgb-bg-at! row col r g b v)
+  (put-bytes (format-rgb-bg-at! row col r g b v)))
+(define (put-rgb-fg-bg-at row col fr fg fb br bg bb v)
+  (put-bytes (format-rgb-fg-bg-at row col fr fg fb br bg bb v)))
+(define (put-rgb-fg-bg-at! row col fr fg fb br bg bb v)
+  (put-bytes (format-rgb-fg-bg-at! row col fr fg fb br bg bb v)))
+(define (put-256-fg-at row col n v) (put-bytes (format-256-fg-at row col n v)))
+(define (put-256-fg-at! row col n v) (put-bytes (format-256-fg-at! row col n v)))
+(define (put-256-bg-at row col n v) (put-bytes (format-256-bg-at row col n v)))
+(define (put-256-bg-at! row col n v) (put-bytes (format-256-bg-at! row col n v)))
+
+;; 光标保存/恢复（与 format-cursor-save/restore 对称）
+(define (put-cursor-save) (put-bytes format-cursor-save))
+(define (put-cursor-restore) (put-bytes format-cursor-restore))
+
+;; 样式重置（与 format-reset 对称）
+(define (put-reset) (put-bytes format-reset))
+
 ;; 导出
 (provide put put-byte put-bytes put-format-bytes put-char put-string put-newline
          format-newline
@@ -127,7 +159,12 @@
          buffer-alt-enable buffer-alt-disable
          current-cursor-row current-cursor-col
          set-immediate-mode! set-buffered-mode! flush!
-         put-fg put-bg put-rgb-fg put-rgb-bg put-256-fg put-256-bg
+         put-fg put-bg put-rgb-fg put-rgb-bg put-rgb-fg-bg put-256-fg put-256-bg
+         put-fg-at put-fg-at! put-bg-at put-bg-at!
+         put-rgb-fg-at put-rgb-fg-at! put-rgb-bg-at put-rgb-bg-at!
+         put-rgb-fg-bg-at put-rgb-fg-bg-at! put-256-fg-at put-256-fg-at!
+         put-256-bg-at put-256-bg-at!
+         put-cursor-save put-cursor-restore put-reset
          put-fg-base put-bg-base put-rgb-fg-base put-rgb-bg-base
          put-rgb-fg-bg-base put-256-fg-base put-256-bg-base
          put-bold put-dim put-italic put-underline put-blink put-reverse)
