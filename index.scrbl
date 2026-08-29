@@ -527,8 +527,9 @@ Like @racket[format-styled], but without the trailing reset.
           [#:utf-char on-utf-char (or/c (-> string? any) #f) #f]
           [#:ctrl on-ctrl (or/c (-> char? any) #f) #f]
           [#:alt on-alt (or/c (-> char? any) #f) #f]
-          [#:mod on-mod (or/c (-> char? boolean? boolean? any) #f) #f]
+          [#:mod on-mod (or/c (-> char? boolean? boolean? boolean? any) #f) #f]
           [#:tab on-tab (or/c (-> any) #f) #f]
+          [#:backtab on-backtab (or/c (-> any) #f) #f]
           [#:space on-space (or/c (-> any) #f) #f]
           [#:enter on-enter (or/c (-> any) #f) #f]
           [#:backspace on-backspace (or/c (-> any) #f) #f]
@@ -550,16 +551,17 @@ Like @racket[format-styled], but without the trailing reset.
           [#:paste on-paste (or/c (-> bytes? any) #f) #f]
           [#:resize on-resize (or/c (-> exact-positive-integer? exact-positive-integer? any) #f) #f]
           [#:null on-null (or/c (-> any) #f) #f]
-          [#:any on-any (or/c (-> symbol? bytes? (or/c #f (cons/c boolean? boolean?)) any) #f) #f])
-         (-> symbol? bytes? (or/c #f (cons/c boolean? boolean?)) any)]{
+          [#:any on-any (or/c (-> symbol? bytes? (or/c #f (list/c boolean? boolean? boolean?)) any) #f) #f])
+         (-> symbol? bytes? (or/c #f (list/c boolean? boolean? boolean?)) any)]{
 Builds an event handler from callback keywords. Every keyword is optional;
 events without a handler fall through to @racket[#:any], or are ignored.
 The returned function has the signature @racket[(type data mods) ...] and can
 be passed to @racket[loop-input] or called directly.
 
 Event dispatch priority (built in): @tt{null} > @tt{resize} > @tt{paste} >
-@tt{mouse} > tab/space/enter/backspace/escape > arrows > function keys >
-@tt{ctrl} > @tt{alt} > @tt{mod-seq} > @tt{utf8} > @tt{char} > @tt{any}.
+@tt{mouse} > tab/backtab/space/enter/backspace/escape > arrows > function
+keys > @tt{ctrl} > @tt{alt} > @tt{mod-seq} > @tt{utf8} > @tt{char} >
+@tt{any}.
 }
 
 @defform[(loop-input handler ...)]{
@@ -582,7 +584,7 @@ Like @racket[loop-input/stop], using @racket[read-event-noblock].
 
 @subsection{Low-level: read-event}
 
-@defproc[(read-event) (values symbol? bytes? (or/c #f (cons/c boolean? boolean?)))]{
+@defproc[(read-event) (values symbol? bytes? (or/c #f (list/c boolean? boolean? boolean?)))]{
 Reads one input event from the terminal, blocking until input arrives.
 Returns @racket[(values type data mods)]:
 
@@ -590,12 +592,13 @@ Returns @racket[(values type data mods)]:
   @item{@racket[type] --- a symbol (see the predicates below).}
   @item{@racket[data] --- event payload: key byte, UTF-8 bytes, mouse detail
         list, paste bytes, or @racket[(rows . cols)] for resize.}
-  @item{@racket[mods] --- @racket[#f] or @racket[(cons ctrl? alt?)] modifier
-        flags.}
+  @item{@racket[mods] --- @racket[#f] (no modifiers) or
+        @racket[(list ctrl? alt? shift?)] for modified keys and mouse
+        events.}
 ]
 }
 
-@defproc[(read-event-noblock) (values symbol? bytes? (or/c #f (cons/c boolean? boolean?)))]
+@defproc[(read-event-noblock) (values symbol? bytes? (or/c #f (list/c boolean? boolean? boolean?)))]
 Like @racket[read-event], but returns immediately with @racket['null] when no
 input is available.
 
@@ -617,6 +620,7 @@ input is available.
 @defproc[(event-end? [type symbol?]) boolean?]
 @defproc[(event-pageup? [type symbol?]) boolean?]
 @defproc[(event-pagedown? [type symbol?]) boolean?]
+@defproc[(event-backtab? [type symbol?]) boolean?]
 @defproc[(event-touch? [type symbol?]) boolean?]
 @defproc[(event-mouse? [type symbol?]) boolean?]
 @defproc[(event-paste? [type symbol?]) boolean?]

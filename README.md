@@ -230,8 +230,8 @@ All keyword arguments are optional. Supported events:
 | `#:utf-char` | `(lambda (str) ...)` | UTF-8 character |
 | `#:ctrl` | `(lambda (ch) ...)` | Ctrl+letter, ch is `#\A`-`#\Z` |
 | `#:alt` | `(lambda (ch) ...)` | Alt+letter |
-| `#:mod` | `(lambda (ch ctrl? alt?) ...)` | Ctrl+Alt+combination |
-| `#:tab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | Special keys |
+| `#:mod` | `(lambda (ch ctrl? alt? shift?) ...)` | Ctrl+Alt+Shift+combination |
+| `#:tab` / `#:backtab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | Special keys |
 | `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | Arrow keys |
 | `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | Function keys |
 | `#:mouse-press` | `(lambda (button x y modifiers) ...)` | Mouse press, button is `'left`/`'middle`/`'right` |

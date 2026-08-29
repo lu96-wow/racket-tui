@@ -34,21 +34,42 @@
                      (values (append ps (list cur)) b))]
                 [else (loop (+ i 1) cur ps)])))))
 
-;; 提取修饰键
-(define (extract-modifiers ps)
-  (if (<= (length ps) 1)
-      (cons #f #f)
-      (let ([ctrl? (ormap (λ (p) (memv p (list MOD-CTRL MOD-ALT-CTRL))) ps)]
-            [alt?  (ormap (λ (p) (memv p (list MOD-ALT MOD-ALT-CTRL))) ps)])
-        (cons ctrl? alt?))))
+;; xterm 修饰码: 2=Shift 3=Alt 4=Shift+Alt 5=Ctrl 6=Shift+Ctrl 7=Alt+Ctrl 8=Shift+Alt+Ctrl
+;; 即 修饰码 = 1 + shift(1) + alt(2) + ctrl(4)，解码为 (list ctrl? alt? shift?)
+(define (decode-modifier-code n)
+  (and (<= 2 n 8)
+       (let ([m (- n 1)])
+         (list (bitwise-bit-set? m 2)
+               (bitwise-bit-set? m 1)
+               (bitwise-bit-set? m 0)))))
 
-;; CSI 键类型映射
+;; 从 CSI 参数提取修饰三元组 (list ctrl? alt? shift?)
+;; 规则：第一个参数是键码（如 1=方向键组、27=modifyOtherKeys 标志），
+;;      其余参数中 2-8 为修饰码，位合并
+(define (extract-modifiers ps)
+  (define acc (list #f #f #f))
+  (for ([p (if (null? ps) '() (cdr ps))])
+    (define d (decode-modifier-code p))
+    (when d
+      (set! acc (list (or (car acc) (car d))
+                      (or (cadr acc) (cadr d))
+                      (or (caddr acc) (caddr d))))))
+  acc)
+
+;; CSI 键类型映射（xterm 编码）
+;; ~ 结尾：2~Insert 3~Delete 5~PgUp 6~PgDn
+;;         1~/4~/7~/8~ = 老式 Home/End
+;; 注：F1-F12（11~-24~）不在终端实际可达范围内（桌面环境吞键），不映射
 (define (csi-params-final->type ps final)
   (cond
     [(= final TILDE)
      (case (and (pair? ps) (car ps))
-       [(3) KEY-DELETE]
+       [(1) KEY-HOME]      ; 老式 Home
+       [(4) KEY-END]       ; 老式 End
+       [(7) KEY-HOME]      ; VT Home
+       [(8) KEY-END]       ; VT End
        [(2) KEY-INSERT]
+       [(3) KEY-DELETE]
        [(5) KEY-PAGEUP]
        [(6) KEY-PAGEDOWN]
        [else EVENT-SEQ])]
@@ -60,7 +81,21 @@
        [(68) KEY-LEFT]   ; CSI D
        [(72) KEY-HOME]   ; CSI H
        [(70) KEY-END]    ; CSI F
+       [(90) KEY-BACKTAB] ; Shift+Tab (xterm: ESC [ Z)
        [else EVENT-SEQ])]))
+
+;; SS3 序列映射（ESC O ...）
+;; DECCKM 应用光标键模式的方向键: ESC O A/B/C/D, Home=H, End=F
+;; 注：F1-F4 的 SS3 形式（ESC O P/Q/R/S）不映射，理由同上
+(define (ss3-final->type b3)
+  (case b3
+    [(65) KEY-UP]    ; A
+    [(66) KEY-DOWN]  ; B
+    [(67) KEY-RIGHT] ; C
+    [(68) KEY-LEFT]  ; D
+    [(72) KEY-HOME]  ; H
+    [(70) KEY-END]   ; F
+    [else EVENT-SEQ]))
 
 ;; 鼠标事件解析
 
@@ -69,7 +104,11 @@
          [x (cadr ps)]
          [y (caddr ps)]
          [button-code (bitwise-and type MOUSE-BUTTON-MASK)]
-         [modifiers (arithmetic-shift type -2)]
+         ;; SGR 修饰位: bit2=Shift bit3=Alt bit4=Ctrl → (list ctrl? alt? shift?)
+         [modifiers (let ([m (arithmetic-shift type -2)])
+                      (list (bitwise-bit-set? m 2)
+                            (bitwise-bit-set? m 1)
+                            (bitwise-bit-set? m 0)))]
          [is-move? (bitwise-bit-set? type MOUSE-MOVE-FLAG)]
          [is-release? (and (= final MOUSE-RELEASE) (not is-move?))]
          [button (case button-code
@@ -147,16 +186,27 @@
               [else (loop (bytes-append acc (bytes b))
                           (sub1 left))])))))
 
-;; read-event 核心 — ESC 后用 ESCDELAY 超时区分独立 ESC vs 序列
+;; ════════════════════════════════════════════════════════════════
+;; 键解析协议 — 可插拔分发点
+;; 默认 'ansi（传统字节流解析）。将来实现 kitty 键盘协议后
+;; 添加 'kitty 分支即可，无需改动 read-event 调用方。
+;; ════════════════════════════════════════════════════════════════
+(define current-key-protocol (make-parameter 'ansi))
 
-(define (read-event-impl first)
+;; read-event 核心 — ESC 后用 ESCDELAY 超时区分独立 ESC vs 序列
+;; （ANSI 协议解析器）
+(define (read-event-ansi first)
   (cond [(ctrl-char? first) (values EVENT-CTRL (bytes first) #f)]
         [(= first ESC)
          (define b2 (read-byte/timeout ESCDELAY))
          (cond [(not b2) (values EVENT-KEY (bytes first) #f)]    ; 独立 ESC
                [(= b2 CSI-SS3)
                 (define b3 (read-byte/timeout ESCDELAY))
-                (values EVENT-SEQ (bytes first b2 (if b3 b3 '())) #f)]
+                (if (not b3)
+                    ;; 只有 ESC O：Alt+O（SS3 序列至少还有一个终结字节）
+                    (values EVENT-ALT (bytes first b2) #f)
+                    (let ([seq (bytes first b2 b3)])
+                      (values (ss3-final->type b3) seq #f)))]
                [(= b2 CSI-OPEN)
                 (define seq (read-csi-seq b2))
                 (let-values ([(ps final) (parse-csi-params seq)])
@@ -173,7 +223,7 @@
                      (values EVENT-MOUSE (parse-mouse-event ps final) #f)]
                     [else
                      (define mods (extract-modifiers ps))
-                     (if (or (car mods) (cdr mods))
+                     (if (or (car mods) (cadr mods) (caddr mods))
                          (values EVENT-MOD seq mods)
                          (values (csi-params-final->type ps final) seq #f))]))]
                [(<= ASCII-PRINTABLE-START b2 ASCII-PRINTABLE-END)
@@ -183,6 +233,13 @@
          (define rest (read-n-bytes (sub1 (utf8-length first))))
          (values EVENT-UTF8 (bytes-append (bytes first) rest) #f)]
         [else (values EVENT-KEY (bytes first) #f)]))
+
+;; 协议分发
+(define (read-event-impl first)
+  (case (current-key-protocol)
+    [(ansi) (read-event-ansi first)]
+    [else (error 'read-event
+                 "unknown key protocol: ~a" (current-key-protocol))]))
 
 ;; resize 监控 — 见 terminal/resize.rkt: signalfd 事件, 无轮询线程
 ;; read-event 的 sync 统一等 stdin-evt + resize-evt, 调度器协作, 零 CPU
@@ -230,6 +287,7 @@
 (define (event-end? t)      (eq? t KEY-END))
 (define (event-pageup? t)   (eq? t KEY-PAGEUP))
 (define (event-pagedown? t) (eq? t KEY-PAGEDOWN))
+(define (event-backtab? t)  (eq? t KEY-BACKTAB))
 (define (event-touch? t)    (eq? t EVENT-MOUSE))
 (define (event-mouse? t)    (eq? t EVENT-MOUSE))
 (define (event-paste? t)    (eq? t EVENT-PASTE))
@@ -291,9 +349,41 @@
 (define (alt->char d)
   (and (bytes? d) (= (bytes-length d) 2) (bytes-ref d 1)))
 
+;; 在 [1, hi] 内从后往前找第一个 ';'，返回下标或 #f
+(define (find-last-sep d hi)
+  (let loop ([i hi])
+    (cond [(< i 1) #f]
+          [(= (bytes-ref d i) CSI-PARAM-SEP) i]
+          [else (loop (sub1 i))])))
+
+;; 解析 [lo, hi) 区间内纯数字，含非数字返回 #f
+(define (parse-number d lo hi)
+  (let loop ([i lo] [acc 0])
+    (if (>= i hi)
+        acc
+        (let ([b (bytes-ref d i)])
+          (if (<= ASCII-DIGIT-START b ASCII-DIGIT-END)
+              (loop (+ i 1) (+ (* acc 10) (- b ASCII-DIGIT-START)))
+              #f)))))
+
+;; xterm modifyOtherKeys 格式: ESC [ 27 ; mods ; code ~
+;; 返回 code（字符码点），非该格式返回 #f
+;; 例: ESC [ 27 ; 5 ; 120 ~ = Ctrl+Alt+x → 120
+;; code 是最后一个 ';' 与结尾 '~' 之间的数字
+(define (parse-modify-other-keys-code d)
+  (define n (bytes-length d))
+  (and (>= n 9)
+       (= (bytes-ref d 0) ESC)
+       (= (bytes-ref d 1) CSI-OPEN)
+       (= (bytes-ref d (sub1 n)) TILDE)
+       (let ([last-sep (find-last-sep d (- n 2))])
+         (and last-sep
+              (parse-number d (+ last-sep 1) (sub1 n))))))
+
 (define (mod-seq->char d)
   (and (bytes? d) (> (bytes-length d) 2)
-       (bytes-ref d (sub1 (bytes-length d)))))
+       (or (parse-modify-other-keys-code d)
+           (bytes-ref d (sub1 (bytes-length d))))))
 
 (define (get-resize-rows d) (car d))
 (define (get-resize-cols d) (cdr d))
@@ -312,6 +402,7 @@
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?
          event-del? event-insert? event-home? event-end? event-pageup? event-pagedown?
+         event-backtab?
          event-touch? event-mouse? event-paste?
          event-tab? event-space? event-backspace? event-enter? event-escape?
          mouse-press? mouse-release? mouse-move? mouse-scroll?

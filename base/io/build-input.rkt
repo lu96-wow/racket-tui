@@ -56,6 +56,7 @@
           #:alt [on-alt #f]
           #:mod [on-mod #f]
           #:tab [on-tab #f]
+          #:backtab [on-backtab #f]
           #:space [on-space #f]
           #:enter [on-enter #f]
           #:backspace [on-backspace #f]
@@ -136,6 +137,7 @@
            (dispatch-key (bytes-ref data 0))
            (on-any-and-null EVENT-KEY data #f))]
       [(up) (if on-up (on-up) (on-any-and-null type data mods))]
+      [(backtab) (if on-backtab (on-backtab) (on-any-and-null type data mods))]
       [(down) (if on-down (on-down) (on-any-and-null type data mods))]
       [(left) (if on-left (on-left) (on-any-and-null type data mods))]
       [(right) (if on-right (on-right) (on-any-and-null type data mods))]
@@ -158,7 +160,7 @@
       [(mod-seq)
        (let ([ch (mod-seq->char data)])
          (if ch
-             (if on-mod (on-mod (integer->char ch) (car mods) (cdr mods))
+             (if on-mod (on-mod (integer->char ch) (car mods) (cadr mods) (caddr mods))
                  (on-any-and-null type data mods))
              (on-any-and-null EVENT-MOD data mods)))]
       [(utf8)

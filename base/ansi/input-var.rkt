@@ -27,6 +27,7 @@
 (define KEY-END      'end)
 (define KEY-PAGEUP   'pageup)
 (define KEY-PAGEDOWN 'pagedown)
+(define KEY-BACKTAB  'backtab)   ; Shift+Tab (xterm: ESC [ Z)
 
 (define EVENT-MOUSE-PRESS   'press)
 (define EVENT-MOUSE-RELEASE 'release)
