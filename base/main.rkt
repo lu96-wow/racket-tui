@@ -9,6 +9,7 @@
          "ansi/ansi-format.rkt"
          "ansi/input-var.rkt"
          "io/input.rkt"
+         "io/event.rkt"
          "io/build-input.rkt"
          "io/output.rkt"
          "io/output-color.rkt"
@@ -23,6 +24,7 @@
          (all-from-out "ansi/ansi-format.rkt")
          (all-from-out "ansi/input-var.rkt")
          (all-from-out "io/input.rkt")
+         (all-from-out "io/event.rkt")
          (all-from-out "io/build-input.rkt")
          (all-from-out "io/output.rkt")
          (all-from-out "io/output-color.rkt")

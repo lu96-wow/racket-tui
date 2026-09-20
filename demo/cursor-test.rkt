@@ -362,7 +362,6 @@
 
   ;; 等待按键退出
   (let loop ()
-    (define-values (type data mods) (read-event))
-    (unless (or (event-key? type) (event-null? type)
-                (and (event-ctrl? type) (= (bytes-ref data 0) 3)))
+    (define ev (read-event))
+    (unless (or (key-event? ev) (null-event? ev))
       (loop)))))

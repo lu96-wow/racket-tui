@@ -548,15 +548,85 @@ Like @racket[format-styled], but without the trailing reset.
 
 @section{Input}
 
+@subsection{Events}
+
+@racket[read-event] returns a single normalized event value
+(@racket[event?]); the event's type is determined by its semantics, not by
+its byte encoding. Every event that carries modifiers uses a @racket[mods?]
+struct: there is no positional modifier list and no polymorphic @racket[data]
+payload.
+
+@defproc[(read-event) event?]{
+Reads one input event from the terminal, blocking until input arrives.
+Equivalent to ncurses @tt{getch()}: the wait is a zero-CPU @racket[sync] on
+stdin and resize events.
+}
+
+@defproc[(read-event-noblock) event?]{
+Like @racket[read-event], but returns a @racket[null-event] immediately when
+no input is available.
+}
+
+@defproc[(event? [v any/c]) boolean?]
+True for any of the event structs below.
+
+@defstruct[mods ([ctrl? boolean?] [alt? boolean?] [shift? boolean?])]{
+The modifier keys held during an event.}
+
+@defproc[(no-mods? [m mods?]) boolean?]
+True when no modifier is held.
+
+@defproc[(->mods [m any/c]) mods?]
+Coerces a @racket[mods?], a positional @racket[(list ctrl? alt? shift?)], or
+@racket[#f] to a @racket[mods?].
+
+@defproc[(mods->list [m mods?]) (list/c boolean? boolean? boolean?)]
+Converts a @racket[mods?] to @racket[(list ctrl? alt? shift?)].
+
+@defstruct[key-event ([key (or/c char? symbol?)] [mods mods?])]{
+A key press. @racket[key] is a @racket[char?] for a character key (printable,
+control, or multi-byte) or a @racket[symbol?] for a named key: @racket['up]
+@racket['down] @racket['left] @racket['right] @racket['home] @racket['end]
+@racket['pageup] @racket['pagedown] @racket['insert] @racket['del]
+@racket['backtab] @racket['tab] @racket['enter] @racket['backspace]
+@racket['escape]. The Ctrl/Alt implied by the raw @tt{ctrl}/@tt{alt} event
+types are folded into @racket[mods].}
+
+@defstruct[paste-event ([bytes bytes?] [text string?])]{
+Bracketed paste. @racket[bytes] is the raw payload; @racket[text] is the
+UTF-8 lossy decoding (invalid bytes become U+FFFD).}
+
+@defstruct[mouse-event ([action symbol?] [button (or/c symbol? #f)] [x exact-nonnegative-integer?] [y exact-nonnegative-integer?] [mods mods?])]{
+@racket[action] is @racket['press] @racket['release] @racket['move] or
+@racket['scroll]. @racket[button] is @racket['left] @racket['middle] or
+@racket['right] for press/release, @racket['up] or @racket['down] (wheel
+direction) for scroll, and @racket[#f] for move. @racket[x] and @racket[y]
+are 1-based coordinates.}
+
+@defstruct[resize-event ([rows exact-positive-integer?] [cols exact-positive-integer?])]{}
+@defstruct[null-event ()]{No input was available (@racket[read-event-noblock]).}
+@defstruct[other-event ([type symbol?] [data any/c] [mods mods?])]{
+An event that could not be normalized (for example an unrecognized escape
+sequence). @racket[type] and @racket[data] are the raw low-level values.}
+
+@defproc[(byte->key [b byte?]) (or/c char? symbol?)]
+Maps a raw single byte to a key: a named symbol (@racket['tab]
+@racket['enter] @racket['backspace] @racket['escape]) or a @racket[char?].
+
+@defproc[(normalize-event [type symbol?] [data any/c] [mods (or/c #f (list/c boolean? boolean? boolean?))]) event?]
+Normalizes a raw @racket[(values type data mods)] triple (as returned by
+@racket[read-event/raw]) into an event value.
+
 @subsection{High-level: build-input and event loops}
 
 @defproc[(build-input
-          [#:char on-char (or/c (-> integer? any) #f) #f]
-          [#:utf-char on-utf-char (or/c (-> string? any) #f) #f]
-          [#:ctrl on-ctrl (or/c (-> char? any) #f) #f]
-          [#:alt on-alt (or/c (-> char? any) #f) #f]
-          [#:mod-char on-mod-char (or/c (-> char? boolean? boolean? boolean? any) #f) #f]
-          [#:mod-key on-mod-key (or/c (-> symbol? boolean? boolean? boolean? any) #f) #f]
+          [#:key on-key (or/c (-> (or/c char? symbol?) mods? any) #f) #f]
+          [#:text on-text (or/c (-> string? any) #f) #f]
+          [#:paste on-paste (or/c (-> bytes? any) #f) #f]
+          [#:mouse on-mouse (or/c (-> symbol? (or/c symbol? #f) exact-nonnegative-integer? exact-nonnegative-integer? mods? any) #f) #f]
+          [#:resize on-resize (or/c (-> exact-positive-integer? exact-positive-integer? any) #f) #f]
+          [#:null on-null (or/c (-> any) #f) #f]
+          [#:any on-any (or/c (-> event? any) #f) #f]
           [#:tab on-tab (or/c (-> any) #f) #f]
           [#:backtab on-backtab (or/c (-> any) #f) #f]
           [#:space on-space (or/c (-> any) #f) #f]
@@ -572,107 +642,81 @@ Like @racket[format-styled], but without the trailing reset.
           [#:home on-home (or/c (-> any) #f) #f]
           [#:end on-end (or/c (-> any) #f) #f]
           [#:pageup on-pageup (or/c (-> any) #f) #f]
-          [#:pagedown on-pagedown (or/c (-> any) #f) #f]
-          [#:mouse-press on-mouse-press (or/c (-> symbol? exact-nonnegative-integer? exact-nonnegative-integer? (list/c boolean? boolean? boolean?) any) #f) #f]
-          [#:mouse-release on-mouse-release (or/c (-> symbol? exact-nonnegative-integer? exact-nonnegative-integer? (list/c boolean? boolean? boolean?) any) #f) #f]
-          [#:mouse-move on-mouse-move (or/c (-> exact-nonnegative-integer? exact-nonnegative-integer? (list/c boolean? boolean? boolean?) any) #f) #f]
-          [#:mouse-scroll on-mouse-scroll (or/c (-> symbol? exact-nonnegative-integer? exact-nonnegative-integer? (list/c boolean? boolean? boolean?) any) #f) #f]
-          [#:paste on-paste (or/c (-> bytes? any) #f) #f]
-          [#:resize on-resize (or/c (-> exact-positive-integer? exact-positive-integer? any) #f) #f]
-          [#:null on-null (or/c (-> any) #f) #f]
-          [#:any on-any (or/c (-> symbol? bytes? (or/c #f (list/c boolean? boolean? boolean?)) any) #f) #f])
-         (-> symbol? bytes? (or/c #f (list/c boolean? boolean? boolean?)) any)]{
-Builds an event handler from callback keywords. Every keyword is optional;
-events without a handler fall through to @racket[#:any], or are ignored.
-The returned function has the signature @racket[(type data mods) ...] and can
-be passed to @racket[loop-input] or called directly.
+          [#:pagedown on-pagedown (or/c (-> any) #f) #f])
+         (-> event? any)]{
+Builds an event handler from callback keywords. Every keyword is optional; an
+event without a matching callback falls through to @racket[#:any], or is
+ignored. The returned function has type @racket[(-> event? any)] and is
+passed to @racket[loop-input] or called with @racket[(read-event)].
 
-Event dispatch priority (built in): @tt{null} > @tt{resize} > @tt{paste} >
-@tt{mouse} > tab/backtab/space/enter/backspace/escape > arrows > function
-keys > @tt{ctrl} > @tt{alt} > @tt{mod-seq} > @tt{utf8} > @tt{char} >
-@tt{any}.
-
-Modified events (@tt{mod-seq}) split into two categories:
-@itemize[
-  @item{Modified characters (e.g. Ctrl+Alt+x, encoded as
-        @tt{ESC [ 27;7;120~}) go to @racket[#:mod-char] with the character.}
-  @item{Modified navigation keys (e.g. Ctrl+Up, encoded as @tt{ESC [ 1;5A})
-        go to @racket[#:mod-key] with a key symbol such as @racket['up] or
-        @racket['home]. If @racket[#:mod-key] is not provided they fall back
-        to @racket[#:mod-char].}
-]
+Dispatch priority (built in): @tt{null} > @tt{resize} > @tt{paste} >
+@tt{mouse} > @tt{key}. Within a @racket[key-event], an unmodified named key
+first tries its shortcut callback (@racket[#:tab], @racket[#:up], ...); then
+a printable character (no Ctrl/Alt) goes to @racket[#:text]; otherwise the
+key goes to @racket[#:key]. A paste tries @racket[#:paste], then
+@racket[#:text].
 
 @subsubsection{Callback arguments}
 
-All keywords are optional; an event without a matching callback falls
-through to @racket[#:any], or is ignored if @racket[#:any] is absent.
-Callback argument types:
+All keywords are optional; an event without a matching callback falls through
+to @racket[#:any], or is ignored if @racket[#:any] is absent.
 
 @tabular[#:sep @hspace[1]
   (list (list @bold{Keyword} @bold{Callback} @bold{Argument types})
-        (list @racket[#:char] @racket[(ch)] @elem{@racket[ch] --- @racket[integer?], ASCII value 0-255 (e.g. 97 = @tt{a}).})
-        (list @racket[#:utf-char] @racket[(str)] @elem{@racket[str] --- @racket[string?], one UTF-8 character (e.g. @tt{"你"}).})
-        (list @racket[#:ctrl] @racket[(ch)] @elem{@racket[ch] --- @racket[char?], @racket[#\A] to @racket[#\Z] for Ctrl+A to Ctrl+Z.})
-        (list @racket[#:alt] @racket[(ch)] @elem{@racket[ch] --- @racket[char?], the character typed with Alt.})
-        (list @racket[#:mod-char] @racket[(ch ctrl? alt? shift?)] @elem{@racket[ch] --- @racket[char?]; @racket[ctrl?] @racket[alt?] @racket[shift?] --- @racket[boolean?], each modifier pressed.})
-        (list @racket[#:mod-key] @racket[(key ctrl? alt? shift?)] @elem{@racket[key] --- @racket[symbol?], one of @racket['up] @racket['down] @racket['left] @racket['right] @racket['home] @racket['end] @racket['pageup] @racket['pagedown] @racket['insert] @racket['del] @racket['backtab]; plus the three @racket[boolean?] modifiers.})
-        (list @racket[#:tab] @racket[()] "No arguments")
+        (list @racket[#:key] @racket[(key mods)] @elem{@racket[key] --- @racket[(or/c char? symbol?)]; @racket[mods] --- @racket[mods?]. Every key not handled by a shortcut or @racket[#:text].})
+        (list @racket[#:text] @racket[(str)] @elem{@racket[str] --- @racket[string?], one printable character (ASCII or UTF-8) or pasted text.})
+        (list @racket[#:paste] @racket[(bytes)] @elem{@racket[bytes] --- @racket[bytes?], raw pasted content.})
+        (list @racket[#:mouse] @racket[(action button x y mods)] @elem{@racket[action] --- @racket[symbol?]; @racket[button] --- @racket[(or/c symbol? #f)]; @racket[x] @racket[y] --- @racket[exact-nonnegative-integer?]; @racket[mods] --- @racket[mods?].})
+        (list @racket[#:resize] @racket[(rows cols)] @elem{@racket[rows] @racket[cols] --- @racket[exact-positive-integer?].})
+        (list @racket[#:null] @racket[()] "No input available (noblock loop).")
+        (list @racket[#:any] @racket[(ev)] @elem{@racket[ev] --- @racket[event?], fallback for every unhandled event.})
+        (list @racket[#:tab] @racket[()] "Tab, no arguments")
         (list @racket[#:backtab] @racket[()] "Shift+Tab, no arguments")
-        (list @racket[#:space] @racket[()] "No arguments")
-        (list @racket[#:enter] @racket[()] "No arguments")
-        (list @racket[#:backspace] @racket[()] "No arguments")
-        (list @racket[#:escape] @racket[()] "No arguments")
+        (list @racket[#:space] @racket[()] "Space, no arguments")
+        (list @racket[#:enter] @racket[()] "Enter, no arguments")
+        (list @racket[#:backspace] @racket[()] "Backspace, no arguments")
+        (list @racket[#:escape] @racket[()] "Escape, no arguments")
         (list @racket[#:up] @racket[()] "Arrow up, no arguments")
         (list @racket[#:down] @racket[()] "No arguments")
         (list @racket[#:left] @racket[()] "No arguments")
         (list @racket[#:right] @racket[()] "No arguments")
-        (list @racket[#:delete] @racket[()] "No arguments")
+        (list @racket[#:delete] @racket[()] "Delete, no arguments")
         (list @racket[#:insert] @racket[()] "No arguments")
         (list @racket[#:home] @racket[()] "No arguments")
         (list @racket[#:end] @racket[()] "No arguments")
         (list @racket[#:pageup] @racket[()] "No arguments")
-        (list @racket[#:pagedown] @racket[()] "No arguments")
-        (list @racket[#:mouse-press] @racket[(button x y mods)] @elem{@racket[button] --- @racket[symbol?], @racket['left] @racket['middle] @racket['right]; @racket[x] @racket[y] --- @racket[exact-nonnegative-integer?] coordinates; @racket[mods] --- @racket[(list/c boolean? boolean? boolean?)] = @racket[(list ctrl? alt? shift?)].})
-        (list @racket[#:mouse-release] @racket[(button x y mods)] "Same as #:mouse-press")
-        (list @racket[#:mouse-move] @racket[(x y mods)] @elem{@racket[x] @racket[y] --- coordinates; @racket[mods] --- modifier triple.})
-        (list @racket[#:mouse-scroll] @racket[(dir x y mods)] @elem{@racket[dir] --- @racket[symbol?], @racket['up] or @racket['down].})
-        (list @racket[#:paste] @racket[(data)] @elem{@racket[data] --- @racket[bytes?], pasted content.})
-        (list @racket[#:resize] @racket[(rows cols)] @elem{@racket[rows] @racket[cols] --- @racket[exact-positive-integer?].})
-        (list @racket[#:null] @racket[()] "No input available (noblock loop)")
-        (list @racket[#:any] @racket[(type data mods)] @elem{@racket[type] --- @racket[symbol?]; @racket[data] --- @racket[bytes?]; @racket[mods] --- @racket[(or/c #f (list/c boolean? boolean? boolean?))]. Fallback for every unhandled event.}))
+        (list @racket[#:pagedown] @racket[()] "No arguments"))
 ]
+
+The shortcut callbacks only fire for an unmodified named key. A modified
+named key (for example Ctrl+Up) always goes to @racket[#:key] with its
+@racket[mods?].
 
 @subsubsection{Example}
 
 @racketblock[
 (define handler
   (build-input
-    #:char     (lambda (ch)      (printf "key '~a'\n" (integer->char ch)))
-    #:ctrl     (lambda (ch)      (printf "Ctrl+~a\n" ch))
-    #:mod-char (lambda (ch ctrl? alt? shift?)
-                 (printf "~a~a~a~a\n"
-                         (if ctrl? "Ctrl+" "")
-                         (if alt? "Alt+" "")
-                         (if shift? "Shift+" "")
-                         ch))
-    #:mod-key  (lambda (key ctrl? alt? shift?)
-                 (printf "~a~a~a~a\n"
-                         (if ctrl? "Ctrl+" "")
-                         (if alt? "Alt+" "")
-                         (if shift? "Shift+" "")
-                         key))
-    #:mouse-press (lambda (button x y mods)
-                    (printf "~a ~a (~a,~a)\n"
-                            (car mods)  ;; ctrl?
-                            button x y))
-    #:paste  (lambda (data) (printf "pasted ~a bytes\n" (bytes-length data)))
-    #:resize (lambda (rows cols) (printf "~ax~a\n" rows cols))))
+    #:text   (lambda (s)   (insert-text s))
+    #:key    (lambda (key mods)
+               (cond [(and (char? key) (mods-ctrl? mods))
+                      (printf "Ctrl+~a\n" key)]
+                     [else (printf "key ~a~a\n"
+                                   (if (mods-alt? mods) "Alt+" "")
+                                   key)]))
+    #:up     (lambda ()    (cursor-up 1))
+    #:enter  (lambda ()    (newline))
+    #:mouse  (lambda (action button x y mods)
+               (printf "mouse ~a ~a (~a,~a) ctrl=~a\n"
+                       action button x y (mods-ctrl? mods)))
+    #:resize (lambda (rows cols) (printf "~ax~a\n" rows cols))
+    #:any    (lambda (ev)  (printf "unhandled: ~a\n" ev))))
 ]
 }
 
 @defform[(loop-input handler ...)]{
-Reads events forever and calls each @racket[handler] function with
-@racket[(values type data mods)] per event. Macro that expands to a loop.
+Reads events forever and calls each @racket[handler] (a @racket[(-> event? any)]
+function) with the event. Macro that expands to a loop.
 }
 
 @defform[(loop-input-noblock handler ...)]{
@@ -688,25 +732,22 @@ event and stops when it is true.
 Like @racket[loop-input/stop], using @racket[read-event-noblock].
 }
 
-@subsection{Low-level: read-event}
+@subsection{Low-level: read-event/raw}
 
-@defproc[(read-event) (values symbol? bytes? (or/c #f (list/c boolean? boolean? boolean?)))]{
-Reads one input event from the terminal, blocking until input arrives.
-Returns @racket[(values type data mods)]:
+The raw byte-level parser remains available for terminal debugging or custom
+protocols. It returns a polymorphic triple; prefer @racket[read-event] in
+application code.
 
-@itemize[
-  @item{@racket[type] --- a symbol (see the predicates below).}
-  @item{@racket[data] --- event payload: key byte, UTF-8 bytes, mouse detail
-        list, paste bytes, or @racket[(rows . cols)] for resize.}
-  @item{@racket[mods] --- @racket[#f] (no modifiers) or
-        @racket[(list ctrl? alt? shift?)] for modified keys and mouse
-        events.}
-]
+@defproc[(read-event/raw) (values symbol? (or/c bytes? list? pair?) (or/c #f (list/c boolean? boolean? boolean?)))]{
+Reads one raw event, blocking. Returns @racket[(values type data mods)]:
+@racket[type] is an event-type symbol, @racket[data] is @racket[bytes?] for
+keys/paste, @racket[list?] for mouse, or @racket[(cons/c ...)] for resize,
+and @racket[mods] is @racket[#f] or @racket[(list ctrl? alt? shift?)].
 }
 
-@defproc[(read-event-noblock) (values symbol? bytes? (or/c #f (list/c boolean? boolean? boolean?)))]
-Like @racket[read-event], but returns immediately with @racket['null] when no
-input is available.
+@defproc[(read-event-noblock/raw) (values symbol? (or/c bytes? list? pair?) (or/c #f (list/c boolean? boolean? boolean?)))]
+Like @racket[read-event/raw], but returns immediately with type
+@racket['null] when no input is available.
 
 @defproc[(event-null? [type symbol?]) boolean?]
 @defproc[(event-key? [type symbol?]) boolean?]
@@ -727,10 +768,9 @@ input is available.
 @defproc[(event-pageup? [type symbol?]) boolean?]
 @defproc[(event-pagedown? [type symbol?]) boolean?]
 @defproc[(event-backtab? [type symbol?]) boolean?]
-@defproc[(event-touch? [type symbol?]) boolean?]
 @defproc[(event-mouse? [type symbol?]) boolean?]
 @defproc[(event-paste? [type symbol?]) boolean?]
-Predicates on the event @racket[type] returned by @racket[read-event].
+Predicates on the raw event @racket[type].
 
 @defproc[(event-tab? [type symbol?] [data bytes?]) boolean?]
 @defproc[(event-space? [type symbol?] [data bytes?]) boolean?]
@@ -740,18 +780,18 @@ Predicates on the event @racket[type] returned by @racket[read-event].
 Predicates that also check the key byte in @racket[data].
 
 @defproc[(ctrl->char [data bytes?]) (or/c char? #f)]
-Returns the letter of a Ctrl+letter event.
+Returns the letter of a Ctrl+letter raw event.
 @defproc[(alt->char [data bytes?]) (or/c char? #f)]
-Returns the character of an Alt+character event.
+Returns the character of an Alt+character raw event.
 @defproc[(mod-seq->char [data bytes?]) (or/c char? #f)]
-Returns the character of a Ctrl+Alt+character event.
+Returns the character of a @tt{modifyOtherKeys} raw event, or @racket[#f].
+@defproc[(mod-seq->key [data bytes?]) (or/c symbol? #f)]
+Returns the navigation-key symbol of a modified key raw event, or @racket[#f].
 
 @defproc[(event->string [data bytes?]) string?]
-Decodes UTF-8 event data to a string.
-@defproc[(event->byte [data bytes?]) byte?]
-Extracts a single byte from event data.
-
-@subsection{Mouse}
+Decodes UTF-8 raw event data to a string.
+@defproc[(event->byte [data bytes?]) (or/c byte? #f)]
+Extracts a single byte from raw event data.
 
 @defproc[(mouse-press? [detail list?]) boolean?]
 @defproc[(mouse-release? [detail list?]) boolean?]
@@ -762,14 +802,12 @@ Extracts a single byte from event data.
 @defproc[(mouse-right? [detail list?]) boolean?]
 @defproc[(scroll-up? [detail list?]) boolean?]
 @defproc[(scroll-down? [detail list?]) boolean?]
-Predicates on the mouse @racket[detail] list carried in @racket[data].
+Predicates on the raw mouse @racket[detail] list.
 
 @defproc[(mouse-x [detail list?]) exact-nonnegative-integer?]
 @defproc[(mouse-y [detail list?]) exact-nonnegative-integer?]
 @defproc[(get-mouse-pos [detail list?]) (values exact-nonnegative-integer? exact-nonnegative-integer?)]
-@defproc[(mouse-modifiers [detail list?]) (listof symbol?)]
-
-@subsection{Resize}
+@defproc[(mouse-modifiers [detail list?]) (list/c boolean? boolean? boolean?)]
 
 @defproc[(get-resize-rows [data (cons/c exact-positive-integer? exact-positive-integer?)]) exact-positive-integer?]
 @defproc[(get-resize-cols [data (cons/c exact-positive-integer? exact-positive-integer?)]) exact-positive-integer?]
@@ -867,11 +905,11 @@ Timeout between bytes while reading a paste. Default @racket[1.0].}
    (define running? #t)
    (define handler
      (build-input
-      #:char (lambda (ch)
-               (when (= ch (char->integer #\q))
+      #:key (lambda (key mods)
+               (when (eqv? key #\q)
                  (set! running? #f)))))
-   (define (render-and-handle type data mods)
-     (handler type data mods)
+   (define (render-and-handle ev)
+     (handler ev)
      (draw-ui))
    (loop-input/stop (not running?) render-and-handle)))
 ]

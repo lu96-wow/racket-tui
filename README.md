@@ -251,28 +251,47 @@ Return byte strings without outputting, used for batch collection:
 
 ## Input Design
 
-`build-input` is the recommended high-level event dispatch API, simplifying event handling via callback functions.
-It encapsulates the event classification logic of the underlying `read-event`, so you only need to declare "what function to call when event X occurs".
+`read-event` returns a normalized `event?` struct — the event type is
+determined by semantics, not by byte encoding. `build-input` is the
+recommended high-level dispatcher built on top of it.
 
-### Recommended: build-input
-
-Use `build-input` directly after `(require tui)` — no extra require needed:
+### Events
 
 ```racket
 (require tui)
 
+(define ev (read-event))         ;; 阻塞，返回 event?
+;; event? 是以下之一:
+;;   (key-event key mods)          key: char? | symbol?（'up 'tab 'enter ...）
+;;   (paste-event bytes text)      原始字节 + 解码后的 string
+;;   (mouse-event action button x y mods)
+;;   (resize-event rows cols)
+;;   (null-event)                  仅 read-event-noblock
+;;   (other-event type data mods)  无法识别的序列
+```
+
+修饰键是 `mods` 结构体，用 `mods-ctrl?` / `mods-alt?` / `mods-shift?` 读取，
+`(mods->list m)` 可转回旧的三元组。
+
+### Recommended: build-input
+
+`build-input` 直接可用（`(require tui)` 即可）：
+
+```racket
 (define handler
   (build-input
-    #:char      (lambda (ch) (printf "Key: ~a\n" (integer->char ch)))
-    #:up        (lambda ()  (cursor-up 1))
-    #:down      (lambda ()  (cursor-down 1))
-    #:left      (lambda ()  (cursor-left 1))
-    #:right     (lambda ()  (cursor-right 1))
-    #:resize    (lambda (rows cols) (printf "Window: ~ax~a\n" rows cols))
-    #:mouse-press (lambda (btn x y mods) (printf "Mouse press ~a (~a,~a)\n" btn x y))
-    #:any       (lambda (type data mods) (printf "Unhandled: ~a\n" type))))
+    #:text    (lambda (s) (insert-text s))          ;; 可打印字符 + 粘贴
+    #:key     (lambda (key mods) ...)               ;; 其余所有键
+    #:up      (lambda () (cursor-up 1))
+    #:down    (lambda () (cursor-down 1))
+    #:left    (lambda () (cursor-left 1))
+    #:right   (lambda () (cursor-right 1))
+    #:enter   (lambda () (newline))
+    #:mouse   (lambda (action button x y mods) ...)
+    #:resize  (lambda (rows cols) (printf "Window: ~ax~a\n" rows cols))
+    #:any     (lambda (ev) (printf "Unhandled: ~a\n" ev))))
 
-;; One-line event loop
+;; One-line event loop; handler 的类型是 (-> event? any)
 (loop-input handler)
 ```
 
@@ -280,49 +299,43 @@ All keyword arguments are optional. Supported events:
 
 | Argument | Callback Signature | Description |
 |----------|-------------------|-------------|
-| `#:char` | `(lambda (ch) ...)` | Regular key; `ch` 是 **integer**（ASCII 值，如 97=`a`） |
-| `#:utf-char` | `(lambda (str) ...)` | UTF-8 字符；`str` 是 **string**（如 `"你"`） |
-| `#:ctrl` | `(lambda (ch) ...)` | Ctrl+字母；`ch` 是 **char**，`#\A`-`#\Z` |
-| `#:alt` | `(lambda (ch) ...)` | Alt+字母；`ch` 是 **char** |
-| `#:mod-char` | `(lambda (ch ctrl? alt? shift?) ...)` | 修饰的字符（Ctrl+Alt+x）；`ch` 是 **char**，`ctrl?`/`alt?`/`shift?` 是 **boolean** |
-| `#:mod-key` | `(lambda (key ctrl? alt? shift?) ...)` | 修饰的导航键（Ctrl+Up）；`key` 是 **symbol**（`'up` `'down` `'left` `'right` `'home` `'end` `'pageup` `'pagedown` `'insert` `'del` `'backtab`），三布尔同 `#:mod-char` |
-| `#:tab` / `#:backtab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | Special keys，无参数 |
-| `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | Arrow keys，无参数 |
-| `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | Function keys，无参数 |
-| `#:mouse-press` | `(lambda (button x y mods) ...)` | 按下；`button` 是 **symbol**（`'left`/`'middle`/`'right`），`x`/`y` 是 **integer** 坐标，`mods` 是 **(list ctrl? alt? shift?)** 三元组 |
-| `#:mouse-release` | `(lambda (button x y mods) ...)` | 释放；参数同 `#:mouse-press` |
-| `#:mouse-move` | `(lambda (x y mods) ...)` | 移动；`x`/`y` 坐标 + `mods` 三元组 |
-| `#:mouse-scroll` | `(lambda (dir x y mods) ...)` | 滚轮；`dir` 是 **symbol**（`'up`/`'down`） |
-| `#:paste` | `(lambda (data) ...)` | Bracketed paste；`data` 是 **bytes** |
+| `#:key` | `(lambda (key mods) ...)` | 每个未被快捷回调 / `#:text` 消费的键；`key` 是 **char?**（可打印或控制字符）或 **symbol?**（`'up` `'tab` `'enter` `'escape` `'backspace` `'del` `'backtab` 等）；`mods` 是 **mods 结构体** |
+| `#:text` | `(lambda (str) ...)` | **文本输入统一通道**；`str` 是 **string?**（一个可打印字符，或整段粘贴内容） |
+| `#:paste` | `(lambda (bytes) ...)` | 原始粘贴字节；未设置时粘贴并入 `#:text` |
+| `#:mouse` | `(lambda (action button x y mods) ...)` | `action` 是 **symbol**（`'press`/`'release`/`'move`/`'scroll`）；`button` 是 `'left`/`'middle`/`'right`，滚轮为 `'up`/`'down`，移动为 `#f`；`x`/`y` 坐标 + `mods` |
 | `#:resize` | `(lambda (rows cols) ...)` | Window resize；`rows`/`cols` 是 **integer** |
 | `#:null` | `(lambda () ...)` | No input event，无参数 |
-| `#:any` | `(lambda (type data mods) ...)` | Fallback；`type` 是 **symbol**，`data` 是 **bytes**，`mods` 是三元组或 `#f` |
+| `#:any` | `(lambda (ev) ...)` | Fallback；`ev` 是 **event?** 结构体（`key-event` / `paste-event` / `mouse-event` / `resize-event` / `null-event` / `other-event`） |
+| `#:tab` / `#:backtab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | 无修饰命名键快捷回调，无参数 |
+| `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | 无修饰方向键，无参数 |
+| `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | 无修饰功能键，无参数 |
 
-修饰参数（`ctrl?`/`alt?`/`shift?`）都是 **boolean**，可直接 `(if ctrl? ...)` 判断；
-鼠标 `mods` 是 `(list ctrl? alt? shift?)`，取 `(car mods)` 即 ctrl 标志。
+Dispatch order (built-in): `null > resize > paste > mouse > key`. Within a
+key: 快捷回调（仅限无修饰命名键）> `#:text`（可打印且无 Ctrl/Alt）>
+`#:key` > `#:any`. 修饰过的命名键（如 Ctrl+Up）总是走 `#:key`。
 
-Priority order (built-in, users don't need to worry): `null > resize > paste > mouse > tab/space/enter/backspace/escape > arrow keys > function keys > ctrl > alt > mod > utf8 > char > any`
+### Low-level: read-event/raw
 
-### Low-level API (input.rkt)
-
-If you need finer-grained control over event types, you can also use the low-level `read-event` and event predicate functions directly:
+字节级解析器保留用于调试或自定义协议，返回 `(values type data mods)`：
 
 ```racket
-(require tui)
-
-(let-values ([(type data mods) (read-event)])
+(let-values ([(type data mods) (read-event/raw)])
   (cond
-    [(event-touch? type)
+    [(event-mouse? type)
      (let-values ([(x y) (get-mouse-pos data)])
        (printf "Mouse ~a,~a" x y))]
     [(event-up? type) (cursor-up 1)]
     [(event-ctrl? type) (printf "Ctrl+~a" (ctrl->char data))]
-    [(event-utf8? type) (printf "UTF-8: ~a" (event->string data))]
     [(event-resize? type)
-     (printf "~a×~a" (get-resize-rows data) (get-resize-cols data))]
-    [(event-paste? type)
-     (printf "Pasted: ~a bytes" (bytes-length data))]))
+     (printf "~a×~a" (get-resize-rows data) (get-resize-cols data))]))
 ```
+
+### Loop macros
+
+`(loop-input handler ...)`, `(loop-input-noblock handler ...)`,
+`(loop-input/stop stop? handler ...)`, `(loop-input-noblock/stop stop? handler ...)`.
+每个 `handler` 都是 `(-> event? any)`。
+
 
 ## Lifecycle Management
 
@@ -401,12 +414,12 @@ If you need finer-grained control over event types, you can also use the low-lev
    (define running? #t)
    (define handler
      (build-input
-       #:char (lambda (ch)
-                (when (= ch (char->integer #\q))
-                  (set! running? #f)))))  ;; press q to quit
+       #:key (lambda (key mods)
+               (when (eqv? key #\q)
+                 (set! running? #f)))))  ;; press q to quit
    ;; Wrap handler to render before each event
-   (define (render-and-handle type data mods)
-     (handler type data mods)
+   (define (render-and-handle ev)
+     (handler ev)
      (draw-ui))
    (loop-input/stop (not running?) render-and-handle)))
 ```

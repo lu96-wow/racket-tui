@@ -1,7 +1,6 @@
 #lang racket
 
-(require "../main.rkt"
-         "../base/io/build-input.rkt")
+(require "../main.rkt")
 
 (with-tui-nobuffer
  (λ ()
@@ -9,8 +8,8 @@
 
    (define running? #t)
 
-  (define handler
-    (build-input
+   (define handler
+     (build-input
       ;; ── 空格：在当前光标位置打印 row,col ──
       #:space (lambda ()
                 (put-string (format "(~a,~a)" current-cursor-row current-cursor-col)))
@@ -25,15 +24,8 @@
       #:enter (lambda () (put-newline))
 
       ;; ── q 退出 ──
-      #:char  (lambda (ch)
-                (when (= ch (char->integer #\q))
-                  (set! running? #f)))
+      #:key   (lambda (key mods)
+                (when (and (char? key) (char=? key #\q))
+                  (set! running? #f)))))
 
-      ;; ── 其他键忽略 ──
-      #:any   (lambda (type data mods) (void))))
-
-  (let loop ()
-    (when running?
-      (let-values ([(type data mods) (read-event)])
-        (handler type data mods))
-      (loop)))))
+   (loop-input/stop (not running?) handler)))

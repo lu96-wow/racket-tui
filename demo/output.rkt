@@ -38,12 +38,11 @@
 
   ;; 事件循环
   (let loop ()
-    (define-values (type data mods) (read-event))
+    (define ev (read-event))
     (cond
-      [(event-key? type)
-       (define b (event->byte data))
-       (cond [(= b (char->integer #\q)) (void)]
-             [(= b (char->integer #\t))
+      [(and (key-event? ev) (char? (key-event-key ev)))
+       (cond [(char=? (key-event-key ev) #\q) (void)]
+             [(char=? (key-event-key ev) #\t)
               (screen-clear)
               (put-at 1 2 "Theme changed")
               (loop)]

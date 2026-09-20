@@ -1,6 +1,6 @@
 #lang racket
 ;; ════════════════════════════════════════════════════════════════
-;; 输入事件调试器 — 验证 read-event 的字节流解析
+;; 输入事件调试器 — 验证 read-event/raw 的字节流解析
 ;;
 ;; 显示每个事件的: type / data 原始字节 / mods / 语义
 ;; 按 q 退出
@@ -69,8 +69,8 @@
        (if ch (format "Ctrl+~a" ch)
            (format "Ctrl+byte~a" (event->byte data))))]
     [(event-alt? type)
-     (let ([b (alt->char data)])
-       (if b (format "Alt+~a" (integer->char b)) "Alt+?"))]
+     (let ([ch (alt->char data)])
+       (if ch (format "Alt+~a" ch) "Alt+?"))]
     [(event-mod-seq? type)
      (define prefix (string-append
                      (if (car mods) "Ctrl+" "")
@@ -80,7 +80,7 @@
      (if key
          (format "~a~a" prefix (describe-key key))
          (let ([ch (mod-seq->char data)])
-           (format "~a~a" prefix (if ch (integer->char ch) "?"))))]
+           (format "~a~a" prefix (if ch ch "?"))))]
     [(event-key? type)
      (define b (event->byte data))
      (cond [(and b (= b 9))  "Tab"]
@@ -118,14 +118,14 @@
 (with-tui
  (λ ()
    (screen-clear)
-   (put-styled 'title "═══ 输入事件调试器 (read-event) ═══") (put-newline)
+   (put-styled 'title "═══ 输入事件调试器 (read-event/raw) ═══") (put-newline)
    (put-styled 'info "按 q 退出 · 组合键: Alt+x / Ctrl+方向键 / Ctrl+Alt+x · 鼠标 / 粘贴") (put-newline)
    (put-newline)
    (define running? #t)
    (define count 0)
    (let loop ()
      (when running?
-       (let-values ([(type data mods) (read-event)])
+       (let-values ([(type data mods) (read-event/raw)])
          (set! count (add1 count))
          (put-styled 'heading (format "事件 #~a:" count)) (put-newline)
          (put-string (format "  type: ~a" type)) (put-newline)

@@ -62,11 +62,9 @@
 
   ;; read-event 内部使用 select() 阻塞等待, 零 CPU
   (let loop ()
-    (let-values ([(type data mods) (read-event)])
-      (cond [(and (event-key? type)
-                  (= (event->byte data) (char->integer #\q))) (void)]
-            [(and (event-key? type)
-                  (= (event->byte data) (char->integer #\t)))
-             (screen-clear)
-             (loop)]
-            [else (loop)])))))
+    (define ev (read-event))
+    (cond [(and (key-event? ev) (char=? (key-event-key ev) #\q)) (void)]
+          [(and (key-event? ev) (char=? (key-event-key ev) #\t))
+           (screen-clear)
+           (loop)]
+          [else (loop)]))))

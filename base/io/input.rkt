@@ -244,9 +244,13 @@
 ;; resize 监控 — 见 terminal/resize.rkt: signalfd 事件, 无轮询线程
 ;; read-event 的 sync 统一等 stdin-evt + resize-evt, 调度器协作, 零 CPU
 
-;; read-event — sync 统一等 stdin 和 resize 事件
+;; read-event/raw 的 sync 统一等 stdin 和 resize 事件
 ;; 阻塞模式, 零 CPU, 等价于 ncurses getch()
-(define (read-event)
+;;
+;; 注意：这是字节级原始接口，返回 (values type data mods)，其中 data 类型
+;; 随事件种类在 bytes/list/pair 之间漂移。高层应优先用 io/event.rkt 的
+;; read-event（返回规范化的 event? 结构体）。
+(define (read-event/raw)
   (define evt (sync (make-stdin-evt) (make-resize-evt)))
   (cond [(bytes? evt)
          ;; stdin 来了 1 个字节
@@ -258,7 +262,7 @@
 
 ;; 非阻塞版本, 等价于 ncurses timeout(0) getch()
 ;; 无事件时 evt 为 #f (sync/timeout 返回), 返回 EVENT-NULL
-(define (read-event-noblock)
+(define (read-event-noblock/raw)
   ;; sync/timeout 避免 CPU 空转，~60fps 足够流式刷新
   (define evt (sync/timeout 0.016 (make-stdin-evt) (make-resize-evt)))
   (cond [(bytes? evt)
@@ -288,7 +292,6 @@
 (define (event-pageup? t)   (eq? t KEY-PAGEUP))
 (define (event-pagedown? t) (eq? t KEY-PAGEDOWN))
 (define (event-backtab? t)  (eq? t KEY-BACKTAB))
-(define (event-touch? t)    (eq? t EVENT-MOUSE))
 (define (event-mouse? t)    (eq? t EVENT-MOUSE))
 (define (event-paste? t)    (eq? t EVENT-PASTE))
 
@@ -346,8 +349,13 @@
        (let ([b (bytes-ref d 0)])
          (and (<= 1 b 26) (integer->char (+ b 64))))))
 
+;; Alt 事件 data = ESC + 被修饰内容的 UTF-8 字节
+;; 统一返回 char?（与 ctrl->char 对齐），ESC 之后按 UTF-8 解码取首字符
 (define (alt->char d)
-  (and (bytes? d) (= (bytes-length d) 2) (bytes-ref d 1)))
+  (and (bytes? d) (>= (bytes-length d) 2)
+       (let ([s (with-handlers ([exn:fail? (λ (_) #f)])
+                  (bytes->string/utf-8 (subbytes d 1)))])
+         (and s (positive? (string-length s)) (string-ref s 0)))))
 
 ;; 在 [1, hi] 内从后往前找第一个 ';'，返回下标或 #f
 (define (find-last-sep d hi)
@@ -380,10 +388,15 @@
          (and last-sep
               (parse-number d (+ last-sep 1) (sub1 n))))))
 
+;; modifyOtherKeys 字符型 → char?；其余（含方向键等导航键型）→ #f
+;; 注：不再用"末字节"兜底，否则 ESC [ 1;5A (Ctrl+Up) 会被误判为 #\A
 (define (mod-seq->char d)
-  (and (bytes? d) (> (bytes-length d) 2)
-       (or (parse-modify-other-keys-code d)
-           (bytes-ref d (sub1 (bytes-length d))))))
+  (and (bytes? d)
+       (let ([code (parse-modify-other-keys-code d)])
+         (and code
+              (<= 0 code #x10FFFF)
+              (not (<= #xD800 code #xDFFF))
+              (integer->char code)))))
 
 ;; 解析 CSI 序列第一个数字参数（从下标 2 开始）
 ;; 例: ESC [ 5;5~ → 5
@@ -436,12 +449,12 @@
 
 ;; 导出
 
-(provide read-event read-event-noblock
+(provide read-event/raw read-event-noblock/raw
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?
          event-del? event-insert? event-home? event-end? event-pageup? event-pagedown?
          event-backtab?
-         event-touch? event-mouse? event-paste?
+         event-mouse? event-paste?
          event-tab? event-space? event-backspace? event-enter? event-escape?
          mouse-press? mouse-release? mouse-move? mouse-scroll?
          mouse-left? mouse-middle? mouse-right?
