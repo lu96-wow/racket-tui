@@ -63,9 +63,11 @@
 ;; ── 颜色 base（与 base 一致的 16 色映射）─────────────────
 
 (define (fg-code n)
+  (unless (<= 0 n 15) (error 'format-fg-base "ANSI color must be 0-15, got ~a" n))
   (cond [(= n 9) 39] [(< n 8) (+ 30 n)] [else (+ 90 (- n 8))]))
 
 (define (bg-code n)
+  (unless (<= 0 n 15) (error 'format-bg-base "ANSI color must be 0-15, got ~a" n))
   (cond [(= n 9) 49] [(< n 8) (+ 40 n)] [else (+ 100 (- n 8))]))
 
 (define (format-fg-base n) (op 'sgr (list (fg-code n))))

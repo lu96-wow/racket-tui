@@ -118,6 +118,84 @@
                     (base-sum (apply be:normalize-event c))
                     (format "case ~a" c))))
 
+  (test-case "随机操作对拍：op 路径 vs ANSI 解析路径（300 步）"
+    (define rows 8)
+    (define cols 16)
+    ;; 自写 LCG，保证两边消费完全相同的操作序列
+    (define seed (box 12345))
+    (define (rnd n)
+      (set-box! seed (modulo (+ (* 1103515245 (unbox seed)) 12345) 2147483648))
+      (modulo (quotient (unbox seed) 65536) n))
+    (define (ch) (integer->char (+ 65 (rnd 26))))
+    (define (str) (list->string (for/list ([i (rnd 4)]) (if (zero? (rnd 6)) #\你 (ch)))))
+    (define (rand-desc)
+      (case (rnd 15)
+        [(0) (list 'move (rnd 9) (rnd 17))]
+        [(1) (list 'text (str))]
+        [(2) (list 'fg (rnd 256) (rnd 256) (rnd 256) (str))]
+        [(3) (list 'c256 (rnd 256) (str))]
+        [(4) (list 'at (rnd 9) (rnd 17) (str))]
+        [(5) (list 'at! (rnd 9) (rnd 17) (str))]
+        [(6) (list 'bold (str))]
+        [(7) (list 'clear)]
+        [(8) (list 'eline (rnd 3))]
+        [(9) (list 'eclear (rnd 3))]
+        [(10) (list 'relup (rnd 3))]
+        [(11) (list 'reldown (rnd 3))]
+        [(12) (list 'col (rnd 17))]
+        [(13) (list 'save-or-restore (rnd 2))]
+        [(14) (list 'home)]))
+    (define (desc->char d)
+      (match d
+        [(list 'move r c) (format-cursor-move r c)]
+        [(list 'text s) s]
+        [(list 'fg r g b s) (format-rgb-fg r g b s)]
+        [(list 'c256 n s) (format-256-fg n s)]
+        [(list 'at r c s) (format-content-at r c s)]
+        [(list 'at! r c s) (format-content-at! r c s)]
+        [(list 'bold s) (ops-append format-bold s format-reset)]
+        [(list 'clear) format-screen-clear]
+        [(list 'eline m) (case m [(0) format-line-clear-right]
+                                 [(1) format-line-clear-left]
+                                 [(2) format-line-clear])]
+        [(list 'eclear m) (case m [(0) format-screen-clear-below]
+                                  [(1) format-screen-clear-above]
+                                  [(2) format-screen-clear])]
+        [(list 'relup n) (format-cursor-up n)]
+        [(list 'reldown n) (format-cursor-down n)]
+        [(list 'col n) (format-cursor-col n)]
+        [(list 'save-or-restore k) (if (zero? k) format-cursor-save format-cursor-restore)]
+        [(list 'home) format-cursor-home]))
+    (define (desc->base d)
+      (match d
+        [(list 'move r c) (b:format-cursor-move r c)]
+        [(list 'text s) (string->bytes/utf-8 s)]
+        [(list 'fg r g b s) (b:format-rgb-fg r g b s)]
+        [(list 'c256 n s) (b:format-256-fg n s)]
+        [(list 'at r c s) (b:format-content-at r c s)]
+        [(list 'at! r c s) (b:format-content-at! r c s)]
+        [(list 'bold s) (raw-bytes-append b:format-bold (string->bytes/utf-8 s) b:format-reset)]
+        [(list 'clear) b:format-screen-clear]
+        [(list 'eline m) (case m [(0) b:format-line-clear-right]
+                                 [(1) b:format-line-clear-left]
+                                 [(2) b:format-line-clear])]
+        [(list 'eclear m) (case m [(0) b:format-screen-clear-below]
+                                  [(1) b:format-screen-clear-above]
+                                  [(2) b:format-screen-clear])]
+        [(list 'relup n) (b:format-cursor-up n)]
+        [(list 'reldown n) (b:format-cursor-down n)]
+        [(list 'col n) (b:format-cursor-col n)]
+        [(list 'save-or-restore k) (if (zero? k) b:format-cursor-save b:format-cursor-restore)]
+        [(list 'home) b:format-cursor-home]))
+    (define descs (for/list ([i 300]) (rand-desc)))
+    (define cg (with-tui (λ () (for ([d descs]) (emit (desc->char d))) (the-screen))
+                        #:rows rows #:cols cols))
+    (define p (make-ansi-parser rows cols))
+    (for ([d descs]) (ansi-parser-feed-bytes! p (desc->base d)))
+    (define pg (ansi-parser-grid p))
+    (check-equal? (grid->text cg #:trim-right? #f) (grid->text pg #:trim-right? #f))
+    (check-equal? (screen-styled-cells cg) (screen-styled-cells pg)))
+
   (test-case "样式系统写入 grid（按需属性）"
     (define cells
       (with-tui

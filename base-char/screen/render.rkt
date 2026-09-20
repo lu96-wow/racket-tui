@@ -80,13 +80,15 @@
     [(rgb) (format "(~a,~a,~a)" (cadr v) (caddr v) (cadddr v))]
     [else ""]))
 
-;; 只列出非默认（带属性/颜色，或非空格）的格
+;; 只列出非默认（带属性/颜色，或非空格）的格；宽字符的右半格(#f)不算内容
 (define (screen-styled-cells g)
   (for*/list ([r (in-range (grid-rows g))]
               [c (in-range (grid-cols g))]
-              #:when (not (cell-default? (grid-ref g r c))))
+              #:when (let ([cell (grid-ref g r c)])
+                       (and (string? (cell-text cell))
+                            (not (cell-default? cell)))))
     (define cell (grid-ref g r c))
-    (list r c (or (cell-text cell) "") (style->string cell))))
+    (list r c (cell-text cell) (style->string cell))))
 
 ;; 按行把属性压成区间，token 更省
 (define (screen-attr-ranges g)

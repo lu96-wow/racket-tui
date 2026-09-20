@@ -384,6 +384,9 @@
 (define (char-input-clear!)
   (set-box! queue '())
   (set-box! closed? #f)
+  ;; 先唤醒可能阻塞在旧 semaphore 上的读者，再换新 semaphore；
+  ;; 读者醒来后会重新读取 sema box，因此不会永久挂起。
+  (semaphore-post (unbox sema))
   (set-box! sema (make-semaphore 0)))
 
 ;; 标记脚本结束：唤醒等待者；队列排空后 read-event 返回 null-event

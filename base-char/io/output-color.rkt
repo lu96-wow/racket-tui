@@ -142,9 +142,15 @@
   (λ () (emit (format-256-bg-base n))))
 
 (define (color-rgb-fg r g b)
+  (unless (<= 0 r 255) (error 'color-rgb-fg "R must be 0-255, got ~a" r))
+  (unless (<= 0 g 255) (error 'color-rgb-fg "G must be 0-255, got ~a" g))
+  (unless (<= 0 b 255) (error 'color-rgb-fg "B must be 0-255, got ~a" b))
   (λ () (emit (format-rgb-fg-base r g b))))
 
 (define (color-rgb-bg r g b)
+  (unless (<= 0 r 255) (error 'color-rgb-bg "R must be 0-255, got ~a" r))
+  (unless (<= 0 g 255) (error 'color-rgb-bg "G must be 0-255, got ~a" g))
+  (unless (<= 0 b 255) (error 'color-rgb-bg "B must be 0-255, got ~a" b))
   (λ () (emit (format-rgb-bg-base r g b))))
 
 (define attr-bold      (λ () (emit format-bold)))
