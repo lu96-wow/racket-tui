@@ -65,6 +65,59 @@ raco pkg install --link
    (sleep 2)))
 ```
 
+## Char Backend (AI-driven debugging, no TTY)
+
+`tui/char` is a drop-in mirror of the whole API whose output goes to an in-memory
+character grid instead of the terminal. It renders each frame as plain text
+(no escape codes), which makes it easy for AI agents, tests and CI to inspect UI
+state without a terminal.
+
+```racket
+(require tui)        ; real terminal
+(require tui/char)   ; character grid
+```
+
+```racket
+#lang racket
+(require tui/char)
+
+(with-tui
+ (λ ()
+   (put-bytes
+    (bytes-append
+     format-screen-clear
+     (format-cursor-move 1 1)
+     (format-rgb-fg 255 255 0 "=== TUI Demo ===")
+     (format-cursor-move 3 1)
+     (format-256-fg 46 "count = 42")))
+   (displayln (char-frame)))
+ #:rows 6 #:cols 30)
+```
+
+```
+=== TUI Demo ===
+
+count = 42
+```
+
+Highlights:
+
+- Same API, switch only by the `require` path — call sites stay unchanged.
+- **No termios / FFI**: runs on any platform and sandbox (non-Linux, CI, AI
+  environments); `tui` itself is Linux-only.
+- `format-*` returns ops instead of ANSI bytes, so there is **no ANSI parsing** on
+  the main path; a parser is kept only as a test oracle.
+- `bytes-append` is shadowed (module-local) to make the batch idiom work as-is.
+- Query cursor position and per-cell attributes on demand.
+- Scripted input (`char-input-push!`) + full event loop with `build-input` /
+  `loop-input/stop`, so it runs headless.
+- Bounded by design: blocking input by default, frame deduplication, and a
+  `char-run` runner that renders once per scripted event — headless loops never
+  spin or flood frames.
+- Per-frame snapshots to plain text or a log file via `flush!` / frame hooks.
+
+Full documentation: [`base-char/README.md`](base-char/README.md).
+
 ## Output System
 
 ### Immediate Output Functions (put- prefix)

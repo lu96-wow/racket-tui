@@ -930,6 +930,136 @@ Timeout between bytes while reading a paste. Default @racket[1.0].}
    (loop-input/stop (not running?) render-and-handle)))
 ]
 
+@section{Character backend (@tt{tui/char})}
+
+@tt{tui/char} is a drop-in mirror of the whole API whose output goes to an
+in-memory @deftech{character grid} instead of the terminal. It renders each
+frame as plain text (no escape codes), which makes it practical for AI agents,
+tests and CI to inspect UI state without a TTY. Switch backends by the
+@racket[require] path only; call sites stay unchanged. Unlike @tt{tui},
+@tt{tui/char} does not load termios or FFI, so it runs on any platform or
+sandbox.
+
+@racketblock[
+(require tui)        ; real terminal
+(require tui/char)   ; character grid
+]
+
+@racketblock[
+(require tui/char)
+
+(with-tui
+ (lambda ()
+   (put-bytes
+    (bytes-append
+     format-screen-clear
+     (format-cursor-move 1 1)
+     (format-rgb-fg 255 255 0 "=== TUI Demo ===")
+     (format-cursor-move 3 1)
+     (format-256-fg 46 "count = 42")))
+   (displayln (char-frame)))
+ #:rows 6 #:cols 30)
+]
+
+prints a plain-text layout:
+
+@verbatim|{
+=== TUI Demo ===
+
+count = 42
+}|
+
+@subsection{How it works}
+
+Every output path in @tt{base} funnels through @racket[format-*] (which produces
+ANSI bytes) and @racket[put-*] (which writes them). The character backend keeps
+the same API but substitutes two leaves:
+
+@itemlist[
+  @item{@racket[format-*] returns an @deftech{op} (or op sequence) instead of
+        ANSI bytes, and}
+  @item{@racket[put-*] applies those ops to the character grid.}
+]
+
+Because the semantic information is available at the formatter, there is
+@bold{no ANSI parsing} on the main path. @racket[bytes-append] is shadowed
+(module-locally) by an op concatenator so the documented batch idiom keeps
+working verbatim:
+
+@racketblock[
+(bytes-append format-screen-clear (format-cursor-move 1 1) "hi")  ; -> op sequence
+]
+
+An ANSI parser (@racket[make-ansi-parser]) is retained only as a test oracle:
+the same UI rendered through ops and through ANSI bytes must agree.
+
+@subsection{Grid output, cursor and attributes}
+
+@itemlist[
+  @item{@racket[(char-frame)] returns the current screen as plain text.}
+  @item{@racket[(screen->text g)] / @racket[(screen->lines g)] render a given
+        grid; @racket[#:trim-right?] defaults to @racket[#t].}
+  @item{@racket[(screen-ref g row col)] returns a cell;
+        @racket[cell-text], @racket[cell-fg], @racket[cell-bg] and
+        @racket[cell-attrs] read it. @racket[(style->string c)] renders a
+        readable style such as @racket["fg#1 bold"].}
+  @item{@racket[(screen-current-style g)] reports the SGR state that the next
+        character would carry.}
+  @item{@racket[(screen-styled-cells g)] lists all non-default cells;
+        @racket[(screen-attr-ranges g)] compresses attributes into per-row
+        ranges.}
+  @item{@racket[(get-cursor)] returns @math{(row, col)} 1-based (as in
+        @tt{base}); @racket[(screen-cursor g)] returns 0-based.}
+]
+
+@subsection{Scripted input and event loops}
+
+Input comes from a script queue rather than the terminal.
+@racket[(char-input-push! spec ...)] accepts an event struct, a character, a
+named-key symbol such as @racket['enter], a @racket[(key mods)] pair, or a raw
+@racket[(type data mods)] tuple.
+
+@racket[(read-event)] @bold{blocks} by default (like the real terminal), so a
+loop does not spin when there is no input; @racket[(read-event-noblock)] is the
+non-blocking variant. Call @racket[(char-input-close!)] when the script ends;
+@racket[(read-event)] then returns a @racket[null-event] and
+@racket[(char-input-exhausted?)] can be used as the stop condition. Both
+@racket[build-input] and the @racket[loop-input*] macros are provided with the
+same signatures as @tt{tui}.
+
+@subsection{Frames and bounded runs}
+
+@racket[flush!] triggers @racket[current-frame-hook] with the current grid, but
+only when the rendered character grid actually changed
+(@racket[current-frame-dedup?], on by default), so an idle loop does not keep
+emitting frames. @racket[(screen-frame-log-enable! path)] appends every frame as
+plain text to a file; @racket[(screen-frame-count)] and
+@racket[(screen-frame-log-disable!)] complete the API.
+
+For deterministic debugging, @racket[char-run] processes a finite list of
+events, rendering once per event and returning the sequence of frame strings
+(at most one frame per event plus the initial frame), so headless runs never
+flood output:
+
+@racketblock[
+(char-run (list #\+ #\+ #\-)
+          #:handle (lambda (ev) ...)
+          #:render (lambda () ...)
+          #:rows 24 #:cols 80)
+]
+
+@subsection{Related entry points}
+
+@itemlist[
+  @item{@racket[(with-tui thunk #:rows 24 #:cols 80)] — sized session.}
+  @item{@racket[current-screen], @racket[(the-screen)],
+        @racket[(current-screen-size)] — grid session state.}
+  @item{@racket[(screen-size g)], @racket[(screen-cursor-cell g)],
+        @racket[(screen-style-at g row col)] — queries.}
+]
+
+The full reference lives in @tt{base-char/README.md} in the source repository.
+
 @section{Implementation notes}
 
 The @tt{termios} struct layout and flag constants in
