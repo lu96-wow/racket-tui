@@ -1,24 +1,27 @@
 #lang racket
 ;; ════════════════════════════════════════════════════════════════
-;; 输入事件调试器 — 验证 read-event/raw 的字节流解析
+;; 输入事件调试器 —— 同时展示三层
 ;;
-;; 显示每个事件的: type / data 原始字节 / mods / 语义
-;; 按 q 退出
+;;   raw   : read-event/raw 的 (type data mods) 字节级结果
+;;   event : normalize-event 后的规范 event?（即 read-event 的返回值）
+;;   cb    : 该事件在 build-input 中命中的回调关键字
+;;
+;; 按 q 退出。
 ;;
 ;; 建议测试清单（用于验证组合键解析）:
-;;   方向键 / Home / End / PgUp / PgDn / Insert / Delete
-;;   Alt+x              → alt 'x'        (ESC x)
-;;   Ctrl+x             → ctrl #\X       (控制字节)
-;;   Ctrl+Alt+x         → mod-seq        (xterm: ESC [ 27;7;120~)
+;;   方向键 / Home / End / PgUp / PgDn / Insert / Delete / Backspace
+;;   Alt+x              → key-event  key=#\x    mods=Alt         cb #:key
+;;   Ctrl+x             → key-event  key=#\X    mods=Ctrl        cb #:key
+;;   Ctrl+Alt+x         → key-event  key=#\x    mods=Ctrl+Alt    cb #:key
 ;;   Ctrl+方向键 / Alt+方向键 / Shift+方向键 / Ctrl+Alt+Shift+方向键
-;;                     → mod-seq        (xterm: ESC [ 1;5A / 1;3A / 1;2A / 1;8A)
-;;   Tab / Shift+Tab / Enter / 独立 Esc
+;;                      → key-event  key=up ... mods=...         cb #:key
+;;   Tab / Shift+Tab / Enter / 独立 Esc / 空格  → 对应快捷回调
 ;;   鼠标点击/移动/滚轮（含 Shift/Ctrl+点击）、中键粘贴
 ;;   注: F1-F12 不映射 — 桌面环境会吞键，终端收不到
 ;; ════════════════════════════════════════════════════════════════
 (require "../main.rkt")
 
-;; 语义描述
+;; ── raw 层：鼠标 detail → 语义 ───────────────────────────────
 (define (describe-mouse data)
   (cond
     [(mouse-press? data)
@@ -38,14 +41,15 @@
              (mouse-x data) (mouse-y data))]
     [else "mouse?"]))
 
-;; mods 三元组 (list ctrl? alt? shift?) → 人可读
-(define (describe-mods mods)
-  (if (not (list? mods))
+;; mods 可为 mods 结构体 / (list ctrl? alt? shift?) / #f
+(define (describe-mods m)
+  (define l (if (mods? m) (mods->list m) m))
+  (if (not (list? l))
       "无"
       (let ([parts (filter identity
-                           (list (and (car mods) "Ctrl")
-                                 (and (cadr mods) "Alt")
-                                 (and (caddr mods) "Shift")))])  
+                           (list (and (car l) "Ctrl")
+                                 (and (cadr l) "Alt")
+                                 (and (caddr l) "Shift")))])
         (if (null? parts) "无" (string-join parts "+")))))
 
 ;; 导航键符号 → 显示名
@@ -56,9 +60,11 @@
     [(pageup) "PgUp"] [(pagedown) "PgDn"]
     [(insert) "Insert"] [(del) "Delete"]
     [(backtab) "Shift+Tab"]
+    [(tab) "Tab"] [(enter) "Enter"] [(escape) "Esc"] [(backspace) "Backspace"]
     [else (format "~a" k)]))
 
-(define (describe type data mods)
+;; ── raw 层：事件 type/data → 语义 ────────────────────────────
+(define (describe-raw type data mods)
   (cond
     [(event-null? type)   "null"]
     [(event-resize? type) (format "resize ~ax~a" (get-resize-rows data) (get-resize-cols data))]
@@ -100,6 +106,42 @@
     [(event-seq? type) (format "seq ~s" data)]
     [else (format "~a" type)]))
 
+;; ── 规范事件 event? → 可读描述 ───────────────────────────────
+(define (describe-event ev)
+  (match ev
+    [(key-event key mods)
+     (format "key-event  key=~s (~a)  mods=~a"
+             key
+             (cond [(char? key) (format "char ~s" key)]
+                   [(symbol? key) (format "named ~a" (describe-key key))]
+                   [else "?"])
+             (describe-mods mods))]
+    [(paste-event bytes text)
+     (format "paste-event  ~a bytes  text=~s" (bytes-length bytes) text)]
+    [(mouse-event action button x y mods)
+     (format "mouse-event  action=~a button=~a x=~a y=~a  mods=~a"
+             action button x y (describe-mods mods))]
+    [(resize-event rows cols) (format "resize-event  ~ax~a" rows cols)]
+    [(null-event) "null-event"]
+    [(other-event type data mods) (format "other-event  type=~a" type)]))
+
+;; ── 该事件在 build-input 中命中的回调关键字 ──────────────────
+;; 所有关键字都设一个探针回调；命中哪个就返回哪个（#:any 为兜底）。
+(define probe
+  (let ([hit #f])
+    (define (mk name) (λ args (set! hit name)))
+    (define handler
+      (build-input
+       #:text (mk '#:text) #:key (mk '#:key) #:paste (mk '#:paste)
+       #:mouse (mk '#:mouse) #:resize (mk '#:resize) #:null (mk '#:null)
+       #:tab (mk '#:tab) #:backtab (mk '#:backtab) #:space (mk '#:space)
+       #:enter (mk '#:enter) #:backspace (mk '#:backspace) #:escape (mk '#:escape)
+       #:up (mk '#:up) #:down (mk '#:down) #:left (mk '#:left) #:right (mk '#:right)
+       #:delete (mk '#:delete) #:insert (mk '#:insert) #:home (mk '#:home)
+       #:end (mk '#:end) #:pageup (mk '#:pageup) #:pagedown (mk '#:pagedown)
+       #:any (mk '#:any)))
+    (λ (ev) (set! hit #f) (handler ev) hit)))
+
 ;; data 的原始字节（十进制 + ASCII 可读形式）
 ;; 注意：鼠标的 data 是 list，resize 的 data 是 pair，只有按键/粘贴是 bytes
 (define (show-bytes data)
@@ -118,7 +160,7 @@
 (with-tui
  (λ ()
    (screen-clear)
-   (put-styled 'title "═══ 输入事件调试器 (read-event/raw) ═══") (put-newline)
+   (put-styled 'title "═══ 输入事件调试器 (raw / event / callback) ═══") (put-newline)
    (put-styled 'info "按 q 退出 · 组合键: Alt+x / Ctrl+方向键 / Ctrl+Alt+x · 鼠标 / 粘贴") (put-newline)
    (put-newline)
    (define running? #t)
@@ -126,12 +168,15 @@
    (let loop ()
      (when running?
        (let-values ([(type data mods) (read-event/raw)])
+         (define ev (normalize-event type data mods))
          (set! count (add1 count))
          (put-styled 'heading (format "事件 #~a:" count)) (put-newline)
-         (put-string (format "  type: ~a" type)) (put-newline)
-         (put-string (format "  data: ~a" (show-bytes data))) (put-newline)
-         (put-string (format "  mods: ~a" (describe-mods mods))) (put-newline)
-         (put-styled 'success (format "  → ~a" (describe type data mods))) (put-newline)
+         (put-string (format "  raw:    type=~a  data=~a  mods=~a"
+                             type (show-bytes data) (describe-mods mods)))
+         (put-newline)
+         (put-string (format "  raw →   ~a" (describe-raw type data mods))) (put-newline)
+         (put-string (format "  event:  ~a" (describe-event ev))) (put-newline)
+         (put-styled 'success (format "  cb:     ~a" (probe ev))) (put-newline)
          (put-newline)
          ;; 清屏前 50 个事件，避免滚动太长
          (when (>= count 50)

@@ -14,9 +14,13 @@
 
 (define (csi-done? b) (<= CSI-FINAL-START b CSI-FINAL-END))
 
+;; 控制字节判定。
+;; 注意顺序：TAB / LF / CR / ESC / BACKSPACE 是“单字节特殊键”，必须在
+;; 通用 ctrl 分类之前排除，否则它们会被当成 Ctrl+字母（例如 0x08 会被
+;; 误判为 Ctrl+H，而不是 Backspace）。
 (define (ctrl-char? b)
   (and (integer? b) (<= 0 b 31)
-       (not (memv b (list TAB LF CR ESC)))))
+       (not (memv b (list TAB LF CR ESC BACKSPACE)))))
 
 ;; CSI 参数解析
 
@@ -193,11 +197,20 @@
 ;; ════════════════════════════════════════════════════════════════
 (define current-key-protocol (make-parameter 'ansi))
 
+;; 首字节分类（纯函数，供 read-event-ansi 与回归测试共用）
+;; 顺序要求：单字节特殊键（TAB/LF/CR/ESC/BACKSPACE）必须在 ctrl 之前排除。
+(define (classify-byte b)
+  (cond [(ctrl-char? b) 'ctrl]
+        [(= b ESC) 'escape]
+        [(utf8-multi-start? b) 'utf8]
+        [else 'key]))
+
 ;; read-event 核心 — ESC 后用 ESCDELAY 超时区分独立 ESC vs 序列
 ;; （ANSI 协议解析器）
 (define (read-event-ansi first)
-  (cond [(ctrl-char? first) (values EVENT-CTRL (bytes first) #f)]
-        [(= first ESC)
+  (case (classify-byte first)
+    [(ctrl) (values EVENT-CTRL (bytes first) #f)]
+    [(escape)
          (define b2 (read-byte/timeout ESCDELAY))
          (cond [(not b2) (values EVENT-KEY (bytes first) #f)]    ; 独立 ESC
                [(= b2 CSI-SS3)
@@ -229,10 +242,10 @@
                [(<= ASCII-PRINTABLE-START b2 ASCII-PRINTABLE-END)
                 (values EVENT-ALT (bytes first b2) #f)]
                [else (values EVENT-SEQ (bytes first b2) #f)])]
-        [(utf8-multi-start? first)
+        [(utf8)
          (define rest (read-n-bytes (sub1 (utf8-length first))))
          (values EVENT-UTF8 (bytes-append (bytes first) rest) #f)]
-        [else (values EVENT-KEY (bytes first) #f)]))
+    [else (values EVENT-KEY (bytes first) #f)]))
 
 ;; 协议分发
 (define (read-event-impl first)
@@ -450,6 +463,7 @@
 ;; 导出
 
 (provide read-event/raw read-event-noblock/raw
+         classify-byte
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?
          event-del? event-insert? event-home? event-end? event-pageup? event-pagedown?

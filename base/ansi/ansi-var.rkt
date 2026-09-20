@@ -16,14 +16,16 @@
 (define ansi-source-col 1)
 
 ;; ─── ASCII 控制字符 ───
+;; TAB / LF / CR / ESC / BACKSPACE 是“单字节特殊键”，
+;; 必须在 ctrl-char? 分类前排除（见 input.rkt）。
 
 (define TAB 9)           ; Tab
 (define LF 10)           ; Line Feed
 (define CR 13)           ; Carriage Return
 (define ESC 27)          ; Escape
 (define SPACE 32)        ; Space
-(define BACKSPACE 8)     ; Backspace (^H)
-(define DELETE 127)      ; Delete
+(define BACKSPACE 8)     ; Backspace (^H) —— 与 DELETE(127) 都映射为 'backspace
+(define DELETE 127)      ; DEL (0x7F) —— 终端 Backspace 键常用此字节，也映射为 'backspace
 
 ;; ASCII 字符范围
 (define ASCII-DIGIT-START 48)    ; '0'

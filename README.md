@@ -306,13 +306,17 @@ All keyword arguments are optional. Supported events:
 | `#:resize` | `(lambda (rows cols) ...)` | Window resize；`rows`/`cols` 是 **integer** |
 | `#:null` | `(lambda () ...)` | No input event，无参数 |
 | `#:any` | `(lambda (ev) ...)` | Fallback；`ev` 是 **event?** 结构体（`key-event` / `paste-event` / `mouse-event` / `resize-event` / `null-event` / `other-event`） |
-| `#:tab` / `#:backtab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | 无修饰命名键快捷回调，无参数 |
+| `#:tab` / `#:backtab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | 无修饰命名键快捷回调，无参数。`#:backspace` 同时匹配终端 Backspace 常用字节 `0x7F` 与 `^H`(`0x08`) |
 | `#:up` / `#:down` / `#:left` / `#:right` | `(lambda () ...)` | 无修饰方向键，无参数 |
 | `#:delete` / `#:insert` / `#:home` / `#:end` / `#:pageup` / `#:pagedown` | `(lambda () ...)` | 无修饰功能键，无参数 |
 
 Dispatch order (built-in): `null > resize > paste > mouse > key`. Within a
 key: 快捷回调（仅限无修饰命名键）> `#:text`（可打印且无 Ctrl/Alt）>
 `#:key` > `#:any`. 修饰过的命名键（如 Ctrl+Up）总是走 `#:key`。
+
+**顺序保证**：单字节特殊键（`tab`/`enter`/`escape`/`backspace`）和
+`#\space` 在通用字符处理 **之前** 判定，因此它们绝不会被投递到 `#:text`
+或 `#:key`；`#\space` 在设置了 `#:space` 时由 `#:space` 优先消费。
 
 ### Low-level: read-event/raw
 

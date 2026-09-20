@@ -77,7 +77,7 @@
           [(symbol? key)
            (case key
              [(tab) on-tab] [(backtab) on-backtab] [(enter) on-enter]
-             [(escape) on-escape] [(up) on-up] [(down) on-down]
+             [(escape) on-escape] [(backspace) on-backspace] [(up) on-up] [(down) on-down]
              [(left) on-left] [(right) on-right] [(del) on-delete]
              [(insert) on-insert] [(home) on-home] [(end) on-end]
              [(pageup) on-pageup] [(pagedown) on-pagedown]

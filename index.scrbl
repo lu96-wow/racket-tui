@@ -589,8 +589,10 @@ control, or multi-byte) or a @racket[symbol?] for a named key: @racket['up]
 @racket['down] @racket['left] @racket['right] @racket['home] @racket['end]
 @racket['pageup] @racket['pagedown] @racket['insert] @racket['del]
 @racket['backtab] @racket['tab] @racket['enter] @racket['backspace]
-@racket['escape]. The Ctrl/Alt implied by the raw @tt{ctrl}/@tt{alt} event
-types are folded into @racket[mods].}
+@racket['escape]. Both byte @tt{0x08} (@tt{^H}) and @tt{0x7F} (@tt{DEL})
+map to @racket['backspace], so @racket[#:backspace] fires for either. The
+Ctrl/Alt implied by the raw @tt{ctrl}/@tt{alt} event types are folded into
+@racket[mods].}
 
 @defstruct[paste-event ([bytes bytes?] [text string?])]{
 Bracketed paste. @racket[bytes] is the raw payload; @racket[text] is the
@@ -655,6 +657,13 @@ first tries its shortcut callback (@racket[#:tab], @racket[#:up], ...); then
 a printable character (no Ctrl/Alt) goes to @racket[#:text]; otherwise the
 key goes to @racket[#:key]. A paste tries @racket[#:paste], then
 @racket[#:text].
+
+Special keys are checked @emph{before} the generic character handler: a
+single-byte special key (@tt{tab}, @tt{enter}, @tt{escape}, @tt{backspace})
+is never delivered to @racket[#:text] or @racket[#:key], and @racket[#\space]
+is claimed by @racket[#:space] (when set) before it can reach @racket[#:text].
+A modified key (for example Ctrl+Up or Ctrl+Space) never matches a shortcut
+and goes to @racket[#:key] with its modifiers.
 
 @subsubsection{Callback arguments}
 
@@ -748,6 +757,13 @@ and @racket[mods] is @racket[#f] or @racket[(list ctrl? alt? shift?)].
 @defproc[(read-event-noblock/raw) (values symbol? (or/c bytes? list? pair?) (or/c #f (list/c boolean? boolean? boolean?)))]
 Like @racket[read-event/raw], but returns immediately with type
 @racket['null] when no input is available.
+
+@defproc[(classify-byte [b byte?]) (or/c 'ctrl 'escape 'utf8 'key)]
+Classifies the first byte of an input sequence. The single-byte special keys
+(TAB, LF, CR, ESC, Backspace) are excluded before the generic control range,
+so they reach their dedicated handling instead of being treated as a
+Ctrl+letter. This ordering is what makes @racket['backspace] work for both
+@tt{0x08} and @tt{0x7F}.
 
 @defproc[(event-null? [type symbol?]) boolean?]
 @defproc[(event-key? [type symbol?]) boolean?]
