@@ -302,8 +302,8 @@ All keyword arguments are optional. Supported events:
 | `#:key` | `(lambda (key mods) ...)` | 每个未被快捷回调 / `#:text` 消费的键；`key` 是 **char?**（可打印或控制字符）或 **symbol?**（`'up` `'tab` `'enter` `'escape` `'backspace` `'del` `'backtab` 等）；`mods` 是 **mods 结构体** |
 | `#:text` | `(lambda (str) ...)` | **文本输入统一通道**；`str` 是 **string?**（一个可打印字符，或整段粘贴内容） |
 | `#:paste` | `(lambda (bytes) ...)` | 原始粘贴字节；未设置时粘贴并入 `#:text` |
-| `#:mouse` | `(lambda (action button x y mods) ...)` | `action` 是 **symbol**（`'press`/`'release`/`'move`/`'scroll`）；`button` 是 `'left`/`'middle`/`'right`，滚轮为 `'up`/`'down`，移动为 `#f`；`x`/`y` 坐标 + `mods` |
-| `#:resize` | `(lambda (rows cols) ...)` | Window resize；`rows`/`cols` 是 **integer** |
+| `#:mouse` | `(lambda (action button x y mods) ...)` | `action` 是 **symbol**（`'press`/`'release`/`'move`/`'scroll`）；`button` 是 `'left`/`'middle`/`'right`，滚轮为 `'up`/`'down`，移动为 `#f`；`x`/`y` 是 **exact-nonnegative-integer?** 坐标 + `mods` |
+| `#:resize` | `(lambda (rows cols) ...)` | Window resize；`rows`/`cols` 是 **exact-positive-integer?** |
 | `#:null` | `(lambda () ...)` | No input event，无参数 |
 | `#:any` | `(lambda (ev) ...)` | Fallback；`ev` 是 **event?** 结构体（`key-event` / `paste-event` / `mouse-event` / `resize-event` / `null-event` / `other-event`） |
 | `#:tab` / `#:backtab` / `#:space` / `#:enter` / `#:backspace` / `#:escape` | `(lambda () ...)` | 无修饰命名键快捷回调，无参数。`#:backspace` 同时匹配终端 Backspace 常用字节 `0x7F` 与 `^H`(`0x08`) |
@@ -522,7 +522,7 @@ More examples can be found in the `demo/` directory.
 | 颜色 | `put-fg/bg` `put-rgb-*` `put-256-*`（含 `-base`、`-at`、`-at!` 三档变体） |
 | 样式 | `style-define!` `style-apply!` `style-reset` `style->bytes`、`put-styled*` / `format-styled*`、构造器 `color-*` `attr-*` `clr-*` `bclr-*` |
 | 格式（返回 bytes） | 所有 `format-*` |
-| 输入 | `read-event` `read-event-noblock`、`event-*` 谓词、`build-input` `loop-input` `loop-input/stop` |
+| 输入 | `read-event` `read-event-noblock`（返回 **event?**）、`build-input` `loop-input` `loop-input/stop`；低层：`read-event/raw` + `event-*` 谓词 |
 | 终端 | `terminal?` `enter-raw-mode!` `exit-raw-mode!` `get-window-size` `resize-monitor-start/stop` |
 | 光标跟踪 | `current-cursor-row` `current-cursor-col` `set-cursor!` `get-cursor` `update-cursor!` |
 | 配置常量 | `ESCDELAY` `CSI-MAX-BYTES` `PASTE-MAX-BYTES` `UTF8-READ-TIMEOUT` `PASTE-READ-TIMEOUT` |

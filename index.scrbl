@@ -139,7 +139,7 @@ Knowing any one tier, the other two can be derived.
                (list "Colors" @elem{@racket[put-fg] @racket[put-rgb-fg] @racket[put-256-fg]})
                (list "Styles" @elem{@racket[style-define!] @racket[put-styled] @racket[color-fg]})
                (list "Format (returns bytes)" @elem{@racket[format-fg] @racket[format-cursor-move]})
-               (list "Input" @elem{@racket[read-event] @racket[build-input] @racket[loop-input]})
+               (list "Input" @elem{@racket[read-event] (typed @racket[event?]) @racket[build-input] @racket[loop-input]; raw: @racket[read-event/raw] @racket[event-mouse?]})
                (list "Terminal" @elem{@racket[terminal?] @racket[enter-raw-mode!] @racket[get-window-size]})
                (list "Cursor tracking" @elem{@racket[current-cursor-row] @racket[set-cursor!] @racket[update-cursor!]})
                (list "Config constants" @elem{@racket[ESCDELAY] @racket[PASTE-MAX-BYTES]}))]
