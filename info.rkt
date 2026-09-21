@@ -2,8 +2,8 @@
 
 (define collection "tui")
 (define version "0.0.1")
-(define deps '("racket-lib"))
-(define build-deps '("scribble-lib" "racket-doc"))
+(define deps '("base"))
+(define build-deps '("rackunit-lib" "scribble-lib" "racket-doc"))
 (define scribblings '(("index.scrbl" ())))
 (define pkg-desc "Terminal UI library for Racket (Linux only)")
 (define pkg-authors '("lu96-wow"))
