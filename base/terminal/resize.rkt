@@ -1,5 +1,6 @@
 #lang racket
-(require ffi/unsafe ffi/unsafe/port)
+(require ffi/unsafe ffi/unsafe/port
+         "platform.rkt")
 
 ;; ════════════════════════════════════════════════════════════════
 ;; 窗口大小获取 + SIGWINCH 事件
@@ -65,6 +66,20 @@
     (error 'resize-monitor "sigprocmask failed (how=~a)" how))
   r)
 
+;; 是否做「全线程 SIGWINCH 掩码」校验（需要读 /proc/<pid>/status）。
+;;   - Android/Termux 的 SELinux 不给 app 域 proc:file read（AOSP 只有
+;;     `allow domain proc:dir r_dir_perms`），/proc/self/task/<tid>/status
+;;     必然 EACCES，校验会恒为 'unknown 并 fail-fast。此时退回到只做
+;;     sigprocmask（新线程继承掩码），不再中断启动。
+;;   - 可用 TUI_RESIZE_PROC_CHECK=0/1 显式覆盖。
+(define (proc-check-enabled?)
+  (define v (getenv "TUI_RESIZE_PROC_CHECK"))
+  (cond
+    [(member v '("0" "false" "no")) #f]
+    [(member v '("1" "true" "yes")) #t]
+    [(termux?) #f]
+    [else #t]))
+
 ;; ── /proc 线程掩码校验 ──────────────────────────────────────
 ;; 返回 'ok（全部阻塞）、'unblocked（发现未阻塞线程）、'unknown（/proc 不可读）
 (define (thread-sigwinch-state tid)
@@ -110,8 +125,10 @@
     (define mask (make-sigwinch-mask))
     (define old (make-bytes SIGNAL-MASK-SIZE 0))
     (sigprocmask/check SIG_BLOCK mask old)
-    (define state (check-sigwinch-mask-all-threads))
-    (unless (eq? state 'ok)
+    (define state (if (proc-check-enabled?)
+                      (check-sigwinch-mask-all-threads)
+                      'skipped))
+    (unless (memq state '(ok skipped))
       (sigprocmask/check SIG_SETMASK old #f)
       (error 'resize-monitor-start
              (case state
