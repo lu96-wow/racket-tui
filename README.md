@@ -151,6 +151,7 @@ Output directly to the terminal, displayed immediately:
 (line-clear)
 (line-clear-right)
 (line-clear-left)
+(line-clear-row 3)   ; clear row 3, keep cursor where it was
 (buffer-alt-enable)
 (buffer-alt-disable)
 
@@ -222,6 +223,7 @@ Return byte strings without outputting, used for batch collection:
 | format-line-clear | Clear line | line-clear |
 | format-line-clear-right | Clear right | line-clear-right |
 | format-line-clear-left | Clear left | line-clear-left |
+| (format-line-clear-row row) | Clear given row, cursor restored | (line-clear-row row) |
 | format-buffer-alt-enable | Enable alt buffer | buffer-alt-enable |
 | format-buffer-alt-disable | Disable alt buffer | buffer-alt-disable |
 | format-reset | Reset styling | style-reset |

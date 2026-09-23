@@ -15,6 +15,7 @@
          format-cursor-home format-cursor-hide format-cursor-show
          format-screen-clear format-screen-clear-below format-screen-clear-above
          format-line-clear format-line-clear-right format-line-clear-left
+         format-line-clear-row
          format-buffer-alt-enable format-buffer-alt-disable
          format-reset
          format-fg-base format-bg-base
@@ -59,6 +60,14 @@
 (define (format-cursor-right n) (op 'move-rel (list 0 n)))
 (define (format-cursor-left n) (op 'move-rel (list 0 (- n))))
 (define (format-cursor-col n) (op 'move-col (list n)))
+
+;; 擦除指定整行（1-based），save/move/erase/restore 作为 op 交给 grid，
+;; 终端光标与 grid 跟踪光标都保持原位。
+(define (format-line-clear-row row)
+  (ops-append format-cursor-save
+              (format-cursor-move row 1)
+              format-line-clear
+              format-cursor-restore))
 
 ;; ── 颜色 base（与 base 一致的 16 色映射）─────────────────
 

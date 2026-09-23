@@ -66,6 +66,9 @@
 (define (line-clear)          (put-bytes format-line-clear))
 (define (line-clear-right)    (put-bytes format-line-clear-right))
 (define (line-clear-left)     (put-bytes format-line-clear-left))
+
+;; 擦除指定整行（1-based），清完光标回到原位（终端光标与跟踪光标都不变）
+(define (line-clear-row row)  (put-bytes (format-line-clear-row row)))
 (define (buffer-alt-enable)   (put-bytes format-buffer-alt-enable))
 (define (buffer-alt-disable)  (put-bytes format-buffer-alt-disable))
 
@@ -155,7 +158,7 @@
          cursor-move cursor-col cursor-home
          cursor-hide cursor-show
          screen-clear screen-clear-below screen-clear-above
-         line-clear line-clear-right line-clear-left
+         line-clear line-clear-right line-clear-left line-clear-row
          buffer-alt-enable buffer-alt-disable
          current-cursor-row current-cursor-col
          set-immediate-mode! set-buffered-mode! flush!

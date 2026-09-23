@@ -9,6 +9,7 @@
          format-cursor-home format-cursor-hide format-cursor-show
          format-screen-clear format-screen-clear-below format-screen-clear-above
          format-line-clear format-line-clear-right format-line-clear-left
+         format-line-clear-row
          format-buffer-alt-enable format-buffer-alt-disable
          format-reset
          ;; 纯转义序列 (base)
@@ -73,6 +74,15 @@
 
 (define (format-cursor-col n)
   (string->bytes/utf-8 (format "\e[~aG" n)))
+
+;; 擦除指定整行（1-based），DECSC/DECRC 由终端保存/恢复光标，
+;; 既不移动终端光标，也不改变跟踪的光标位置。
+;; ESC[2K 擦整行与列无关，无需先移到第 1 列。
+(define (format-line-clear-row row)
+  (bytes-append format-cursor-save
+                (format-cursor-move row 1)
+                format-line-clear
+                format-cursor-restore))
 
 ;; 16色前景/背景 — 纯转义序列
 (define (format-fg-base n)

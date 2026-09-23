@@ -134,6 +134,8 @@
 (define (line-clear) (emit format-line-clear))
 (define (line-clear-right) (emit format-line-clear-right))
 (define (line-clear-left) (emit format-line-clear-left))
+;; 擦除指定整行（1-based），清完光标回到原位
+(define (line-clear-row row) (emit (format-line-clear-row row)))
 (define (buffer-alt-enable) (emit format-buffer-alt-enable))
 (define (buffer-alt-disable) (emit format-buffer-alt-disable))
 
@@ -203,7 +205,7 @@
          cursor-move cursor-col cursor-home
          cursor-hide cursor-show
          screen-clear screen-clear-below screen-clear-above
-         line-clear line-clear-right line-clear-left
+         line-clear line-clear-right line-clear-left line-clear-row
          buffer-alt-enable buffer-alt-disable
          current-cursor-row current-cursor-col
          set-immediate-mode! set-buffered-mode! flush!

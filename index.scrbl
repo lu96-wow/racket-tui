@@ -255,6 +255,9 @@ Restores the saved cursor position (DECRC).
 @defproc[(line-clear) void?]
 @defproc[(line-clear-right) void?]
 @defproc[(line-clear-left) void?]
+@defproc[(line-clear-row [row exact-nonnegative-integer?]) void?]
+Clears the whole given row (1-based) without moving the terminal cursor and
+without changing the tracked cursor position.
 @defproc[(buffer-alt-enable) void?]
 @defproc[(buffer-alt-disable) void?]
 
@@ -476,6 +479,7 @@ once at the end of a batch.
 @defproc[(format-line-clear) bytes?]
 @defproc[(format-line-clear-right) bytes?]
 @defproc[(format-line-clear-left) bytes?]
+@defproc[(format-line-clear-row [row exact-nonnegative-integer?]) bytes?]
 @defproc[(format-buffer-alt-enable) bytes?]
 @defproc[(format-buffer-alt-disable) bytes?]
 @defproc[(format-reset) bytes?]
