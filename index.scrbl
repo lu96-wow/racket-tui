@@ -10,7 +10,7 @@
 A small terminal UI library for Linux: raw-mode terminal control, mouse and
 true-color support, bracketed paste, and window-resize events.
 
-@bold{Linux only.} This library binds directly to Linux @tt{termios},
+@bold{Linux / Android (Termux).} This library binds directly to Linux @tt{termios},
 @tt{signalfd} and @tt{ioctl}. Loading @racketmodname[tui] on other operating
 systems raises an error, because the FFI symbols do not exist. Only
 @tt{xterm} / @tt{qterminal} have been tested.

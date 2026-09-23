@@ -2,8 +2,9 @@
 
 A terminal UI library for Racket — mouse, true color, bracketed paste, window resize.
 
-> **Linux only.** 本项目直接绑定 Linux 的 `termios` / `signalfd` / `ioctl`，不兼容其他系统。
-> 在非 Linux 上 `(require tui)` 会因 FFI 符号（`tcgetattr` / `signalfd`）不存在而在加载时报错。
+> **Linux / Android(Termux).** 本项目直接绑定 Linux 的 `termios` / `signalfd` / `ioctl`，不兼容其他系统。
+> Termux 用的是 Racket BC，`(system-type 'os*)` 返回 `'android`（底层仍是 Linux 内核 + bionic），已在守卫里一并放行。
+> 在非 Linux/Android 上 `(require tui)` 会因 FFI 符号（`tcgetattr` / `signalfd`）不存在而在加载时报错。
 
 ![Demo](a.gif)
 

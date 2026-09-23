@@ -2,8 +2,12 @@
 
 (require ffi/unsafe racket/bytes)
 
-(unless (eq? 'linux
-             (system-type 'os*)) (error "only linux could use"))
+;; Termux/Android 上 Racket 官方包是 BC 实现（termux-packages: --enable-bc
+;; --enable-bconly），其 sconfig.h 在 __ANDROID__ 下把 os* 定义为 'android
+;; (src/bc/sconfig.h: SCHEME_OS "android")，而不是 'linux。但底层同为 Linux
+;; 内核 + bionic libc，termios / signalfd / ioctl 全部可用，故一并放行。
+(unless (memq (system-type 'os*)
+              '(linux android)) (error "only linux could use"))
 ;; ════════════════════════════════════════════════════════════════
 ;; FFI 绑定 — termios / isatty（Linux libc）
 ;;
