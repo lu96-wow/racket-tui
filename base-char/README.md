@@ -4,7 +4,7 @@
 > 与真实终端后端 `tui` 同名同 API，**只改 require 路径即可切换**。
 >
 > char 后端**不加载 termios / FFI**，因此可在任何平台和沙箱（非 Linux、CI、AI 运行环境）运行；
-> base 本身仅支持 Linux。
+> base 支持 Linux 与 Android/Termux（Termux 的 Racket BC 报 `os* = 'android`）。
 
 ```racket
 (require tui)        ; 真实终端：输出 ANSI 到 stdout

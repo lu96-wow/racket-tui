@@ -11,6 +11,7 @@
 (require "tui.rkt"
          "terminal/base.rkt"
          "terminal/resize.rkt"
+         "terminal/platform.rkt"
          "terminal/cursor-state.rkt"
          "terminal/config.rkt"
          "ansi/ansi-var.rkt"
@@ -37,6 +38,7 @@
          (all-from-out "tui.rkt")
          (all-from-out "terminal/base.rkt")
          (all-from-out "terminal/resize.rkt")
+         (all-from-out "terminal/platform.rkt")
          (all-from-out "terminal/cursor-state.rkt")
          (all-from-out "terminal/config.rkt")
          (all-from-out "ansi/ansi-var.rkt")

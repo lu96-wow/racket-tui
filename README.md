@@ -4,6 +4,7 @@ A terminal UI library for Racket — mouse, true color, bracketed paste, window 
 
 > **Linux / Android(Termux).** 本项目直接绑定 Linux 的 `termios` / `signalfd` / `ioctl`，不兼容其他系统。
 > Termux 用的是 Racket BC，`(system-type 'os*)` 返回 `'android`（底层仍是 Linux 内核 + bionic），已在守卫里一并放行。
+> Termux 的 SELinux 不给 app 读 `/proc/<pid>/status`，resize 的全线程掩码校验会自动跳过（可用 `TUI_RESIZE_PROC_CHECK=1` 强制）。
 > 在非 Linux/Android 上 `(require tui)` 会因 FFI 符号（`tcgetattr` / `signalfd`）不存在而在加载时报错。
 
 ![Demo](a.gif)
@@ -580,6 +581,7 @@ More examples can be found in the `demo/` directory.
 | 格式（返回 bytes） | 所有 `format-*` |
 | 输入 | `read-event` `read-event-noblock`（返回 **event?**）、`build-input` `loop-input` `loop-input/stop`；低层：`read-event/raw` + `event-*` 谓词 |
 | 终端 | `terminal?` `enter-raw-mode!` `exit-raw-mode!` `get-window-size` `resize-monitor-start/stop` |
+| 平台 | `android?` `termux?` `termux-home` `termux-prefix` |
 | 光标跟踪 | `current-cursor-row` `current-cursor-col` `set-cursor!` `get-cursor` `update-cursor!` |
 | 配置常量 | `ESCDELAY` `CSI-MAX-BYTES` `PASTE-MAX-BYTES` `UTF8-READ-TIMEOUT` `PASTE-READ-TIMEOUT` |
 
