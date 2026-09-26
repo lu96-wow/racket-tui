@@ -118,6 +118,29 @@
                     (base-sum (apply be:normalize-event c))
                     (format "case ~a" c))))
 
+  (test-case "鼠标 raw 形状 → mouse-event（move / scroll 防回归）"
+    ;; raw 形状由 input.rkt 的 parse-mouse-event 决定：
+    ;;   press/release : (action button x y mods)
+    ;;   move          : (move   button x y mods)
+    ;;   scroll        : (scroll scroll dir x y mods)
+    (for ([d (list 'up 'down)])
+      (define ev (normalize-event 'mouse (list 'scroll 'scroll d 3 4 #f) #f))
+      (check-true (mouse-event? ev))
+      (check-equal? (mouse-event-action ev) 'scroll)
+      (check-equal? (mouse-event-button ev) d)
+      (check-equal? (list (mouse-event-x ev) (mouse-event-y ev)) '(3 4)))
+    (define mev (normalize-event 'mouse (list 'move #f 3 4 #f) #f))
+    (check-true (mouse-event? mev))
+    (check-equal? (mouse-event-action mev) 'move)
+    (check-equal? (list (mouse-event-x mev) (mouse-event-y mev)) '(3 4))
+    ;; base 后端同样
+    (define bev (be:normalize-event 'mouse (list 'scroll 'scroll 'down 3 4 #f) #f))
+    (check-true (be:mouse-event? bev))
+    (check-equal? (be:mouse-event-button bev) 'down)
+    (define bmv (be:normalize-event 'mouse (list 'move #f 3 4 #f) #f))
+    (check-true (be:mouse-event? bmv))
+    (check-equal? (be:mouse-event-action bmv) 'move))
+
   (test-case "随机操作对拍：op 路径 vs ANSI 解析路径（300 步）"
     (define rows 8)
     (define cols 16)

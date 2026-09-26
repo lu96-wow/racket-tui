@@ -78,8 +78,11 @@
   (match data
     [(list 'press b x y ms)   (mouse-event 'press b x y (->mods ms))]
     [(list 'release b x y ms) (mouse-event 'release b x y (->mods ms))]
-    [(list 'move x y ms)      (mouse-event 'move #f x y (->mods ms))]
-    [(list 'scroll d x y ms)  (mouse-event 'scroll d x y (->mods ms))]
+    ;; move：raw = (move button x y ms)（button 多为 #f；规范化后按文档置 #f）
+    [(list 'move _ x y ms)    (mouse-event 'move #f x y (->mods ms))]
+    ;; 滚轮：raw = (scroll scroll dir x y ms) —— 比其它鼠标事件多一个类型位；
+    ;;       mouse-x / mouse-y / mouse-modifiers 也是按这个形状取的。
+    [(list 'scroll _ d x y ms) (mouse-event 'scroll d x y (->mods ms))]
     [_ (other-event 'mouse data fallback-mods)]))
 
 ;; 原始 (type data mods) → 规范事件
