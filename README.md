@@ -83,17 +83,17 @@ state without a terminal.
 #lang racket
 (require tui/char)
 
-(with-tui
- (λ ()
-   (put-bytes
-    (bytes-append
-     format-screen-clear
-     (format-cursor-move 1 1)
-     (format-rgb-fg 255 255 0 "=== TUI Demo ===")
-     (format-cursor-move 3 1)
-     (format-256-fg 46 "count = 42")))
-   (displayln (char-frame)))
- #:rows 6 #:cols 30)
+(parameterize ([current-screen-size (cons 6 30)])   ; 尺寸走 parameter，同 base
+ (with-tui
+  (λ ()
+    (put-bytes
+     (bytes-append
+      format-screen-clear
+      (format-cursor-move 1 1)
+      (format-rgb-fg 255 255 0 "=== TUI Demo ===")
+      (format-cursor-move 3 1)
+      (format-256-fg 46 "count = 42")))
+    (displayln (char-frame)))))
 ```
 
 ```
@@ -166,7 +166,7 @@ Output directly to the terminal, displayed immediately:
 
 ```racket
 ;; 16-color
-(fg-red) (bg-blue)
+(clr-red) (bclr-blue)    ; 立即上色的 thunk（= (color-fg 1) / (color-bg 4)）
 (put-styled 'error "Error message")
 
 ;; True color (RGB)
@@ -498,7 +498,7 @@ More examples can be found in the `demo/` directory.
 ```racket
 (set-immediate-mode!)    ;; put- functions flush immediately (default)
 (set-buffered-mode!)     ;; put- functions buffer output
-(flush)                  ;; Manual flush
+(flush!)                 ;; Manual flush
 ```
 
 ## API Conventions（命名规则）

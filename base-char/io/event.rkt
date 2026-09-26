@@ -134,7 +134,7 @@
     [(and (>= n 4)
           (= (bytes-ref d 0) ESC) (= (bytes-ref d 1) CSI-OPEN)
           (= (bytes-ref d 2) 50) (= (bytes-ref d 3) 55)) #f]
-    [(= last TILDE)
+    [(eqv? last TILDE)
      (case (mod-seq-first-param d)
        [(2) KEY-INSERT] [(3) KEY-DELETE]
        [(5) KEY-PAGEUP] [(6) KEY-PAGEDOWN]
@@ -270,7 +270,21 @@
            (other-event type data m)))]
     [(mod-seq)
      (let ([key (or (mod-seq->key data) (mod-seq->char data))])
-       (if key (k key) (other-event type data m)))]
+       (cond
+         [key (k key)]
+         ;; ESC + 单控制/特殊字节：默认 xterm 下 Alt[+Ctrl]+键 的编码
+         ;; （如 Ctrl+Alt+x = ESC ^X）。控制字节 1-26 → Ctrl+字母。
+         [(and (bytes? data) (= (bytes-length data) 2)
+               (= (bytes-ref data 0) ESC))
+          (define b (bytes-ref data 1))
+          (define ctrl-letter?
+            (and (<= 1 b 26)
+                 (not (memv b (list TAB LF CR BACKSPACE)))))
+          (key-event (if ctrl-letter?
+                         (integer->char (+ 64 b))
+                         (byte->key b))
+                     m)]
+         [else (other-event type data m)]))]
     [(utf8)
      (let ([s (event->string data)])
        (if (= (string-length s) 1)
@@ -362,7 +376,14 @@
 (define (spec->event s)
   (cond
     [(event? s) s]
-    [(char? s) (key-event s no-mods)]
+    [(char? s)
+     ;; 与真实终端一致：单字节特殊键先经 byte->key 归一化
+     ;; （#\tab→'tab, #\return/#\newline→'enter, #\backspace→'backspace,
+     ;;  #\escape→'escape；#\space 仍保持 #\space）。非 ASCII char 原样保留。
+     (key-event (if (< (char->integer s) 128)
+                    (byte->key (char->integer s))
+                    s)
+                no-mods)]
     [(symbol? s) (key-event s no-mods)]
     [(and (list? s) (= (length s) 2) (mods? (cadr s)))
      (key-event (car s) (cadr s))]

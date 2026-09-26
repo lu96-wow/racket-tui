@@ -90,6 +90,7 @@
 (define MOUSE-MOVE-FLAG 5)           ; 移动标志 (bit 5, bit index 供 bitwise-bit-set? 使用)
 (define MOUSE-SCROLL-START 64)       ; 滚轮向上
 (define MOUSE-SCROLL-END 65)         ; 滚轮向下
+(define MOUSE-SCROLL-BIT 6)          ; 滚轮标志位（bit index，bit6=64）
 
 ;; ─── 启用/禁用 ANSI 转义序列（输出用）───
 

@@ -5,6 +5,11 @@
 (require rackunit
          "../char.rkt")
 
+;; 与 base 一致：with-tui 不带尺寸关键字，尺寸走 current-screen-size
+(define (with-sized-tui rows cols thunk)
+  (parameterize ([current-screen-size (cons rows cols)])
+    (with-tui thunk)))
+
 (module+ test
 
   (test-case "push 各种 spec 形态"
@@ -38,7 +43,7 @@
   (test-case "完整事件循环：build-input + loop-input/stop"
     (define hits (box 0))
     (define result
-      (with-tui
+      (with-sized-tui 6 20
        (λ ()
          (char-input-clear!)
          (char-input-push! #\a #\b 'up #\c)
@@ -48,8 +53,7 @@
             #:key (λ (k m) (when (char? k) (set-box! hits (add1 (unbox hits)))))
             #:up (λ () (set-box! hits (+ (unbox hits) 100)))))
          (loop-input/stop (char-input-exhausted?) handler)
-         (unbox hits))
-       #:rows 6 #:cols 20))
+         (unbox hits))))
     (check-equal? result 103)                 ; 3 个字符 + 1 次 up
     (check-true (char-input-empty?)))
 
@@ -57,14 +61,13 @@
     (define frames '())
     (parameterize ([current-frame-hook
                     (λ (g) (set! frames (cons (grid->text g) frames)))])
-      (with-tui
+      (with-sized-tui 3 10
        (λ ()
          (screen-clear)
          (put-string "hi")
          (flush!)
          (flush!)                               ; 与上一帧相同 → 不触发
-         (put-string "!"))                       ; 未 flush
-       #:rows 3 #:cols 10))
+         (put-string "!"))))                     ; 未 flush
     (check-equal? (length frames) 1)
     (check-equal? (car frames) "hi\n\n"))
 
@@ -73,14 +76,13 @@
     (dynamic-wind
       void
       (λ ()
-        (with-tui
+        (with-sized-tui 3 10
          (λ ()
            (screen-frame-log-enable! path)
            (screen-clear) (put-string "A") (flush!)
            (flush!)                             ; 与上一帧相同 → 去重
            (screen-clear) (put-string "B") (flush!)
-           (screen-frame-log-disable!))
-         #:rows 3 #:cols 10)
+           (screen-frame-log-disable!)))
         (define txt (file->string path))
         (check-true (string-contains? txt "── frame 1 ──"))
         (check-true (string-contains? txt "A"))
@@ -90,7 +92,7 @@
       (λ () (when (file-exists? path) (delete-file path)))))
 
   (test-case "光标位置与局部属性查询"
-    (with-tui
+    (with-sized-tui 5 12
      (λ ()
        (screen-clear)
        (put-at 3 5 "hi")
@@ -109,8 +111,7 @@
        ;; 当前待写入属性
        (check-equal? (screen-current-style g) "")
        (put-256-fg-base 46)
-       (check-equal? (screen-current-style g) "fg#46"))
-     #:rows 5 #:cols 12))
+       (check-equal? (screen-current-style g) "fg#46"))))
 
   (test-case "char-run：有界脚本 → 帧序列，不会无限输出"
     (define count (box 0))
@@ -135,13 +136,12 @@
 
   (test-case "字符图与按需属性同源"
     (define g
-      (with-tui
+      (with-sized-tui 5 16
        (λ ()
          (screen-clear)
          (put-at 1 1 "OK")
          (put-styled-at 3 1 'error "bad")
-         (the-screen))
-       #:rows 5 #:cols 16))
+         (the-screen))))
     (check-equal? (grid->text g) "OK\n\nbad\n\n")
     (check-not-false (member '(2 0 "b" "fg#1 bold")
                              (screen-styled-cells g)))))

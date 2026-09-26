@@ -47,8 +47,8 @@
     [(erase-line) (grid-erase-line! g (car args))]
     [(cursor-hide) (set-grid-cursor-visible?! g #f)]
     [(cursor-show) (set-grid-cursor-visible?! g #t)]
-    [(alt-enable) (set-grid-alt-active?! g #t)]
-    [(alt-disable) (set-grid-alt-active?! g #f)]
+    [(alt-enable) (screen-alt-enable!)]
+    [(alt-disable) (screen-alt-disable!)]
     [(sgr) (apply-sgr! g args)]
     [else (void)]))
 
@@ -84,9 +84,10 @@
   (cond
     [(current-emit-sink) => (λ (sink) (for-each sink ops))]
     [else
-     (define g (the-screen))
-     (for-each (λ (o) (apply-op! g o)) ops)
-     (sync-cursor! g)]))
+     ;; 每个 op 都取当前屏：alt-enable/disable 会切换 (the-screen)，
+     ;; 后续 op 必须作用到新屏上
+     (for-each (λ (o) (apply-op! (the-screen) o)) ops)
+     (sync-cursor! (the-screen))]))
 
 ;; 缓冲/立即模式对 grid 无区别
 (define (set-immediate-mode!) (void))
@@ -95,13 +96,20 @@
 
 ;; ── 基础输出 ─────────────────────────────────────────────
 
-(define (put-byte b) (emit (integer->char (bitwise-and b #xff))))
+;; 与 base 的 put-byte 一致：越界即报错（不静默截断）
+(define (put-byte b)
+  (unless (and (integer? b) (<= 0 b 255))
+    (error 'put-byte "expected byte (0-255), got ~a" b))
+  (emit (integer->char b)))
 (define (put-bytes bs) (emit bs))
 (define (put-char c) (emit c))
 (define (put-string s) (emit s))
 (define (put v)
-  (cond [(integer? v) (put-byte v)]
-        [else (emit v)]))
+  (cond [(string? v) (put-string v)]
+        [(bytes? v) (put-bytes v)]
+        [(char? v) (put-char v)]
+        [(integer? v) (put-byte v)]
+        [else (void)]))
 
 (define (put-format-bytes . parts)
   (emit (apply ops-append parts)))

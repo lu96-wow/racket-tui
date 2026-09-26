@@ -114,21 +114,25 @@
                             (bitwise-bit-set? m 1)
                             (bitwise-bit-set? m 0)))]
          [is-move? (bitwise-bit-set? type MOUSE-MOVE-FLAG)]
-         [is-release? (and (= final MOUSE-RELEASE) (not is-move?))]
+         ;; 滚轮：bit6 置位，且低 2 位为 0(上)/1(下)；修饰位在 bit2-4，
+         ;; 必须用掩码判断，否则 Ctrl/Alt/Shift+滚轮 会被误判成按键。
+         [is-scroll? (and (bitwise-bit-set? type MOUSE-SCROLL-BIT)
+                          (<= (bitwise-and type MOUSE-BUTTON-MASK) 1))]
+         [is-release? (and (= final MOUSE-RELEASE) (not is-move?) (not is-scroll?))]
          [button (case button-code
                    [(0) BUTTON-LEFT]
                    [(1) BUTTON-MIDDLE]
                    [(2) BUTTON-RIGHT]
                    [else BUTTON-UNKNOWN])]
          [action (cond
-                   [(<= MOUSE-SCROLL-START type MOUSE-SCROLL-END) EVENT-MOUSE-SCROLL]
+                   [is-scroll? EVENT-MOUSE-SCROLL]
                    [is-release? EVENT-MOUSE-RELEASE]
                    [is-move? EVENT-MOUSE-MOVE]
                    [else EVENT-MOUSE-PRESS])]
          [scroll-direction (cond
-                             [(= type MOUSE-SCROLL-START) SCROLL-UP]
-                             [(= type MOUSE-SCROLL-END) SCROLL-DOWN]
-                             [else #f])])
+                             [(not is-scroll?) #f]
+                             [(zero? (bitwise-and type 1)) SCROLL-UP]
+                             [else SCROLL-DOWN])])
     (if scroll-direction
         (list action EVENT-MOUSE-SCROLL scroll-direction x y modifiers)
         (list action button x y modifiers))))
@@ -241,7 +245,20 @@
                          (values (csi-params-final->type ps final) seq #f))]))]
                [(<= ASCII-PRINTABLE-START b2 ASCII-PRINTABLE-END)
                 (values EVENT-ALT (bytes first b2) #f)]
-               [else (values EVENT-SEQ (bytes first b2) #f)])]
+               [(utf8-multi-start? b2)
+                ;; Alt + 非 ASCII 字符（ESC + UTF-8 字节）
+                (define rest (read-n-bytes (sub1 (utf8-length b2))))
+                (values EVENT-ALT (bytes-append (bytes first b2) rest) #f)]
+               [else
+                ;; ESC + 控制/特殊字节：默认 xterm 下 Alt[+Ctrl]+字母/键 的编码
+                ;; （如 Ctrl+Alt+x = ESC ^X）。TAB/LF/CR/BS 是独立特殊键，
+                ;; 不算 Ctrl+字母；具体键值在 normalize-event 的 'mod-seq
+                ;; 分支还原。
+                (define ctrl-letter?
+                  (and (<= 1 b2 26)
+                       (not (memv b2 (list TAB LF CR BACKSPACE)))))
+                (values EVENT-MOD (bytes first b2)
+                        (list ctrl-letter? #t #f))])]
         [(utf8)
          (define rest (read-n-bytes (sub1 (utf8-length first))))
          (values EVENT-UTF8 (bytes-append (bytes first) rest) #f)]
@@ -435,7 +452,7 @@
           (= (bytes-ref d 3) 55))  ; '7'
      #f]
     ;; ~ 结尾：功能键修饰形式（ESC [ 5;5~ = Ctrl+PgUp 等）
-    [(= last TILDE)
+    [(eqv? last TILDE)
      (case (mod-seq-first-param d)
        [(2) KEY-INSERT] [(3) KEY-DELETE]
        [(5) KEY-PAGEUP] [(6) KEY-PAGEDOWN]

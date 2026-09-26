@@ -19,17 +19,17 @@
 #lang racket
 (require tui/char)
 
-(with-tui
- (λ ()
-   (put-bytes
-    (bytes-append                     ; ← 被 base-char 覆盖，行为=拼 op
-     format-screen-clear
-     (format-cursor-move 1 1)
-     (format-rgb-fg 255 255 0 "=== TUI Demo ===")
-     (format-cursor-move 3 1)
-     (format-256-fg 46 "count = 42")))
-   (displayln (char-frame)))         ; 读回纯字符图
- #:rows 6 #:cols 30)
+(parameterize ([current-screen-size (cons 6 30)])   ; 与 base 一致：尺寸走 parameter
+ (with-tui
+  (λ ()
+    (put-bytes
+     (bytes-append                    ; ← 被 base-char 覆盖，行为=拼 op
+      format-screen-clear
+      (format-cursor-move 1 1)
+      (format-rgb-fg 255 255 0 "=== TUI Demo ===")
+      (format-cursor-move 3 1)
+      (format-256-fg 46 "count = 42")))
+    (displayln (char-frame)))))        ; 读回纯字符图
 ```
 
 输出：
@@ -43,13 +43,13 @@ count = 42
 也可以直接构建（不经 `bytes-append`）：
 
 ```racket
-(with-tui
- (λ ()
-   (screen-clear)
-   (put-at 5 10 "Hello")
-   (put-rgb-fg 0 255 0 "green")
-   (displayln (char-frame)))
- #:rows 12 #:cols 40)
+(parameterize ([current-screen-size (cons 12 40)])
+ (with-tui
+  (λ ()
+    (screen-clear)
+    (put-at 5 10 "Hello")
+    (put-rgb-fg 0 255 0 "green")
+    (displayln (char-frame)))))
 ```
 
 ---
@@ -95,13 +95,14 @@ Racket 允许显式 `require` 覆盖 `#lang` 的初始导入，所以：
 ## 尺寸与生命周期
 
 ```racket
-(with-tui thunk #:rows 24 #:cols 80)   ; 不写关键字则用 current-screen-size（默认 24×80）
+(parameterize ([current-screen-size (cons 24 80)])
+  (with-tui thunk))                    ; 尺寸来自 current-screen-size（默认 24×80）
 
 (current-screen-size (cons 30 100))    ; 全局默认尺寸
 (current-screen)                       ; 当前网格（参数）
 (the-screen)                           ; 当前网格；没有就按尺寸新建
 (call-with-screen g thunk)             ; 临时切换到指定网格
-(tui-init #:rows ... #:cols ...)       ; 手动初始化
+(tui-init)                             ; 手动初始化（同样读 current-screen-size）
 (tui-exit)                             ; 清理（仅复位 newline-var）
 ```
 
@@ -155,13 +156,13 @@ Racket 允许显式 `require` 覆盖 `#lang` 的初始导入，所以：
 属性为 symbol 列表：`bold dim italic underline blink reverse`。
 
 ```racket
-(with-tui (λ ()
-            (put-at 3 5 "hello")
-            (put-styled-at 2 1 'error "E")
-            (displayln (call-with-values get-cursor list))          ; (1 1)
-            (displayln (screen-style-at (the-screen) 1 0))          ; "fg#1 bold"
-            (displayln (screen-styled-cells (the-screen))))
-          #:rows 6 #:cols 16)
+(parameterize ([current-screen-size (cons 6 16)])
+  (with-tui (λ ()
+              (put-at 3 5 "hello")
+              (put-styled-at 2 1 'error "E")
+              (displayln (call-with-values get-cursor list))          ; (1 1)
+              (displayln (screen-style-at (the-screen) 1 0))          ; "fg#1 bold"
+              (displayln (screen-styled-cells (the-screen))))))
 ```
 
 ---
@@ -215,19 +216,19 @@ char 后端的输入有两个语义：
    (format-cursor-move 3 1) (format-256-fg 46 (format "count = ~a" count))
    (format-cursor-move 5 1) format-bold "keys: + - q" format-reset))
 
-(with-tui
- (λ ()
-   (char-input-push! #\+ #\+ #\- #\q)
-   (define handler
-     (build-input
-      #:key (λ (k mods)
-              (case k
-                [(#\+) (set! count (add1 count))]
-                [(#\-) (set! count (sub1 count))]
-                [(#\q) (set! quit? #t)]))))
-   (loop-input/stop (or quit? (char-input-empty?))
-     (λ (ev) (handler ev) (put-bytes (draw)) (flush!) (displayln (char-frame)))))
- #:rows 7 #:cols 24)
+(parameterize ([current-screen-size (cons 7 24)])
+ (with-tui
+  (λ ()
+    (char-input-push! #\+ #\+ #\- #\q)
+    (define handler
+      (build-input
+       #:key (λ (k mods)
+               (case k
+                 [(#\+) (set! count (add1 count))]
+                 [(#\-) (set! count (sub1 count))]
+                 [(#\q) (set! quit? #t)]))))
+    (loop-input/stop (or quit? (char-input-empty?))
+      (λ (ev) (handler ev) (put-bytes (draw)) (flush!) (displayln (char-frame)))))))
 ```
 
 `build-input`、`loop-input`、`loop-input-noblock`、`loop-input/stop`、
@@ -331,7 +332,8 @@ char 后端的输入有两个语义：
 | `format-*` 返回类型 | char 下是 op-seq，不是 bytes；当字节用会在编译期报错（不会静默出错） |
 | 硬编码 ANSI 字面量 | 如 `#"\e[2J"` 会被当成普通文本写入网格；只用 `format-*`/`put-*` 则无此问题 |
 | `screen-clear` | char 下会额外归位光标（erase + home） |
-| alt buffer | 只置标志位，未真正维护主/副双网格（base 全程用 alt，暂不影响） |
+| 尺寸入口 | 与 base 同签名：`with-tui`/`tui-init` **不接受** `#:rows/#:cols`，尺寸走 `(parameterize ([current-screen-size (cons rows cols)]) ...)` |
+| alt buffer | 真正维护主/副双网格（`screen-alt-enable!/disable!`），语义对齐 base 的 `ESC[?1049h/l`：alt 期间主屏内容保留 |
 | 输入 | 事件模型/归一化逻辑自带（复制自 base，有对拍测试），**零 FFI**；`read-event/raw` / `read-event-noblock/raw` 为 base 专有（字节级读 stdin），char 不提供 |
 | 坐标系 | `get-cursor` 1-based，`screen-cursor` 0-based |
 
@@ -343,7 +345,7 @@ char 后端的输入有两个语义：
 |---|---|
 | 入口 | `with-tui` `with-tui-nobuffer` `with-tui-nobuffer-echo` `tui-init` `tui-exit` |
 | 输出（与 base 同名） | `put-*` `format-*` `cursor-*` `screen-*` `line-*` `buffer-alt-*` `style-*` `put-styled*` |
-| 会话 | `current-screen` `current-screen-size` `the-screen` `call-with-screen` |
+| 会话 | `current-screen` `current-screen-size` `the-screen` `call-with-screen` `screen-alt-enable!` `screen-alt-disable!` `screen-alt-active?` |
 | 字符图 | `char-frame` `screen->text` `screen->lines` `grid->text` `grid->lines` |
 | 光标 | `get-cursor` `update-cursor!` `screen-cursor` `screen-cursor-cell` `screen-size` |
 | 属性 | `screen-ref` `cell-text/fg/bg/attrs` `style->string` `screen-style-at` `screen-current-style` `screen-styled-cells` `screen-attr-ranges` |
@@ -360,5 +362,5 @@ raco test tests/
 ```
 
 - `tests/screen-test.rkt`：解析器（含分片 fuzz、宽字符、擦除、备用缓冲）
-- `tests/char-backend-test.rkt`：op 路径 vs ANSI 解析路径**跨实现对拍**
+- `tests/char-backend-test.rkt`：op 路径 vs ANSI 解析路径**跨实现对拍**（含 alt buffer）
 - `tests/char-app-test.rkt`：脚本输入 / 事件循环 / 帧钩子 / 属性查询

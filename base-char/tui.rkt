@@ -13,33 +13,36 @@
 (define (init-newline-var) (set-box! newline-var "\r\n"))
 (define (reset-newline-var) (set-box! newline-var "\n"))
 
-(define (char-init! #:rows [rows #f] #:cols [cols #f])
-  (when (and rows cols) (current-screen-size (cons rows cols)))
+;; 尺寸来源是 current-screen-size（session.rkt 的 parameter），与 base 一致
+;; 不带尺寸关键字。测试/调试需要固定尺寸时：
+;;   (parameterize ([current-screen-size (cons rows cols)]) (with-tui thunk))
+(define (char-init!)
+  (screen-alt-disable!)                 ; 清掉上次会话可能残留的 alt 屏
   (define size (current-screen-size))
   (current-screen (make-grid (car size) (cdr size)))
   (frame-reset!)
   (init-newline-var)
   (use-color-auto!))
 
-(define (char-exit!) (reset-newline-var))
+;; 与 base 的 tui-exit 一致：退出时恢复主屏（即便 body 出错时停在 alt）
+(define (char-exit!)
+  (screen-alt-disable!)
+  (reset-newline-var))
 
 ;; ── 与 base 同名 ─────────────────────────────────────────
 
-(define (tui-init #:rows [rows #f] #:cols [cols #f]) (char-init! #:rows rows #:cols cols))
+(define (tui-init) (char-init!))
 (define (tui-exit) (char-exit!))
 (define tui-init-no-buffer tui-init)
 (define tui-exit-no-buffer tui-exit)
 (define tui-init-no-buffer-echo tui-init)
 (define tui-exit-no-buffer-echo tui-exit)
 
-(define (with-tui thunk #:rows [rows #f] #:cols [cols #f])
-  (dynamic-wind (λ () (char-init! #:rows rows #:cols cols)) thunk char-exit!))
+(define (with-tui thunk)
+  (dynamic-wind char-init! thunk char-exit!))
 
-(define (with-tui-nobuffer thunk #:rows [rows #f] #:cols [cols #f])
-  (with-tui thunk #:rows rows #:cols cols))
-
-(define (with-tui-nobuffer-echo thunk #:rows [rows #f] #:cols [cols #f])
-  (with-tui thunk #:rows rows #:cols cols))
+(define (with-tui-nobuffer thunk) (with-tui thunk))
+(define (with-tui-nobuffer-echo thunk) (with-tui thunk))
 
 (define (enable-mouse!) (void))
 (define (disable-mouse!) (void))

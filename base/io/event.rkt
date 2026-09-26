@@ -112,7 +112,21 @@
            (other-event type data m)))]
     [(mod-seq)
      (let ([key (or (mod-seq->key data) (mod-seq->char data))])
-       (if key (k key) (other-event type data m)))]
+       (cond
+         [key (k key)]
+         ;; ESC + 单控制/特殊字节：默认 xterm 下 Alt[+Ctrl]+键 的编码
+         ;; （如 Ctrl+Alt+x = ESC ^X）。控制字节 1-26 → Ctrl+字母。
+         [(and (bytes? data) (= (bytes-length data) 2)
+               (= (bytes-ref data 0) ESC))
+          (define b (bytes-ref data 1))
+          (define ctrl-letter?
+            (and (<= 1 b 26)
+                 (not (memv b (list TAB LF CR BACKSPACE)))))
+          (key-event (if ctrl-letter?
+                         (integer->char (+ 64 b))
+                         (byte->key b))
+                     m)]
+         [else (other-event type data m)]))]
     [(utf8)
      (let ([s (event->string data)])
        (if (= (string-length s) 1)

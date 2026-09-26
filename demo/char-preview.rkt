@@ -23,11 +23,11 @@
    format-bold "bold text" format-reset
    format-cursor-restore))
 
-(with-tui
- (λ ()
-   (put-bytes (draw-ui))
-   (displayln (char-frame))
-   (displayln "── 非默认格（按需属性）──")
-   (for ([c (screen-styled-cells (the-screen))])
-     (displayln c)))
- #:rows 13 #:cols 44)
+(parameterize ([current-screen-size (cons 13 44)])
+ (with-tui
+  (λ ()
+    (put-bytes (draw-ui))
+    (displayln (char-frame))
+    (displayln "── 非默认格（按需属性）──")
+    (for ([c (screen-styled-cells (the-screen))])
+      (displayln c)))))

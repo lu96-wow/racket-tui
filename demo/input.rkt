@@ -12,7 +12,9 @@
 ;;   方向键 / Home / End / PgUp / PgDn / Insert / Delete / Backspace
 ;;   Alt+x              → key-event  key=#\x    mods=Alt         cb #:key
 ;;   Ctrl+x             → key-event  key=#\X    mods=Ctrl        cb #:key
-;;   Ctrl+Alt+x         → key-event  key=#\x    mods=Ctrl+Alt    cb #:key
+;;   Ctrl+Alt+x         → key-event  mods=Ctrl+Alt   cb #:key
+;;                        （默认编码 ESC ^X → key=#\X）
+;;                        （modifyOtherKeys ESC[27;7;120~ → key=#\x）
 ;;   Ctrl+方向键 / Alt+方向键 / Shift+方向键 / Ctrl+Alt+Shift+方向键
 ;;                      → key-event  key=up ... mods=...         cb #:key
 ;;   Tab / Shift+Tab / Enter / 独立 Esc / 空格  → 对应快捷回调

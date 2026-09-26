@@ -12,7 +12,8 @@
          "../char.rkt")
 
 (define (op-path thunk #:rows [rows 8] #:cols [cols 24])
-  (with-tui (λ () (thunk) (char-frame)) #:rows rows #:cols cols))
+  (parameterize ([current-screen-size (cons rows cols)])
+    (with-tui (λ () (thunk) (char-frame)))))
 
 (define (parse-path bs #:rows [rows 8] #:cols [cols 24])
   (define p (make-ansi-parser rows cols))
@@ -152,7 +153,7 @@
     (define (ch) (integer->char (+ 65 (rnd 26))))
     (define (str) (list->string (for/list ([i (rnd 4)]) (if (zero? (rnd 6)) #\你 (ch)))))
     (define (rand-desc)
-      (case (rnd 15)
+      (case (rnd 16)
         [(0) (list 'move (rnd 9) (rnd 17))]
         [(1) (list 'text (str))]
         [(2) (list 'fg (rnd 256) (rnd 256) (rnd 256) (str))]
@@ -167,7 +168,8 @@
         [(11) (list 'reldown (rnd 3))]
         [(12) (list 'col (rnd 17))]
         [(13) (list 'save-or-restore (rnd 2))]
-        [(14) (list 'home)]))
+        [(14) (list 'home)]
+        [(15) (list 'alt (rnd 2))]))
     (define (desc->char d)
       (match d
         [(list 'move r c) (format-cursor-move r c)]
@@ -188,7 +190,8 @@
         [(list 'reldown n) (format-cursor-down n)]
         [(list 'col n) (format-cursor-col n)]
         [(list 'save-or-restore k) (if (zero? k) format-cursor-save format-cursor-restore)]
-        [(list 'home) format-cursor-home]))
+        [(list 'home) format-cursor-home]
+        [(list 'alt k) (if (zero? k) format-buffer-alt-enable format-buffer-alt-disable)]))
     (define (desc->base d)
       (match d
         [(list 'move r c) (b:format-cursor-move r c)]
@@ -209,10 +212,11 @@
         [(list 'reldown n) (b:format-cursor-down n)]
         [(list 'col n) (b:format-cursor-col n)]
         [(list 'save-or-restore k) (if (zero? k) b:format-cursor-save b:format-cursor-restore)]
-        [(list 'home) b:format-cursor-home]))
+        [(list 'home) b:format-cursor-home]
+        [(list 'alt k) (if (zero? k) b:format-buffer-alt-enable b:format-buffer-alt-disable)]))
     (define descs (for/list ([i 300]) (rand-desc)))
-    (define cg (with-tui (λ () (for ([d descs]) (emit (desc->char d))) (the-screen))
-                        #:rows rows #:cols cols))
+    (define cg (parameterize ([current-screen-size (cons rows cols)])
+                 (with-tui (λ () (for ([d descs]) (emit (desc->char d))) (the-screen)))))
     (define p (make-ansi-parser rows cols))
     (for ([d descs]) (ansi-parser-feed-bytes! p (desc->base d)))
     (define pg (ansi-parser-grid p))
@@ -221,13 +225,45 @@
 
   (test-case "样式系统写入 grid（按需属性）"
     (define cells
+      (parameterize ([current-screen-size (cons 6 16)])
+        (with-tui
+         (λ ()
+           (screen-clear)
+           (put-at 1 1 "X")
+           (put-styled-at 2 1 'error "E")
+           (screen-styled-cells (the-screen))))))
+    (check-not-false (member '(0 0 "X" "") cells))
+    (define e (findf (λ (c) (equal? (cadr c) 0)) (filter (λ (c) (equal? (car c) 1)) cells)))
+    (check-true (and e (string-contains? (cadddr e) "fg#1"))))
+
+  (test-case "备用缓冲：alt 期间不破坏主屏（= base ESC[?1049h/l）"
+    (define frames
+      (parameterize ([current-screen-size (cons 3 10)])
+        (with-tui
+         (λ ()
+           (screen-clear)
+           (put-string "MAIN")
+           (define before (char-frame))
+           (buffer-alt-enable)          ; 切到 alt（清空）
+           (check-true (screen-alt-active?))
+           (define in-alt (char-frame))
+           (put-string "ALT")
+           (define alt-drawn (char-frame))
+           (buffer-alt-disable)         ; 切回主屏
+           (define after (char-frame))
+           (list before in-alt alt-drawn after)))))
+    (check-equal? (list-ref frames 0) "MAIN\n\n")
+    (check-equal? (list-ref frames 1) "\n\n")
+    (check-equal? (list-ref frames 2) "ALT\n\n")
+    (check-equal? (list-ref frames 3) "MAIN\n\n")   ; 主屏内容恢复
+    (check-false (screen-alt-active?))
+    ;; 停在 alt 时直接退出 with-tui，也应像 base 的 tui-exit 一样恢复主屏
+    (parameterize ([current-screen-size (cons 3 10)])
       (with-tui
        (λ ()
          (screen-clear)
-         (put-at 1 1 "X")
-         (put-styled-at 2 1 'error "E")
-         (screen-styled-cells (the-screen)))
-       #:rows 6 #:cols 16))
-    (check-not-false (member '(0 0 "X" "") cells))
-    (define e (findf (λ (c) (equal? (cadr c) 0)) (filter (λ (c) (equal? (car c) 1)) cells)))
-    (check-true (and e (string-contains? (cadddr e) "fg#1")))))
+         (put-string "MAIN")
+         (buffer-alt-enable)
+         (put-string "ALT"))))
+    (check-false (screen-alt-active?))
+    (check-equal? (char-frame) "MAIN\n\n")))

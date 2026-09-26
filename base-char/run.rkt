@@ -28,8 +28,9 @@
                   #:dedup? [dedup? #t]
                   #:rows [rows 24]
                   #:cols [cols 80])
-  (with-tui
-   (λ ()
+  (parameterize ([current-screen-size (cons rows cols)])
+   (with-tui
+    (λ ()
      (char-input-clear!)
      (apply char-input-push! events)
      (char-input-close!)
@@ -47,5 +48,4 @@
          (render)
          (snap!)
          (unless (stop) (loop))))
-     (reverse frames))
-   #:rows rows #:cols cols))
+       (reverse frames)))))

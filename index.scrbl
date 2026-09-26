@@ -979,17 +979,17 @@ sandbox.
 @racketblock[
 (require tui/char)
 
-(with-tui
- (lambda ()
-   (put-bytes
-    (bytes-append
-     format-screen-clear
-     (format-cursor-move 1 1)
-     (format-rgb-fg 255 255 0 "=== TUI Demo ===")
-     (format-cursor-move 3 1)
-     (format-256-fg 46 "count = 42")))
-   (displayln (char-frame)))
- #:rows 6 #:cols 30)
+(parameterize ([current-screen-size (cons 6 30)])   ; size via parameter, as in base
+ (with-tui
+  (lambda ()
+    (put-bytes
+     (bytes-append
+      format-screen-clear
+      (format-cursor-move 1 1)
+      (format-rgb-fg 255 255 0 "=== TUI Demo ===")
+      (format-cursor-move 3 1)
+      (format-256-fg 46 "count = 42")))
+    (displayln (char-frame)))))
 ]
 
 prints a plain-text layout:
@@ -1082,7 +1082,8 @@ flood output:
 @subsection{Related entry points}
 
 @itemlist[
-  @item{@racket[(with-tui thunk #:rows 24 #:cols 80)] — sized session.}
+  @item{@racket[(with-tui thunk)] plus
+        @racket[(parameterize ([current-screen-size (cons 24 80)]) ...)] — sized session.}
   @item{@racket[current-screen], @racket[(the-screen)],
         @racket[(current-screen-size)] — grid session state.}
   @item{@racket[(screen-size g)], @racket[(screen-cursor-cell g)],
