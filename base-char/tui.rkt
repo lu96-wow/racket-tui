@@ -6,6 +6,7 @@
 (require "screen/session.rkt"
          "screen/grid.rkt"
          "terminal/resize.rkt"
+         "io/event.rkt"
          "io/output.rkt"
          "io/output-color.rkt"
          "ansi/ansi-var.rkt")
@@ -39,7 +40,8 @@
 (define tui-exit-no-buffer-echo tui-exit)
 
 (define (with-tui thunk)
-  (dynamic-wind char-init! thunk char-exit!))
+  (call-with-source-registry
+   (λ () (dynamic-wind char-init! thunk char-exit!))))
 
 (define (with-tui-nobuffer thunk) (with-tui thunk))
 (define (with-tui-nobuffer-echo thunk) (with-tui thunk))

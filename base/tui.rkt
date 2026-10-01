@@ -88,16 +88,22 @@
 ;; 用 dynamic-wind 保证 body 无论正常返回还是抛出异常都执行清理。
 ;; 异常自然向外传播（不再手动 catch + re-raise），因此 body 的
 ;; 错误总是会被调用方或默认错误处理器报告，不会静默吞掉。
+;;
+;; call-with-source-registry：为本次会话建立事件源注册表，
+;; 会话内 (on-source evt proc) 注册的源会被 read-event 的 sync 自动带上。
 (define (with-tui thunk)
-  (dynamic-wind tui-init thunk (λ () (tui-exit))))
+  (call-with-source-registry
+   (λ () (dynamic-wind tui-init thunk (λ () (tui-exit))))))
 
 ;; 不切换 alt 缓冲
 (define (with-tui-nobuffer thunk)
-  (dynamic-wind tui-init-no-buffer thunk (λ () (tui-exit-no-buffer))))
+  (call-with-source-registry
+   (λ () (dynamic-wind tui-init-no-buffer thunk (λ () (tui-exit-no-buffer))))))
 
 ;; 不切换 alt 缓冲，保留终端回显
 (define (with-tui-nobuffer-echo thunk)
-  (dynamic-wind tui-init-no-buffer-echo thunk (λ () (tui-exit-no-buffer-echo))))
+  (call-with-source-registry
+   (λ () (dynamic-wind tui-init-no-buffer-echo thunk (λ () (tui-exit-no-buffer-echo))))))
 
 ;; 鼠标支持
 (define (enable-mouse!)

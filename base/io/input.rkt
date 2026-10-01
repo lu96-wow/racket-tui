@@ -274,27 +274,73 @@
 ;; resize 监控 — 见 terminal/resize.rkt: signalfd 事件, 无轮询线程
 ;; read-event 的 sync 统一等 stdin-evt + resize-evt, 调度器协作, 零 CPU
 
-;; read-event/raw 的 sync 统一等 stdin 和 resize 事件
+;; ════════════════════════════════════════════════════════════════
+;; 事件源注册 — 让外部可 sync 的事件并入 read-event 的等待集合
+;;
+;; with-tui 建立注册表（parameter 里的 box），会话内用 on-source 注册；
+;; read-event 的 sync 自动带上它们：源就绪 → 跑它的 proc，再继续等，
+;; 只把 tui 事件返回给上层。于是 loop / build-input / 键盘判别都不用改。
+;; ════════════════════════════════════════════════════════════════
+
+(struct source (evt proc) #:transparent)
+;; evt  : evt?            用户自己的可 sync 事件（async-channel / alarm-evt / fd-evt …）
+;; proc : (-> any/c any)  就绪时在事件循环线程里执行；返回值丢弃（通常在其中重绘）
+
+(define current-source-registry (make-parameter #f))
+;; #f | box（当前会话已注册的 source 列表）
+
+;; 建立一次会话的注册表（with-tui 用）。
+(define (call-with-source-registry thunk)
+  (parameterize ([current-source-registry (box '())])
+    (thunk)))
+
+;; 在当前 TUI 会话内注册一个事件源。→ void
+(define (on-source evt proc)
+  (define reg (current-source-registry))
+  (unless reg
+    (error 'on-source "必须在 with-tui 会话内注册事件源"))
+  (set-box! reg (cons (source evt proc) (unbox reg))))
+
+;; 已注册源 → 内联处理器的 evt 列表；处理器结果一律 void，
+;; 供 read-event 用它区分「tui 事件」和「额外源」（bytes / pair / #f）。
+(define (registered-source-evts)
+  (define reg (current-source-registry))
+  (if reg
+      (for/list ([s (in-list (unbox reg))])
+        (handle-evt (source-evt s) (λ (x) ((source-proc s) x) (void))))
+      '()))
+
+;; read-event/raw 的 sync 统一等 stdin / resize / 已注册事件源
 ;; 阻塞模式, 零 CPU, 等价于 ncurses getch()
 ;;
 ;; 注意：这是字节级原始接口，返回 (values type data mods)，其中 data 类型
 ;; 随事件种类在 bytes/list/pair 之间漂移。高层应优先用 io/event.rkt 的
 ;; read-event（返回规范化的 event? 结构体）。
 (define (read-event/raw)
-  (define evt (sync (make-stdin-evt) (make-resize-evt)))
-  (cond [(bytes? evt)
-         ;; stdin 来了 1 个字节
-         (read-event-impl (bytes-ref evt 0))]
-        [(pair? evt)
-         ;; resize 事件: (rows . cols)
-         (values EVENT-RESIZE evt #f)]
-        [else (values EVENT-NULL (bytes) #f)]))
+  (let loop ()
+    (define evt (apply sync (make-stdin-evt) (make-resize-evt) (registered-source-evts)))
+    (cond [(bytes? evt)
+           ;; stdin 来了 1 个字节
+           (read-event-impl (bytes-ref evt 0))]
+          [(pair? evt)
+           ;; resize 事件: (rows . cols)
+           (values EVENT-RESIZE evt #f)]
+          [(not evt)
+           ;; resize ioctl 失败（make-resize-evt 返回 #f）
+           (values EVENT-NULL (bytes) #f)]
+          [(void? evt)
+           ;; 额外源已就绪：proc 已跑完 → 继续等 tui 事件
+           (loop)]
+          [else
+           ;; 理论上到不了；防御性返回 null 而不是死循环
+           (values EVENT-NULL (bytes) #f)])))
 
 ;; 非阻塞版本, 等价于 ncurses timeout(0) getch()
 ;; 无事件时 evt 为 #f (sync/timeout 返回), 返回 EVENT-NULL
 (define (read-event-noblock/raw)
   ;; sync/timeout 避免 CPU 空转，~60fps 足够流式刷新
-  (define evt (sync/timeout 0.016 (make-stdin-evt) (make-resize-evt)))
+  (define evt (apply sync/timeout 0.016 (make-stdin-evt) (make-resize-evt)
+                     (registered-source-evts)))
   (cond [(bytes? evt)
          (read-event-impl (bytes-ref evt 0))]
         [(pair? evt)
@@ -480,6 +526,7 @@
 ;; 导出
 
 (provide read-event/raw read-event-noblock/raw
+         on-source call-with-source-registry
          classify-byte
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?

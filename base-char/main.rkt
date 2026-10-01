@@ -44,7 +44,7 @@
          (all-from-out "ansi/ansi-var.rkt")
          (all-from-out "ansi/ansi-format.rkt")
          (all-from-out "ansi/input-var.rkt")
-         (all-from-out "io/event.rkt")
+         (except-out (all-from-out "io/event.rkt") call-with-source-registry)
          (all-from-out "io/build-input.rkt")
          (all-from-out "io/output.rkt")
          (all-from-out "io/output-color.rkt")

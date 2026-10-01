@@ -32,6 +32,8 @@
  get-resize-rows get-resize-cols get-resize-size
  ;; 事件分发
  build-input
+ ;; 事件源注册（与 base 同名）
+ on-source call-with-source-registry
  ;; 脚本输入
  read-event read-event-noblock
  char-input-push! char-input-empty? char-input-clear! char-input-remaining
@@ -423,13 +425,47 @@
   (set-box! queue (cdr q))
   (car q))
 
-;; 阻塞：队列空且未关闭时等待；关闭且空时返回 null-event
+;; ════════════════════════════════════════════════════════════════
+;; 事件源注册 — 让外部可 sync 的事件并入 read-event 的等待集合
+;; 语义与 base 后端一致；只是这里的 tui 输入来自脚本队列 + semaphore。
+;; ════════════════════════════════════════════════════════════════
+
+(struct source (evt proc) #:transparent)
+(define current-source-registry (make-parameter #f))
+
+(define (call-with-source-registry thunk)
+  (parameterize ([current-source-registry (box '())])
+    (thunk)))
+
+(define (on-source evt proc)
+  (define reg (current-source-registry))
+  (unless reg
+    (error 'on-source "必须在 with-tui 会话内注册事件源"))
+  (set-box! reg (cons (source evt proc) (unbox reg))))
+
+(define (registered-source-evts)
+  (define reg (current-source-registry))
+  (if reg
+      (for/list ([s (in-list (unbox reg))])
+        (handle-evt (source-evt s) (λ (x) ((source-proc s) x) (void))))
+      '()))
+
+;; 阻塞：队列空且未关闭时等待；关闭且空时返回 null-event。
+;; 有注册源时用 sync 同时等 semaphore 和源；否则保持原来的 semaphore-wait。
 (define (read-event)
   (let loop ()
     (cond [(pair? (unbox queue)) (dequeue!)]
           [(unbox closed?) (null-event)]
-          [else (semaphore-wait (unbox sema)) (loop)])))
+          [else
+           (define srcs (registered-source-evts))
+           (if (null? srcs)
+               (semaphore-wait (unbox sema))
+               (apply sync (unbox sema) srcs))
+           (loop)])))
 
 ;; 非阻塞：无事件立即返回 null-event
 (define (read-event-noblock)
+  (define srcs (registered-source-evts))
+  (unless (null? srcs)
+    (apply sync/timeout 0 (unbox sema) srcs))
   (if (pair? (unbox queue)) (dequeue!) (null-event)))
