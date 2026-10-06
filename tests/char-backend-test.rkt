@@ -266,4 +266,33 @@
          (buffer-alt-enable)
          (put-string "ALT"))))
     (check-false (screen-alt-active?))
-    (check-equal? (char-frame) "MAIN\n\n")))
+    (check-equal? (char-frame) "MAIN\n\n"))
+
+  (test-case "body 抛异常时先恢复主屏、再向外抛"
+    (parameterize ([current-screen-size (cons 3 10)])
+      ;; 异常在 with-tui 外被接住的那一刻，alt 必须已关闭
+      (define caught-alt?
+        (with-handlers ([exn? (λ (e) (screen-alt-active?))])
+          (with-tui
+           (λ ()
+             (screen-clear)
+             (put-string "MAIN")
+             (buffer-alt-enable)
+             (put-string "ALT")
+             (error "boom")))
+          'no-error))
+      (check-false caught-alt?)
+      ;; 异常原样向外传播
+      (define e
+        (with-handlers ([exn? (λ (e) e)])
+          (with-tui (λ () (error "boom"))) #f))
+      (check-true (exn? e))
+      ;; 多返回值按 values 协议透传
+      (check-equal? (call-with-values
+                     (λ () (with-tui (λ () (values 1 2 3))))
+                     list)
+                    '(1 2 3))
+      (check-equal? (call-with-values
+                     (λ () (with-tui (λ () (values))))
+                     list)
+                    '()))))

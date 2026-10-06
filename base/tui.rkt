@@ -86,24 +86,44 @@
 
 ;; ── with-tui 系列（函数版）──────────────────────────────────
 ;; 用 dynamic-wind 保证 body 无论正常返回还是抛出异常都执行清理。
-;; 异常自然向外传播（不再手动 catch + re-raise），因此 body 的
-;; 错误总是会被调用方或默认错误处理器报告，不会静默吞掉。
+;;
+;; 关键：Racket 的默认错误处理器在 dynamic-wind 的 after-thunk 之前运行。
+;; 若让 body 的异常直接向外冒，错误会先被打印到【仍在 alt 缓冲 + raw 模式】
+;; 的终端上，随后 tui-exit 的 buffer-alt-disable 切回主屏，刚打印的错误
+;; 连同 alt 屏一起被丢弃 —— 用户什么都看不到。
+;;
+;; 因此下面在 body 外层接住任何 raise，先让 dynamic-wind 走完清理
+;; （切回主屏、退出 raw 模式），再在会话外原样重新抛出。这样无论
+;; 调用方还是默认错误处理器接手，报错都出现在已恢复的主屏上。
+;; 多返回值按与 body 相同的 values 协议透传。
 ;;
 ;; call-with-source-registry：为本次会话建立事件源注册表，
 ;; 会话内 (on-source evt proc) 注册的源会被 read-event 的 sync 自动带上。
+(define (call-with-tui-lifecycle init cleanup thunk)
+  (define tagged
+    (dynamic-wind
+     init
+     (λ ()
+       (with-handlers ([(λ (_) #t) (λ (e) (list #f e))])
+         (call-with-values thunk (λ vals (cons #t vals)))))
+     cleanup))
+  (if (car tagged)
+      (apply values (cdr tagged))
+      (raise (cadr tagged))))
+
 (define (with-tui thunk)
   (call-with-source-registry
-   (λ () (dynamic-wind tui-init thunk (λ () (tui-exit))))))
+   (λ () (call-with-tui-lifecycle tui-init tui-exit thunk))))
 
 ;; 不切换 alt 缓冲
 (define (with-tui-nobuffer thunk)
   (call-with-source-registry
-   (λ () (dynamic-wind tui-init-no-buffer thunk (λ () (tui-exit-no-buffer))))))
+   (λ () (call-with-tui-lifecycle tui-init-no-buffer tui-exit-no-buffer thunk))))
 
 ;; 不切换 alt 缓冲，保留终端回显
 (define (with-tui-nobuffer-echo thunk)
   (call-with-source-registry
-   (λ () (dynamic-wind tui-init-no-buffer-echo thunk (λ () (tui-exit-no-buffer-echo))))))
+   (λ () (call-with-tui-lifecycle tui-init-no-buffer-echo tui-exit-no-buffer-echo thunk))))
 
 ;; 鼠标支持
 (define (enable-mouse!)

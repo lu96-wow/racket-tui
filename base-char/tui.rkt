@@ -32,6 +32,21 @@
 
 ;; ── 与 base 同名 ─────────────────────────────────────────
 
+;; 与 base/call-with-tui-lifecycle 同一语义：先接住 body 异常、走完
+;; dynamic-wind 清理（切回主屏），再在会话外重新抛出，避免错误落在
+;; 即将被丢弃的 alt 屏上。多返回值按 values 协议透传。
+(define (char-call-with-lifecycle init cleanup thunk)
+  (define tagged
+    (dynamic-wind
+     init
+     (λ ()
+       (with-handlers ([(λ (_) #t) (λ (e) (list #f e))])
+         (call-with-values thunk (λ vals (cons #t vals)))))
+     cleanup))
+  (if (car tagged)
+      (apply values (cdr tagged))
+      (raise (cadr tagged))))
+
 (define (tui-init) (char-init!))
 (define (tui-exit) (char-exit!))
 (define tui-init-no-buffer tui-init)
@@ -41,7 +56,7 @@
 
 (define (with-tui thunk)
   (call-with-source-registry
-   (λ () (dynamic-wind char-init! thunk char-exit!))))
+   (λ () (char-call-with-lifecycle char-init! char-exit! thunk))))
 
 (define (with-tui-nobuffer thunk) (with-tui thunk))
 (define (with-tui-nobuffer-echo thunk) (with-tui thunk))
