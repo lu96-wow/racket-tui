@@ -40,6 +40,11 @@
         [(char? v) (string->bytes/utf-8 (string v))]
         [else (string->bytes/utf-8 (format "~a" v))]))
 
+;; 数值范围校验 —— 与文档声明的 byte? / (integer-in 0 255) 保持一致
+(define (check-byte who name v)
+  (unless (byte? v)
+    (error who "~a must be a byte (0-255), got ~a" name v)))
+
 ;; 基础 ANSI 序列（直接返回字节串）
 (define format-cursor-save #"\e7")     ; DECSC - 保存光标位置
 (define format-cursor-restore #"\e8")  ; DECRC - 恢复光标位置
@@ -58,7 +63,8 @@
 
 ;; 带参数的 ANSI 序列（返回字节串）
 (define (format-cursor-move row col)
-  (string->bytes/utf-8 (format "\e[~a;~aH" row col)))
+  ;; 坐标为 1-based；0 与 1 等价（终端本就把 ESC[0;0H 当作左上角）
+  (string->bytes/utf-8 (format "\e[~a;~aH" (max 1 row) (max 1 col))))
 
 (define (format-cursor-up n)
   (string->bytes/utf-8 (format "\e[~aA" n)))
@@ -101,19 +107,33 @@
 
 ;; RGB 颜色 — 纯转义序列
 (define (format-rgb-fg-base r g b)
+  (check-byte 'format-rgb-fg-base 'r r)
+  (check-byte 'format-rgb-fg-base 'g g)
+  (check-byte 'format-rgb-fg-base 'b b)
   (string->bytes/utf-8 (format "\e[38;2;~a;~a;~am" r g b)))
 
 (define (format-rgb-bg-base r g b)
+  (check-byte 'format-rgb-bg-base 'r r)
+  (check-byte 'format-rgb-bg-base 'g g)
+  (check-byte 'format-rgb-bg-base 'b b)
   (string->bytes/utf-8 (format "\e[48;2;~a;~a;~am" r g b)))
 
 (define (format-rgb-fg-bg-base fr fg fb br bg bb)
+  (check-byte 'format-rgb-fg-bg-base 'fr fr)
+  (check-byte 'format-rgb-fg-bg-base 'fg fg)
+  (check-byte 'format-rgb-fg-bg-base 'fb fb)
+  (check-byte 'format-rgb-fg-bg-base 'br br)
+  (check-byte 'format-rgb-fg-bg-base 'bg bg)
+  (check-byte 'format-rgb-fg-bg-base 'bb bb)
   (string->bytes/utf-8 (format "\e[38;2;~a;~a;~a;48;2;~a;~a;~am" fr fg fb br bg bb)))
 
 ;; 256色 — 纯转义序列
 (define (format-256-fg-base n)
+  (check-byte 'format-256-fg-base 'n n)
   (string->bytes/utf-8 (format "\e[38;5;~am" n)))
 
 (define (format-256-bg-base n)
+  (check-byte 'format-256-bg-base 'n n)
   (string->bytes/utf-8 (format "\e[48;5;~am" n)))
 
 ;; ── 带内容拼接的 format-* (与 put-* 对称, 但不 flush) ──

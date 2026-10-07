@@ -210,7 +210,10 @@ All @tt{put-} functions write to the current output port immediately
 (one flush per call) by default; use @racket[set-buffered-mode!] to batch.
 
 @defproc[(put [v any/c]) void?]
-Prints @racket[v] using @racket[~a] formatting.
+Writes @racket[v] according to its type: a @racket[string?] is displayed, a
+@racket[bytes?] is written as raw bytes, a @racket[char?] is written as a
+character, and an @racket[integer?] in @racket[0]--@racket[255] is written as
+a single byte. Values of any other type are ignored.
 
 @defproc[(put-string [s string?]) void?]
 @defproc[(put-bytes [bs bytes?]) void?]
@@ -232,6 +235,10 @@ cursor position (the terminal saves and restores the cursor).
 @defproc[(put-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [v any/c]) void?]
 Like @racket[put-at], but updates the tracked cursor position to
 @racket[row]×@racket[col].
+
+All coordinates in this manual are 1-based. @racket[0] is accepted and
+treated as @racket[1] (a terminal clamps @tt{ESC[0;0H} to the top-left cell,
+and the tracked cursor is normalized the same way).
 
 @subsection{Cursor}
 
@@ -362,7 +369,7 @@ The two registries give automatic 256/16-color fallback: plain
 what @racket[format-styled] uses internally. An undefined style name is a
 no-op: it produces empty bytes without raising an error.
 
-@defproc[(style-define! [name symbol?] [spec procedure?] ...) void?]
+@defproc[(style-define! [name symbol?] [spec (or/c procedure? color-thunk?)] ...) void?]
 Registers @racket[name] from color/attribute thunks such as @racket[color-fg],
 @racket[color-bg], @racket[attr-bold], or @racket[color-fg*].
 
@@ -415,6 +422,11 @@ A two-registry color: uses @racket[c256] when the 256-color registry is
 active, @racket[c16] otherwise.
 @defproc[(color-bg* [c256 (integer-in 0 255)] [c16 (integer-in 0 15)]) color-thunk?]
 
+@defproc[(color-thunk? [v any/c]) boolean?]
+True for the opaque two-registry value returned by @racket[color-fg*] and
+@racket[color-bg*]; such a value can be passed to @racket[style-define!] but
+is not itself a procedure.
+
 @defproc[(attr-bold) void?]
 @defproc[(attr-dim) void?]
 @defproc[(attr-italic) void?]
@@ -422,7 +434,39 @@ active, @racket[c16] otherwise.
 @defproc[(attr-blink) void?]
 @defproc[(attr-reverse) void?]
 
+@defproc[(clr-black) void?]
+@defproc[(clr-red) void?]
+@defproc[(clr-green) void?]
+@defproc[(clr-yellow) void?]
+@defproc[(clr-blue) void?]
+@defproc[(clr-magenta) void?]
+@defproc[(clr-cyan) void?]
+@defproc[(clr-white) void?]
+@defproc[(clr-default) void?]
+16-color foreground shorthands for @racket[style-define!]: @racket[clr-red]
+is @racket[(color-fg 1)], @racket[clr-blue] is @racket[(color-fg 4)], and
+so on; @racket[clr-default] is ANSI color 9.
+
+@defproc[(bclr-black) void?]
+@defproc[(bclr-red) void?]
+@defproc[(bclr-green) void?]
+@defproc[(bclr-yellow) void?]
+@defproc[(bclr-blue) void?]
+@defproc[(bclr-magenta) void?]
+@defproc[(bclr-cyan) void?]
+@defproc[(bclr-white) void?]
+@defproc[(bclr-default) void?]
+16-color background shorthands: @racket[bclr-blue] is @racket[(color-bg 4)],
+and so on.
+
 @subsection{Color mode}
+
+@defparam[current-registry registry hash?]{
+The active style registry. @racket[style-define!] writes into both the
+256-color and 16-color registries, while @racket[style-apply!] and
+@racket[style->bytes] read whichever one is current. Changed by
+@racket[use-256color!], @racket[use-16color!] and @racket[use-color-auto!].
+}
 
 @defproc[(use-256color!) void?]
 Selects the 256-color style registry.
@@ -465,32 +509,37 @@ appends content and a style reset, so @racket[format-reset] is only needed
 once at the end of a batch.
 
 @defproc[(format-cursor-move [row exact-nonnegative-integer?] [col exact-nonnegative-integer?]) bytes?]
+Coordinates are 1-based; @racket[0] is treated as @racket[1].
 @defproc[(format-cursor-up [n exact-nonnegative-integer?]) bytes?]
 @defproc[(format-cursor-down [n exact-nonnegative-integer?]) bytes?]
 @defproc[(format-cursor-left [n exact-nonnegative-integer?]) bytes?]
 @defproc[(format-cursor-right [n exact-nonnegative-integer?]) bytes?]
 @defproc[(format-cursor-col [n exact-nonnegative-integer?]) bytes?]
-@defproc[(format-cursor-home) bytes?]
-@defproc[(format-cursor-hide) bytes?]
-@defproc[(format-cursor-show) bytes?]
-@defproc[(format-cursor-save) bytes?]
-@defproc[(format-cursor-restore) bytes?]
-@defproc[(format-screen-clear) bytes?]
-@defproc[(format-screen-clear-below) bytes?]
-@defproc[(format-screen-clear-above) bytes?]
-@defproc[(format-line-clear) bytes?]
-@defproc[(format-line-clear-right) bytes?]
-@defproc[(format-line-clear-left) bytes?]
+@defthing[format-cursor-home bytes?]
+@defthing[format-cursor-hide bytes?]
+@defthing[format-cursor-show bytes?]
+@defthing[format-cursor-save bytes?]
+@defthing[format-cursor-restore bytes?]
+@defthing[format-screen-clear bytes?]
+@defthing[format-screen-clear-below bytes?]
+@defthing[format-screen-clear-above bytes?]
+@defthing[format-line-clear bytes?]
+@defthing[format-line-clear-right bytes?]
+@defthing[format-line-clear-left bytes?]
 @defproc[(format-line-clear-row [row exact-nonnegative-integer?]) bytes?]
-@defproc[(format-buffer-alt-enable) bytes?]
-@defproc[(format-buffer-alt-disable) bytes?]
-@defproc[(format-reset) bytes?]
-@defproc[(format-bold) bytes?]
-@defproc[(format-dim) bytes?]
-@defproc[(format-italic) bytes?]
-@defproc[(format-underline) bytes?]
-@defproc[(format-blink) bytes?]
-@defproc[(format-reverse) bytes?]
+@defthing[format-buffer-alt-enable bytes?]
+@defthing[format-buffer-alt-disable bytes?]
+@defthing[format-reset bytes?]
+@defthing[format-bold bytes?]
+@defthing[format-dim bytes?]
+@defthing[format-italic bytes?]
+@defthing[format-underline bytes?]
+@defthing[format-blink bytes?]
+@defthing[format-reverse bytes?]
+The zero-argument escape sequences above are predefined @racket[bytes?]
+constants (for example @racket[format-reset] is @racket[#"\e[0m"]); pass
+them to @racket[put-bytes] or combine them with @racket[bytes-append]. Only
+@racket[format-line-clear-row] is a procedure.
 
 @defproc[(format-content [v any/c]) bytes?]
 Converts @racket[v] to a byte string (bytes pass through, strings become
@@ -549,8 +598,8 @@ Like @racket[format-styled], but without the trailing reset.
 @defproc[(format-256-fg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 255)] [v any/c]) bytes?]
 @defproc[(format-256-bg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 255)] [v any/c]) bytes?]
 @defproc[(format-256-bg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [n (integer-in 0 255)] [v any/c]) bytes?]
-@defproc[(format-rgb-fg-bg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [fr byte?] [fg byte?] [fb byte?] [br byte?] [bg byte?] [bb byte?]) bytes?]
-@defproc[(format-rgb-fg-bg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [fr byte?] [fg byte?] [fb byte?] [br byte?] [bg byte?] [bb byte?]) bytes?]
+@defproc[(format-rgb-fg-bg-at [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [fr byte?] [fg byte?] [fb byte?] [br byte?] [bg byte?] [bb byte?] [v any/c]) bytes?]
+@defproc[(format-rgb-fg-bg-at! [row exact-nonnegative-integer?] [col exact-nonnegative-integer?] [fr byte?] [fg byte?] [fb byte?] [br byte?] [bg byte?] [bb byte?] [v any/c]) bytes?]
 
 @section{Input}
 
@@ -849,9 +898,11 @@ Restores the saved terminal state.
 Raw mode but keeps echo on. Used internally by
 @racket[tui-init-no-buffer-echo].
 
-@defproc[(call-with-terminal-reply [thunk (-> any)]) any]
-Runs @racket[thunk] with a timeout such that a terminal reply (for example
-from a DSR query) can be read without hanging.
+@defproc[(call-with-terminal-reply [thunk (-> any)] [#:vtime vtime real? 1]) any]
+Runs @racket[thunk] with the terminal in a blocking one-byte mode, so a
+terminal reply (for example from a DSR query) can be read without hanging.
+The optional @racket[vtime] (tenths of a second, default @racket[1]) bounds
+the wait between bytes.
 
 @defproc[(make-stdin-evt) evt?]
 A synchronizable event that is ready when stdin has input.

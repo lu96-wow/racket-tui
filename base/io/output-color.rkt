@@ -257,6 +257,7 @@
  ;; 颜色构造器
  color-fg color-bg color256-fg color256-bg color-rgb-fg color-rgb-bg
  color-fg* color-bg*
+ color-thunk?
  ;; 属性
  attr-bold attr-dim attr-italic attr-underline attr-blink attr-reverse
  ;; 格式化属性

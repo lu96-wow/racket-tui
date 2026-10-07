@@ -189,9 +189,9 @@
    (λ (_)
      (drain-resize-signal!)
      (let-values ([(r c) (get-window-size)])
-       ;; ioctl 失败时 get-window-size 返回 #f；此时不投递非法 resize 事件，
-       ;; 由 read-event/raw 归一为 null-event
-       (and r c (cons r c))))))
+       ;; ioctl 失败时 get-window-size 返回 #f；尺寸为 0 也不投递非法 resize
+       ;; 事件（resize-event 约定为正整数），由 read-event/raw 归一为 null-event
+       (and (exact-positive-integer? r) (exact-positive-integer? c) (cons r c))))))
 
 (provide get-window-size
          resize-monitor-start resize-monitor-stop

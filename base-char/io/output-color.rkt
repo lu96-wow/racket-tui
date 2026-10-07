@@ -185,6 +185,7 @@
  format-styled format-styled-at format-styled-at! format-styled*
  color-fg color-bg color256-fg color256-bg color-rgb-fg color-rgb-bg
  color-fg* color-bg*
+ color-thunk?
  attr-bold attr-dim attr-italic attr-underline attr-blink attr-reverse
  format-styled-bold format-styled-bold-at format-styled-bold-at!
  format-styled-dim format-styled-dim-at format-styled-dim-at!

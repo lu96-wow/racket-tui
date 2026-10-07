@@ -9,8 +9,9 @@
 (define current-cursor-col ansi-source-col)
 
 (define (set-cursor! row col)
-  (set! current-cursor-row row)
-  (set! current-cursor-col col))
+  ;; 坐标 1-based；0（或负数）归一到 1，与终端 ESC[0;0H 的行为一致
+  (set! current-cursor-row (max 1 row))
+  (set! current-cursor-col (max 1 col)))
 
 (define (get-cursor)
   (values current-cursor-row current-cursor-col))

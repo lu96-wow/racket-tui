@@ -37,6 +37,11 @@
 
 (define (format-content v) (->ops v))
 
+;; 数值范围校验 —— 与 base 后端保持一致的 byte? / (integer-in 0 255)
+(define (check-byte who name v)
+  (unless (byte? v)
+    (error who "~a must be a byte (0-255), got ~a" name v)))
+
 ;; ── 基础序列 ─────────────────────────────────────────────
 
 (define format-cursor-save (op 'save '()))
@@ -81,12 +86,30 @@
 
 (define (format-fg-base n) (op 'sgr (list (fg-code n))))
 (define (format-bg-base n) (op 'sgr (list (bg-code n))))
-(define (format-rgb-fg-base r g b) (op 'sgr (list 38 2 r g b)))
-(define (format-rgb-bg-base r g b) (op 'sgr (list 48 2 r g b)))
+(define (format-rgb-fg-base r g b)
+  (check-byte 'format-rgb-fg-base 'r r)
+  (check-byte 'format-rgb-fg-base 'g g)
+  (check-byte 'format-rgb-fg-base 'b b)
+  (op 'sgr (list 38 2 r g b)))
+(define (format-rgb-bg-base r g b)
+  (check-byte 'format-rgb-bg-base 'r r)
+  (check-byte 'format-rgb-bg-base 'g g)
+  (check-byte 'format-rgb-bg-base 'b b)
+  (op 'sgr (list 48 2 r g b)))
 (define (format-rgb-fg-bg-base fr fg fb br bg bb)
+  (check-byte 'format-rgb-fg-bg-base 'fr fr)
+  (check-byte 'format-rgb-fg-bg-base 'fg fg)
+  (check-byte 'format-rgb-fg-bg-base 'fb fb)
+  (check-byte 'format-rgb-fg-bg-base 'br br)
+  (check-byte 'format-rgb-fg-bg-base 'bg bg)
+  (check-byte 'format-rgb-fg-bg-base 'bb bb)
   (op 'sgr (list 38 2 fr fg fb 48 2 br bg bb)))
-(define (format-256-fg-base n) (op 'sgr (list 38 5 n)))
-(define (format-256-bg-base n) (op 'sgr (list 48 5 n)))
+(define (format-256-fg-base n)
+  (check-byte 'format-256-fg-base 'n n)
+  (op 'sgr (list 38 5 n)))
+(define (format-256-bg-base n)
+  (check-byte 'format-256-bg-base 'n n)
+  (op 'sgr (list 48 5 n)))
 
 ;; ── 转义+内容（自动 reset）──────────────────────────────
 
