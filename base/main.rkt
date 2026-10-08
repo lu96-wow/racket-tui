@@ -6,6 +6,10 @@
          "terminal/platform.rkt"
          "terminal/cursor-state.rkt"
          "terminal/config.rkt"
+         "terminal/features.rkt"
+         "terminal/probe.rkt"
+         "terminal/feature-plan.rkt"
+         "terminal/session.rkt"
          "ansi/ansi-var.rkt"
          "ansi/ansi-format.rkt"
          "ansi/input-var.rkt"
@@ -14,6 +18,7 @@
          "io/build-input.rkt"
          "io/output.rkt"
          "io/output-color.rkt"
+         "io/color-policy.rkt"
          "io/output-styles.rkt")
 
 (provide (all-from-out "tui.rkt")
@@ -22,6 +27,10 @@
          (all-from-out "terminal/platform.rkt")
          (all-from-out "terminal/cursor-state.rkt")
          (all-from-out "terminal/config.rkt")
+         (all-from-out "terminal/features.rkt")
+         (all-from-out "terminal/probe.rkt")
+         (all-from-out "terminal/feature-plan.rkt")
+         (all-from-out "terminal/session.rkt")
          (all-from-out "ansi/ansi-var.rkt")
          (all-from-out "ansi/ansi-format.rkt")
          (all-from-out "ansi/input-var.rkt")
@@ -30,4 +39,5 @@
          (all-from-out "io/build-input.rkt")
          (all-from-out "io/output.rkt")
          (all-from-out "io/output-color.rkt")
+         (all-from-out "io/color-policy.rkt")
          (all-from-out "io/output-styles.rkt"))

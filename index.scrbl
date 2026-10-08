@@ -339,7 +339,7 @@ reset; the attribute variants emit the corresponding SGR sequence:
 Styles are named bundles of color and attribute thunks. Define them once,
 then apply by name. @racket[style-define!] registers every style in both a
 256-color and a 16-color registry; the active registry is selected by
-@racket[current-registry] (see @racket[use-color-auto!]).
+@racket[current-registry] (see @racket[use-color-from-features!]).
 
 @subsection{Usage}
 
@@ -465,16 +465,19 @@ and so on.
 The active style registry. @racket[style-define!] writes into both the
 256-color and 16-color registries, while @racket[style-apply!] and
 @racket[style->bytes] read whichever one is current. Changed by
-@racket[use-256color!], @racket[use-16color!] and @racket[use-color-auto!].
+@racket[use-256color!], @racket[use-16color!] and
+@racket[use-color-from-features!].
 }
 
 @defproc[(use-256color!) void?]
 Selects the 256-color style registry.
 @defproc[(use-16color!) void?]
 Selects the 16-color style registry.
-@defproc[(use-color-auto!) void?]
-Selects the registry based on the @envvar{COLORTERM} / @envvar{TERM}
-environment variables. Called automatically by @racket[tui-init].
+@defproc[(use-color-from-features! [f features?]) (or/c '16 '256 'truecolor)]{
+Selects the style registry according to the terminal capabilities in
+@racket[f] (a @racket[features] value). Called automatically by
+@racket[tui-init] after capability probing.
+}
 
 @subsection{Built-in styles}
 

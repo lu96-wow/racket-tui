@@ -1,7 +1,9 @@
 #lang racket
 
 (require "../base/io/output-color.rkt"
-         "../base/io/output-styles.rkt")
+         "../base/io/output-styles.rkt"
+         "../base/io/color-policy.rkt"
+         "../base/terminal/features.rkt")
 
 ;; ═══════════════════════════════════════════════════════
 ;; 双表回退边界测试
@@ -89,13 +91,10 @@
 (printf "  => 不崩溃 ✓\n")
 (br)
 
-;; ── 7. auto 检测 ──
-(printf "── 7. use-color-auto! ──\n")
-(use-color-auto!)
-(define auto-reg (current-registry))
-(if (eq? auto-reg (current-registry))
-    (printf "  => 256 模式\n")
-    (printf "  => 16 模式\n"))
+;; ── 7. features 驱动选择 ──
+(printf "── 7. use-color-from-features! ──\n")
+(printf "  => ~a 档\n" (use-color-from-features! (features '16 #f #f #f #f #f)))
+(printf "  => ~a 档\n" (use-color-from-features! (features '256 #f #f #f #f #f)))
 (br)
 
 (printf "═══ 全部通过 ═══\n")

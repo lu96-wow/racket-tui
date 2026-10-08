@@ -257,7 +257,7 @@ Return byte strings without outputting, used for batch collection:
 
 ### 双 registry 自动回退（256 / 16 色）
 
-每个样式同时注册在 256 色表和 16 色表里。`use-color-auto!`（`tui-init` 自动调用）根据 `COLORTERM` 选当前表：
+每个样式同时注册在 256 色表和 16 色表里。`tui-init` 探测终端能力后（`use-color-from-features!`）选当前表：
 
 | 构造器 | 256 色终端 | 16 色终端 |
 |--------|-----------|-----------|

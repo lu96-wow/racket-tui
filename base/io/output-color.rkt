@@ -163,14 +163,8 @@
 (define attr-reverse   (λ () (put-bytes format-reverse)))
 
 ;; ═══════════════════════════════════════════════════════
-;; 颜色深度检测 & 切换
+;; 颜色档位切换
 ;; ═══════════════════════════════════════════════════════
-
-(define (detect-color-depth)
-  (define term (getenv "TERM"))
-  (if (and term (regexp-match? #rx"256color" term))
-      registry-256
-      registry-16))
 
 (define (use-256color!)
   (current-registry registry-256))
@@ -178,11 +172,8 @@
 (define (use-16color!)
   (current-registry registry-16))
 
-(define (use-color-auto!)
-  (current-registry (detect-color-depth)))
-
 ;; ═══════════════════════════════════════════════════════
-;; format-styled-attr (保持不变)
+;; format-styled-attr
 ;; ═══════════════════════════════════════════════════════
 
 (define (format-styled-bold v)
@@ -242,7 +233,7 @@
 (provide
  ;; 样式管理
  style-define! style-apply! style-reset style->bytes
- current-registry use-256color! use-16color! use-color-auto!
+ current-registry use-256color! use-16color!
  ;; 立即输出
  put-styled put-styled-at put-styled-at!
  ;; 立即输出属性

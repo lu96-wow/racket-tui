@@ -196,8 +196,8 @@
 
 ;; ════════════════════════════════════════════════════════════════
 ;; 键解析协议 — 可插拔分发点
-;; 默认 'ansi（传统字节流解析）。将来实现 kitty 键盘协议后
-;; 添加 'kitty 分支即可，无需改动 read-event 调用方。
+;; 默认 'ansi（传统字节流解析）。其他协议（如 kitty 键盘）在此加分支，
+;; read-event 调用方无需改动。
 ;; ════════════════════════════════════════════════════════════════
 (define current-key-protocol (make-parameter 'ansi))
 
@@ -527,6 +527,7 @@
 
 (provide read-event/raw read-event-noblock/raw
          on-source call-with-source-registry
+         current-key-protocol
          classify-byte
          event-null? event-key? event-utf8? event-seq? event-ctrl? event-alt?
          event-mod-seq? event-resize? event-up? event-down? event-left? event-right?
