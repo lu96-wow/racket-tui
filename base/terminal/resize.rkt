@@ -32,7 +32,7 @@
 (define close-fd    (get-ffi-obj 'close       libc (_fun _int -> _int)))
 
 (define TIOCGWINSZ #x5413)
-(define STDOUT_FILENO 1)
+(define STDIN_FILENO 0)
 
 (define SIG_BLOCK 0)
 (define SIG_SETMASK 2)
@@ -66,7 +66,7 @@
     (error 'resize-monitor "sigprocmask failed (how=~a)" how))
   r)
 
-;; 是否做「全线程 SIGWINCH 掩码」校验（需要读 /proc/<pid>/status）。
+;; 是否做「全线程 SIGWINCH 掩码」校验（需要读 /proc/self/task/*/status）。
 ;;   - Android/Termux 的 SELinux 不给 app 域 proc:file read（AOSP 只有
 ;;     `allow domain proc:dir r_dir_perms`），/proc/self/task/<tid>/status
 ;;     必然 EACCES，校验会恒为 'unknown 并 fail-fast。此时退回到只做
@@ -112,7 +112,9 @@
            state
            (worst-thread-state state (thread-sigwinch-state tid))))]))
 
-(define (get-window-size (fd STDOUT_FILENO))
+;; 尺寸默认问 stdin：与 raw 模式/输入同一个 fd，且 tui-init 已用 (terminal?)
+;; 保证它是 tty。用 stdout 时一旦被重定向, ioctl 会失败, resize 静默丢失。
+(define (get-window-size (fd STDIN_FILENO))
   (define ws (make-bytes 8 0))
   (if (= (ioctl fd TIOCGWINSZ ws) -1)
       (values #f #f)

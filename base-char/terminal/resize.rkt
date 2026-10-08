@@ -8,7 +8,7 @@
          resize-monitor-start resize-monitor-stop
          make-resize-evt)
 
-(define (get-window-size (fd 1))
+(define (get-window-size (fd 0))
   (values (car (current-screen-size))
           (cdr (current-screen-size))))
 

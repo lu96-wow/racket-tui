@@ -907,9 +907,12 @@ the wait between bytes.
 @defproc[(make-stdin-evt) evt?]
 A synchronizable event that is ready when stdin has input.
 
-@defproc[(get-window-size [fd exact-integer? 1]) (values (or/c exact-positive-integer? #f) (or/c exact-positive-integer? #f))]
+@defproc[(get-window-size [fd exact-integer? 0]) (values (or/c exact-positive-integer? #f) (or/c exact-positive-integer? #f))]
 Returns the terminal size as @racket[(values rows cols)], or
-@racket[(values #f #f)] if the ioctl fails. @racket[fd] defaults to stdout.
+@racket[(values #f #f)] if the ioctl fails. @racket[fd] defaults to stdin,
+matching the fd used for raw mode and input, so it keeps working when stdout
+is redirected. (The char backend ignores @racket[fd] and reports the scripted
+screen size instead.)
 
 @defproc[(resize-monitor-start) void?]
 Starts a background thread watching for SIGWINCH; resizes are reported as
