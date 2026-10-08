@@ -3,22 +3,22 @@
 ;; ════════════════════════════════════════════════════════════════
 ;; terminal-support/caps.rkt —— 能力表：组装 + 访问
 ;;
-;; `assemble-caps` 只把"按表查询"得到的结果表打包成 caps（纯数据，不做决策）；
-;; `probe-terminal` 是 default-queries 的便捷封装。
-;; 访问/谓词部分只做查表与解释，同样不决定启用任何功能。
+;; `assemble-caps` 只把"按表查询"得到的结果表 + 环境快照打包成 caps（纯数据，不做决策）。
+;; 本模块不含"决定查什么 / 启用什么"的逻辑。
+;;
+;; 环境事实（TERM/COLORTERM/多路复用器/SSH）作为**显式输入** `#:env`，
+;; 由调用方提供快照——保持纯函数、可测。
 ;; ════════════════════════════════════════════════════════════════
 
 (require racket/string
          racket/list
          "query.rkt"
-         "catalog.rkt"
-         "run.rkt"
          "modes.rkt"
-         "device-attrs.rkt"
-         "groups.rkt")
+         "device-attrs.rkt")
 
 (provide (struct-out caps)
-         assemble-caps probe-terminal caps->hash
+         assemble-caps caps->hash env-snapshot
+         caps-mux?
          caps-mode-pm caps-mode-state caps-mode-supported?
          caps-mode-recognized? caps-mode-on? caps-mode-settable? caps-mode-available?
          caps-mode-name
@@ -28,6 +28,39 @@
          caps-osc-rgb? caps-truecolor caps-truecolor? caps-color-level)
 
 ;; ════════════════════════════════════════════════════════════════
+;; 环境快照（消费方也可自己构造同名 hash）
+;; ════════════════════════════════════════════════════════════════
+
+;; 影响能力解读的环境变量 → 快照 hash（值可为 #f）
+(define env-vars
+  '("TERM" "COLORTERM" "TMUX" "STY" "ZELLIJ"
+    "SSH_CONNECTION" "SSH_CLIENT" "SSH_TTY"))
+
+(define (env-snapshot)
+  (for/hash ([k (in-list env-vars)]) (values k (getenv k))))
+
+;; 多路复用器：拦载/代答终端查询，故 caps 描述的是它而非外层终端。
+;; 只能启发式；顺序 = 由内到外的常见假设。
+(define (detect-mux env xtv da2)
+  (define (v k) (hash-ref env k #f))
+  (define t (let ([term (v "TERM")]) (and term (string-downcase term))))
+  (cond
+    [(or (v "TMUX")
+         (and xtv (string-contains? (string-downcase xtv) "tmux"))
+         (and (pair? da2) (= (car (car da2)) 84))   ; notcurses: tmux 的 DA2 Pp=84
+         (and t (string-prefix? t "tmux")))
+     'tmux]
+    [(or (v "STY") (and t (string-prefix? t "screen")))  'screen]
+    [(v "ZELLIJ")                                        'zellij]
+    [else #f]))
+
+(define (env-ssh? env)
+  (or (and (hash-ref env "SSH_CONNECTION" #f) #t)
+      (and (hash-ref env "SSH_CLIENT" #f) #t)
+      (and (hash-ref env "SSH_TTY" #f) #t)
+      #f))
+
+;; ════════════════════════════════════════════════════════════════
 ;; 能力表（纯数据）
 ;; ════════════════════════════════════════════════════════════════
 
@@ -35,7 +68,8 @@
   (id            ; string
    id-source     ; 'xtversion | 'xtgettcap | 'da2 | 'unknown
    name version  ; string / #f
-   tmux?         ; boolean
+   mux           ; 'tmux | 'screen | 'zellij | #f —— 多路复用器（会代答查询）
+   ssh?          ; boolean —— SSH 会话（查询仍透明，仅 env 提示可能过时）
    da1 da2 da3 xtversion
    xtgettcap     ; hash: 已找到的能力名 -> 值(string | #t)
    xtgettcap?    ; boolean —— 终端是否实现了 DCS +q
@@ -45,18 +79,19 @@
    cursor text-size pixel-size cell-size
    private-modes ansi-modes   ; hash: mode -> Pm
    osc palette                ; hash
-   colorterm term             ; string / #f —— 环境提示快照（COLORTERM / TERM）
+   colorterm term             ; string / #f —— 环境快照
    raw)          ; bytes
   #:transparent)
 
+(define (caps-mux? c) (and (caps-mux c) #t))
+
 ;; ════════════════════════════════════════════════════════════════
-;; 组装（纯函数：结果表 + 原始回复 → caps）
+;; 组装（纯函数：结果表 + 原始回复 + 环境快照 → caps）
 ;; ════════════════════════════════════════════════════════════════
 
-(define (assemble-caps results raw
-                       #:colorterm [colorterm #f]
-                       #:term [term #f])
+(define (assemble-caps results raw #:env [env (hash)])
   (define (get k [d #f]) (hash-ref results k d))
+  (define (env-ref k) (hash-ref env k #f))
 
   (define da1  (get 'da1 '()))
   (define da2  (get 'da2 '()))
@@ -67,7 +102,6 @@
                   (values (car e) (or (caddr e) #t))))
   (define xtgettcap? (pair? tcaps-list))
 
-  ;; 从结果表里收 DECRQM / OSC / palette
   (define private-modes (make-hash))
   (define ansi-modes (make-hash))
   (define osc (make-hash))
@@ -92,13 +126,9 @@
   (define-values (nm ver)
     (if (eq? id-source 'xtversion) (split-name-version xtv) (values #f #f)))
 
-  (define tmux?
-    (or (and (getenv "TMUX") #t)
-        (and xtv (string-contains? (string-downcase xtv) "tmux"))
-        (and (pair? da2) (= (car (car da2)) 84))   ; notcurses: tmux 用 84
-        #f))
-
-  (caps id id-source nm ver tmux?
+  (caps id id-source nm ver
+        (detect-mux env xtv da2)
+        (env-ssh? env)
         da1 da2 da3 xtv tcaps xtgettcap?
         (get 'kitty-flags #f)
         (and (get 'kitty-graphics #f) #t)
@@ -106,44 +136,13 @@
         (get 'cursor #f)
         (get 'text-size #f) (get 'pixel-size #f) (get 'cell-size #f)
         private-modes ansi-modes osc palette
-        colorterm term
+        (env-ref "COLORTERM") (env-ref "TERM")
         raw))
-
-;; ════════════════════════════════════════════════════════════════
-;; 便捷入口：跑默认表 → 组装
-;; ════════════════════════════════════════════════════════════════
-
-(define (probe-terminal
-         #:profile [profile default-profile]
-         #:groups [groups #f]
-         #:private-modes [extra-private '()]
-         #:ansi-modes [extra-ansi '()]
-         #:xtgettcap-names [xtgettcap-names default-xtgettcap-names]
-         #:palette-indices [palette-indices default-palette-indices]
-         #:kitty-graphics? [kitty-graphics? #f]
-         #:colorterm [colorterm (getenv "COLORTERM")]
-         #:term [term (getenv "TERM")]
-         #:timeout [timeout 0.30]
-         #:idle [idle 0.05])
-  (define gs (or groups (profile-groups profile)))
-  ;; 额外指定的模式先去重（避免与组内模式撞 id）
-  (define extra-private* (remove-duplicates (remove* (group-private-modes gs) extra-private)))
-  (define extra-ansi*    (remove-duplicates (remove* (group-ansi-modes gs)    extra-ansi)))
-  (define queries
-    (append (group->queries gs
-                            #:xtgettcap-names xtgettcap-names
-                            #:palette-indices palette-indices
-                            #:kitty-graphics? kitty-graphics?)
-            (for/list ([m (in-list extra-private*)]) (decrqm-private-query m))
-            (for/list ([m (in-list extra-ansi*)])    (decrqm-ansi-query m))))
-  (define-values (raw results) (run-queries/raw queries #:timeout timeout #:idle idle))
-  (assemble-caps results raw #:colorterm colorterm #:term term))
 
 ;; ════════════════════════════════════════════════════════════════
 ;; 访问 / 谓词（纯查表）
 ;; ════════════════════════════════════════════════════════════════
 
-;; Pm 值 → 原始状态符号（不合并，保留语义）
 (define (pm->state pm)
   (case pm
     [(1) 'set] [(2) 'reset]
@@ -199,7 +198,6 @@
 (define (caps-palette-color caps i) (hash-ref (caps-palette caps) i #f))
 
 ;; OSC 颜色值（"rgb:rrrr/gggg/bbbb" 或 "#rrggbb"）→ (list r g b)，分量 0-255；不可解析则 #f。
-;; 这样外部拿到颜色不需要自己拆字符串。
 (define (hex-comp->byte h)
   (define n (string->number h 16))
   (case (string-length h)
@@ -225,7 +223,6 @@
 (define (caps-color-rgb caps code)
   (define s (caps-color caps code))
   (and s (parse-color-string s)))
-
 (define (caps-palette-color-rgb caps i)
   (define s (caps-palette-color caps i))
   (and s (parse-color-string s)))
@@ -244,6 +241,11 @@
 
 (define (caps-truecolor? caps) (eq? (caps-truecolor caps) #t))
 
+(define (caps-colors-count caps)
+  (define tc (caps-xtgettcap caps))
+  (define v (or (hash-ref tc "Co" #f) (hash-ref tc "colors" #f)))
+  (and (string? v) (string->number v)))
+
 ;; 色深判定：把混乱的多个来源揉成一个确定符号。
 ;;   'truecolor | '256 | '16 | 'unknown
 ;; 优先级：XTGETTCAP RGB/Tc > COLORTERM > XTGETTCAP Co > COLORTERM(其他值) > TERM > DA1 ANSI color
@@ -258,28 +260,23 @@
     [(and ct (member ct '("truecolor" "24bit"))) 'truecolor]
     [(>= co 16777216) 'truecolor]
     [(>= co 256) '256]
-    [(and ct (positive? (string-length ct))) '256]   ; COLORTERM 有值但不认识
+    [(and ct (positive? (string-length ct))) '256]
     [(term-match? #rx"256color") '256]
     [(term-match? #rx"truecolor|direct") 'truecolor]
     [(member "ANSI color" (caps-da1-attrs caps)) '16]
     [else 'unknown]))
 
-(define (caps-colors-count caps)
-  (define tc (caps-xtgettcap caps))
-  (define v (or (hash-ref tc "Co" #f) (hash-ref tc "colors" #f)))
-  (and (string? v) (string->number v)))
-
 ;; ════════════════════════════════════════════════════════════════
 ;; 检查 / 序列化（供测试、快照、日志）
 ;; ════════════════════════════════════════════════════════════════
 
-;; 把 caps 摊平成可比较/可序列化的 hash（不含 raw）。
 (define (caps->hash c)
   (hash 'id            (caps-id c)
         'id-source     (caps-id-source c)
         'name          (caps-name c)
         'version       (caps-version c)
-        'tmux?         (caps-tmux? c)
+        'mux           (caps-mux c)
+        'ssh?          (caps-ssh? c)
         'xtversion     (caps-xtversion c)
         'xtgettcap?    (caps-xtgettcap? c)
         'xtgettcap     (caps-xtgettcap c)

@@ -11,7 +11,7 @@
 ;;   groups.rkt      表：查询分组 + profile（纯数据）
 ;;   catalog.rkt     查询目录 + 默认表（*-query / *-queries / group->queries）
 ;;   run.rkt         按表查询（run-queries）
-;;   caps.rkt        能力表：assemble-caps（纯数据，不做决策）+ 访问 + probe-terminal
+;;   caps.rkt        能力表：assemble-caps（纯数据，不做决策）+ 访问
 ;;
 ;; 本模块不做决策、不启用任何功能，只提供组合基石。
 ;; ════════════════════════════════════════════════════════════════

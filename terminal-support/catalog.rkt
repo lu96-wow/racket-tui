@@ -37,7 +37,7 @@
 (define (xtgettcap-query names) (query 'xtgettcap      (xtgettcap-request names) parse-xtgettcap))
 (define (kitty-flags-query)     (query 'kitty-flags    (kitty-flags-request)     kitty-flags-value))
 (define (xtmodkeys-query)       (query 'xtmodkeys      (xtmodkeys-request)       parse-xtmodkeys))
-(define (kitty-graphics-query)  (query 'kitty-graphics (kitty-graphics-request)  kitty-graphics-ok?))
+(define (kitty-graphics-query)  (query 'kitty-graphics (kitty-graphics-request)  kitty-graphics-reply?))
 
 ;; ── 模式（每个模式一条）──
 (define (decrqm-private-query mode)

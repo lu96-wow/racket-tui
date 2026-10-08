@@ -29,7 +29,7 @@
  text-area-size-request text-area-pixel-size-request cell-pixel-size-request
  ;; 回复解析（整段原始回复）
  parse-da1 parse-da2 parse-da3 parse-xtversion parse-dcs
- parse-dsr parse-kitty-flags parse-apc kitty-graphics-ok? parse-xtmodkeys
+ parse-dsr parse-kitty-flags parse-apc kitty-graphics-reply? parse-xtmodkeys
  parse-decrqm-private parse-decrqm-ansi
  parse-xtgettcap parse-osc parse-window-reports
  da1-reply?
@@ -38,7 +38,7 @@
  osc-value osc-palette-value window-size
  xtgettcap-lookup cursor-position kitty-flags-value
  ;; 辅助
- bytes->hex hex->bytes split-name-version)
+ bytes->hex hex->bytes split-name-version vis-string)
 
 ;; ════════════════════════════════════════════════════════════════
 ;; 单元类型
@@ -117,9 +117,11 @@
 (define (text-area-pixel-size-request) (bytes-append ESC (s->b "[14t")))  ; → CSI 4;h;w t
 (define (cell-pixel-size-request)      (bytes-append ESC (s->b "[16t")))  ; → CSI 6;h;w t
 
-;; kitty 图形协议查询（APC，默认不发：不消费 APC 的终端会把字节泄漏到屏幕）
+;; kitty 图形协议查询（APC）。用官方推荐的“仅查询”指令：带一张 1×1 RGB 空图
+;; （s=1,v=1,f=24 → 3 字节 → base64 "AAAA"），终端会把它当“加载”往返。
+;; 不消费 APC 的终端会把字节泄漏到屏幕，故默认不发。
 (define (kitty-graphics-request)
-  (bytes-append ESC (bytes 95) (s->b "Gi=1,a=q;") ST))   ; ESC _ G i=1,a=q; ESC \
+  (bytes-append ESC (bytes 95) (s->b "Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA") ST))
 
 ;; ════════════════════════════════════════════════════════════════
 ;; 回复解析 —— 全部作用在"整段累积的原始回复字节"上
@@ -214,8 +216,10 @@
   (for/list ([m (in-list (all-matches apc-rx b))])
     (cadr m)))
 
-(define (kitty-graphics-ok? b)
-  (for/or ([s (in-list (parse-apc b))]) (regexp-match? #px"^G[^;]*;OK" s)))
+;; kitty 图形“有回复即支持”：回复形如 ESC_Gi=<id>;OK 或 ESC_Gi=<id>;E<错误>。
+;; 我们自己的查询是 "Gi=31,s=..."（id 后是 ','），不会被匹配。
+(define (kitty-graphics-reply? b)
+  (for/or ([s (in-list (parse-apc b))]) (regexp-match? #px"^Gi=[0-9]+;" s)))
 
 ;; XTWINOPS 尺寸报告 → hash: 4/6/8 -> (cons 高/行 宽/列)
 ;;   CSI 8 ; rows ; cols t   文本区(cells)
@@ -278,3 +282,16 @@
 (define (split-name-version s)
   (define m (regexp-match #px"^(.*?)\\((.*)\\)$" s))
   (if m (values (cadr m) (caddr m)) (values s #f)))
+
+;; 把终端派生的字符串中的控制字符可视化，避免打印时被执行：
+;;   ESC → "^["；C0(1-26) → "^X"；DEL → "^?"；其余原样。
+(define (vis-string s)
+  (define out (open-output-string))
+  (for ([c (in-string s)])
+    (define n (char->integer c))
+    (cond
+      [(= n 27)  (write-string "^[" out)]
+      [(= n 127) (write-string "^?" out)]
+      [(< n 32)  (write-char #\^ out) (write-char (integer->char (+ 64 n)) out)]
+      [else (write-char c out)]))
+  (get-output-string out))

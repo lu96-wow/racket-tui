@@ -43,6 +43,8 @@
 (define (pad s n) (string-append s (make-string (max 0 (- n (str-width s))) #\space)))
 (define (pair->s p) (if p (format "~a x ~a" (car p) (cdr p)) "-"))
 (define (lst->s l) (if (null? l) "-" (string-join l ", ")))
+;; 终端派生的字符串一律可视化后再打印，防止控制序列被执行
+(define (vs x) (if (string? x) (vis-string x) (or x "-")))
 
 (define (state-label st)
   (case st
@@ -53,7 +55,7 @@
 (define (da3-show s)
   (if (and s (regexp-match? #px"^[0-9A-Fa-f]+$" s) (even? (string-length s)))
       (format "~a  (hex → ~s)" s (hex->bytes s))
-      (or s "-")))
+      (if s (vis-string s) "-")))
 
 (define (run)
   (define groups (or groups-opt
@@ -70,28 +72,34 @@
   (say "")
 
   (define t0 (current-inexact-milliseconds))
-  (define caps (probe-terminal #:groups groups
-                               #:timeout timeout #:idle idle
-                               #:kitty-graphics? kitty-graphics?))
+  ;; 显式组合：定查哪些 → 调 api 查（显式端口）→ 返回 hash → 组装成句柄
+  (define qs (group->queries groups #:kitty-graphics? kitty-graphics?))
+  (define-values (raw results)
+    (run-queries/raw qs #:in (current-input-port) #:out (current-output-port)
+                     #:timeout timeout #:idle idle))
+  (define caps (assemble-caps results raw #:env (env-snapshot)))
   (define probe-ms (- (current-inexact-milliseconds) t0))
 
   (say (format "== 身份 ==   (探测耗时 ~a ms)" (real->decimal-string probe-ms 1)))
-  (say (format "  id        : ~a   (来源 ~a)" (caps-id caps) (caps-id-source caps)))
+  (say (format "  id        : ~a   (来源 ~a)" (vs (caps-id caps)) (caps-id-source caps)))
   (when (caps-name caps)
-    (say (format "  name/ver  : ~a / ~a" (caps-name caps) (caps-version caps))))
-  (say (format "  tmux?     : ~a" (caps-tmux? caps)))
-  (say (format "  XTVERSION : ~a" (or (caps-xtversion caps) "-")))
+    (say (format "  name/ver  : ~a / ~a" (vs (caps-name caps)) (vs (caps-version caps)))))
+  (say (format "  mux/ssh?   : ~a / ~a" (caps-mux caps) (caps-ssh? caps)))
+  (say (format "  XTVERSION : ~a" (vs (caps-xtversion caps))))
   (say (format "  DA1       : ~a" (lst->s (map fmt-nums (caps-da1 caps)))))
   (say (format "  DA1 属性  : ~a" (lst->s (caps-da1-attrs caps))))
   (say (format "  DA2       : ~a   型号: ~a" (lst->s (map fmt-nums (caps-da2 caps))) (or (caps-da2-model caps) "-")))
   (say (format "  DA3       : ~a" (da3-show (caps-da3 caps))))
   (define tc (caps-xtgettcap caps))
-  (say (format "  XTGETTCAP : ~a"
+  (say (format "  XTGETTCAP :~a"
                (cond
-                 [(not (caps-xtgettcap? caps)) "（未实现 DCS +q）"]
-                 [(zero? (hash-count tc)) "（有回复，但所查名字都未找到）"]
-                 [else (string-join (for/list ([(k v) (in-hash tc)])
-                                      (format "~a=~a" k (if (string? v) v "(有)"))) "  ")])))
+                 [(not (caps-xtgettcap? caps)) " （未实现 DCS +q）"]
+                 [(zero? (hash-count tc)) " （有回复，但所查名字都未找到）"]
+                 [else ""])))
+  (when (positive? (hash-count tc))
+    (for ([k (in-list (sort (hash-keys tc) string<?))])
+      (define v (hash-ref tc k))
+      (say (format "    ~a = ~a" (pad k 6) (if (string? v) (vis-string v) "(bool)")))))
   (say "")
 
   (say "== 尺寸 ==")
@@ -107,13 +115,13 @@
     (for ([m (in-list (sort modes <))])
       (define pm (caps-mode-pm caps m ansi?))
       (say (format "  ~a  ~a  ~a  ~a"
-                   (pad (format "~a~a" (if ansi? "" "?") m) 8)
+                   (pad (~a m) 8)
                    (pad (if pm (number->string pm) "-") 3)
                    (pad (state-label (caps-mode-state caps m ansi?)) 10)
                    (or (caps-mode-name m ansi?) "")))))
-  (mode-table "== DECRQM 私有模式 ==" private-modes #f)
+  (mode-table "== DECRQM 私有模式 (CSI ? Ps $ p) ==" private-modes #f)
   (say "")
-  (mode-table "== DECRQM ANSI 模式 ==" ansi-modes #t)
+  (mode-table "== DECRQM ANSI 模式 (CSI Ps $ p) ==" ansi-modes #t)
   (say "")
 
   (say "== 能力判定 ==")

@@ -18,7 +18,7 @@
 | `groups.rkt` | 表 | 查询分组 + profile |
 | `catalog.rkt` | 查询目录+默认表 | `*-query` 构造器 + `*-queries` 表 + `group->queries` |
 | `run.rkt` | 按表查询 | `run-queries` / `run-queries/raw` |
-| `caps.rkt` | 能力表 | `assemble-caps`（纯数据）+ 访问 + `probe-terminal` |
+| `caps.rkt` | 能力表 | `assemble-caps`（纯数据）+ 访问 |
 | `main.rkt` | **门户** | 对外唯一入口（重新导出各层） |
 
 ## 数据模型
@@ -34,7 +34,7 @@
 - **结果表** = `(hash/c id any/c)`：`run-queries` 的产物，`id → 值`（`#f` = 无数据）。
 
 ```racket
-(struct caps (id id-source name version tmux?
+(struct caps (id id-source name version mux ssh?
               da1 da2 da3 xtversion
               xtgettcap xtgettcap?
               kitty-flags kitty-graphics? xtmodkeys
@@ -55,19 +55,20 @@
 ;; 2) 按表查询 → 原始回复 + 结果表（id -> value）
 (define-values (raw results) (run-queries/raw qs))
 
-;; 3) 纯组装成能力表
-(define c (assemble-caps results raw))
+;; 3) 纯组装成能力表（env 显式传入）
+(define c (assemble-caps results raw #:env (env-snapshot)))
 
 ;; 或加自定义查询
 (define my (query 'my-id #"\e[>0q" parse-xtversion))
 (run-queries (cons my qs))
 ```
 
-- `probe-terminal` 只是 `default-queries`（= `default-profile`）的便捷封装。
 - 表：`identity-queries xtgettcap-queries kitty-queries mode-queries color-queries size-queries`，
-  以及 `group->queries / profile->queries / default-queries`。
+  以及 `group->queries / profile->queries / default-queries`（纯数据，按需取用）。
+- 传输端口是**显式参数**：`run-queries/raw #:in #:out`（默认 `current-*-port`）。
 - **结果 hash 的 `id` 必须唯一**：重复 `id` 直接报错（不静默覆盖）。
-  `probe-terminal` 的 `#:private-modes/#:ansi-modes` 会先对组内模式去重，故"额外指定已有模式"不误报。
+- 组装是纯函数：`assemble-caps results raw #:env env`（env 由 `env-snapshot` 或调用方给）。
+- **库不提供“一步到位”的封装**：外部按上面三步自己组合。
 
 ## 查哪些：可配置（profile / 分组）
 
@@ -78,9 +79,9 @@
 | `'full` | 82 | 6 | 全部 |
 
 ```racket
-(probe-terminal #:profile 'full)
-(probe-terminal #:groups '(identity mouse paste colors))
-(probe-terminal #:private-modes '(1006 2026))   ; 额外追加
+(profile->queries 'full)
+(group->queries '(identity mouse paste colors))
+(decrqm-private-query 1006)   ; 额外单条查询
 ```
 
 分组（`groups.rkt`）：
@@ -127,7 +128,7 @@
 
 `caps-color-level` 优先级：**XTGETTCAP `RGB`/`Tc` > `COLORTERM` > XTGETTCAP `Co`
 > `COLORTERM`(其他值) > `TERM`(含 256color/direct/truecolor) > DA1 `ANSI color`**。
-`COLORTERM`/`TERM` 在 `probe-terminal`/`assemble-caps` 时以快照存入 `caps-colorterm`/`caps-term`。
+`COLORTERM`/`TERM` 由 `#:env` 快照传入 `assemble-caps`，存入 `caps-colorterm`/`caps-term`。
 
 **注意**：`caps-truecolor` 只看 XTGETTCAP；不要用 OSC 的 `rgb:` 判真彩（那只是 OSC 回复格式）。
 
@@ -145,6 +146,12 @@
 ## 注意
 
 - 只做**只读查询**，不改终端持久状态（raw 模式由调用方负责）。
-- tmux/screen 会拦截并自答 DA2/DECRQM；那反映 mux 的能力（正确行为）。`caps-tmux?` 可识别。
+- **SSH 对查询透明**：`XTVERSION`/`DECRQM`/`OSC` 仍到达本地终端并回传，无需特殊处理。
+  但 `COLORTERM` 默认不随 SSH 转发（`TERM` 会）——所以 `caps-color-level` 把查询排在 env 之前。
+  `caps-ssh?` 仅作元数据（表示 env 提示可能过时）。
+- tmux/screen/zellij 会拦截并自答 DA2/DECRQM；那反映 mux 的能力（正确行为）。
+  `caps-mux` 给出具体是哪个（`'tmux/'screen/'zellij/#f`），`caps-mux?` 为布尔。
+- 环境事实（`TERM`/`COLORTERM`/多路复用器/SSH）作为**显式输入 `#:env`**（`env-snapshot` 可抓当前环境）
+  传给 `assemble-caps`，保持纯函数、可测。
 - `#:kitty-graphics? #t` 会发 APC 查询；不消费 APC 的终端可能把字节泄漏到屏幕，故默认关闭。
 - 终止用"读到静默"（`#:idle`），不是 DA1 早停：回复非严格有序，早停会漏读并泄漏给 shell。

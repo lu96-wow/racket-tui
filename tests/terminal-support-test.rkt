@@ -22,18 +22,17 @@
                  [current-output-port (open-output-nowhere)])
     (thunk)))
 
-;; 组一张表 → 跑 → 组装（测底层组合，不经过 probe-terminal）
+;; 组一张表 → 跑 → 组装（纯组合）
 (define (caps-from replies
                    #:groups [gs '(identity xtgettcap kitty colors sizes
                                   cursor mouse paste screen focus sync keyboard)]
-                   #:colorterm [colorterm #f]
-                   #:term [term #f])
+                   #:env [env (hash)])
   (with-replies replies
     (λ ()
       (define qs (group->queries gs))
       (check-query-ids qs)
       (define-values (raw res) (run-queries/raw qs #:timeout 0.02 #:idle 0.005))
-      (assemble-caps res raw #:colorterm colorterm #:term term))))
+      (assemble-caps res raw #:env env))))
 
 (module+ test
 
@@ -53,7 +52,7 @@
   (check-equal? (osc-palette-request 1) #"\e]4;1;?\e\\" "OSC 调色板请求")
   (check-equal? (text-area-size-request) #"\e[18t" "XTWINOPS 18t")
   (check-equal? (xtgettcap-request '("TN")) #"\eP+q544E\e\\" "XTGETTCAP 请求")
-  (check-equal? (kitty-graphics-request) #"\e_Gi=1,a=q;\e\\" "kitty 图形请求")
+  (check-equal? (kitty-graphics-request) #"\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\" "kitty 图形请求")
 
   ;; ══════════════════════════════════════════════════════════════
   ;; 2. 解析
@@ -74,8 +73,9 @@
                 '("10;rgb:cccc/cccc/cccc") "parse-osc")
   (check-equal? (parse-window-reports (B (j E "[8;24;80t" E "[4;480;640t" E "[6;17;8t")))
                 (hash 8 (cons 24 80) 4 (cons 480 640) 6 (cons 17 8)) "parse-window-reports")
-  (check-true (kitty-graphics-ok? (B (j E "_Gi=1;OK" E "\\"))) "kitty 图形 OK")
-  (check-false (kitty-graphics-ok? (B (j E "_Gi=1;ENOTSUP" E "\\"))) "kitty 图形 ENOTSUP")
+  (check-true (kitty-graphics-reply? (B (j E "_Gi=31;OK" E "\\"))) "kitty 图形：OK 回复")
+  (check-true (kitty-graphics-reply? (B (j E "_Gi=31;EINVAL:bad" E "\\"))) "kitty 图形：错误回复也算支持")
+  (check-false (kitty-graphics-reply? (B (j E "_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA" E "\\"))) "kitty 图形：我们自己的查询不算回复")
 
   ;; ══════════════════════════════════════════════════════════════
   ;; 3. 取值函数
@@ -93,6 +93,9 @@
   (check-equal? (hex->bytes "544E") (string->bytes/utf-8 "TN") "hex->bytes")
   (check-equal? (call-with-values (λ () (split-name-version "xterm.js(6.1)")) list)
                 '("xterm.js" "6.1") "split-name-version")
+  (check-equal? (vis-string (string-append (string (integer->char 27)) "[9m")) "^[[9m" "vis-string: ESC")
+  (check-equal? (vis-string (string (integer->char 7))) "^G" "vis-string: BEL")
+  (check-equal? (vis-string "abc") "abc" "vis-string: 明文")
 
   ;; ══════════════════════════════════════════════════════════════
   ;; 4. 组装 + 访问
@@ -162,10 +165,21 @@
   (check-equal? (caps-color-level c) 'unknown "色深：无来源 → unknown")
   (check-equal? (caps-color-level (caps-from (j E "P1+r524742" E "\\" E "[?1;2c"))) 'truecolor "色深：XTGETTCAP RGB → truecolor")
   (check-equal? (caps-color-level (caps-from (j E "P1+r436F=323536" E "\\" E "[?1;2c"))) '256 "色深：Co=256 → 256")
-  (check-equal? (caps-color-level (caps-from (j E "[?1;2c") #:colorterm "truecolor")) 'truecolor "色深：COLORTERM=truecolor")
-  (check-equal? (caps-color-level (caps-from (j E "[?1;2c") #:colorterm "yes")) '256 "色深：COLORTERM 其他值 → 256")
-  (check-equal? (caps-color-level (caps-from (j E "[?1;2c") #:term "xterm-256color")) '256 "色深：TERM=...256color")
+  (check-equal? (caps-color-level (caps-from (j E "[?1;2c") #:env (hash "COLORTERM" "truecolor"))) 'truecolor "色深：COLORTERM=truecolor")
+  (check-equal? (caps-color-level (caps-from (j E "[?1;2c") #:env (hash "COLORTERM" "yes"))) '256 "色深：COLORTERM 其他值 → 256")
+  (check-equal? (caps-color-level (caps-from (j E "[?1;2c") #:env (hash "TERM" "xterm-256color"))) '256 "色深：TERM=...256color")
   (check-equal? (caps-color-level (caps-from (j E "[?61;1;22c"))) '16 "色深：DA1 ANSI color → 16")
+
+  ;; 环境事实：多路复用器 / SSH
+  (check-equal? (caps-mux (caps-from (j E "[?1;2c") #:env (hash "TMUX" "/tmp/tmux-1000/default,1,0"))) 'tmux "mux: TMUX")
+  (check-equal? (caps-mux (caps-from (j E "[?1;2c") #:env (hash "STY" "12345.pts-0.host"))) 'screen "mux: STY")
+  (check-equal? (caps-mux (caps-from (j E "[?1;2c") #:env (hash "ZELLIJ" "0"))) 'zellij "mux: ZELLIJ")
+  (check-equal? (caps-mux (caps-from (j E "[?1;2c") #:env (hash "TERM" "screen-256color"))) 'screen "mux: TERM screen-*")
+  (check-equal? (caps-mux (caps-from (j E "[?1;2c") #:env (hash "TERM" "tmux-256color"))) 'tmux "mux: TERM tmux-*")
+  (check-equal? (caps-mux (caps-from (j E "[>84;0;0c"))) 'tmux "mux: DA2 Pp=84")
+  (check-false (caps-mux? (caps-from (j E "[?1;2c"))) "mux: 无 → #f")
+  (check-true (caps-ssh? (caps-from (j E "[?1;2c") #:env (hash "SSH_TTY" "/dev/pts/0"))) "ssh?：SSH_TTY")
+  (check-false (caps-ssh? (caps-from (j E "[?1;2c"))) "ssh?：无 → #f")
 
   ;; ══════════════════════════════════════════════════════════════
   ;; 6. 表 / profile 不变量
@@ -184,7 +198,11 @@
               "kitty-queries #t 含 kitty-graphics")
 
   ;; ══════════════════════════════════════════════════════════════
-  ;; 7. 端到端：probe-terminal（默认 profile）
+  ;; 7. 端到端：定查哪些 → 查 → hash → 组装句柄（无便捷入口，纯组合）
   ;; ══════════════════════════════════════════════════════════════
-  (define c2 (with-replies fake (λ () (probe-terminal #:timeout 0.02 #:idle 0.005))))
-  (check-equal? (caps-id c2) "xterm.js(6.1)" "probe-terminal 端到端"))
+  (define c2 (with-replies fake
+               (λ ()
+                 (define-values (raw res) (run-queries/raw (default-queries)
+                                                           #:timeout 0.02 #:idle 0.005))
+                 (assemble-caps res raw #:env (hash)))))
+  (check-equal? (caps-id c2) "xterm.js(6.1)" "端到端：default-queries → run-queries → assemble-caps"))
