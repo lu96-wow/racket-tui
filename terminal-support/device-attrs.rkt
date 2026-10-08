@@ -1,24 +1,16 @@
 #lang racket
 
 ;; ════════════════════════════════════════════════════════════════
-;; terminal-support/features.rkt —— 纯数据：设备属性码 ↔ 名称
+;; terminal-support/device-attrs.rkt —— 纯数据：设备属性码 ↔ 名称
 ;; 取自 xterm ctlseqs "Send Device Attributes (Primary/Secondary DA)"。
 ;; ════════════════════════════════════════════════════════════════
 
-(provide da1-feature-names da1-feature-name
+(provide da1-attr-names da1-attr-name
          da1-model-names da1-model-name
          da2-model-names da2-model-name)
 
-;; DA1 首位：VT100 系/ VT2xx+ 的型号码（首位是这些值时，其后才是特性码）
-(define da1-model-names
-  '((1  . "VT100") (4 . "VT132") (6 . "VT102") (7 . "VT131")
-    (12 . "VT125") (61 . "VT510?/VTE") (62 . "VT220") (63 . "VT320")
-    (64 . "VT420") (65 . "VT510-525")))
-(define (da1-model-name n)
-  (cond [(assoc n da1-model-names) => cdr] [(>= n 60) "VT5xx?"] [else #f]))
-
 ;; DA1 回复里的能力码（首位 6x 是型号码，不在本表）
-(define da1-feature-names
+(define da1-attr-names
   '((1  . "132 columns")
     (2  . "printer")
     (3  . "ReGIS graphics")
@@ -35,8 +27,17 @@
     (28 . "rectangular editing")
     (29 . "ANSI text locator")))
 
-(define (da1-feature-name n)
-  (cond [(assoc n da1-feature-names) => cdr] [else #f]))
+(define (da1-attr-name n)
+  (cond [(assoc n da1-attr-names) => cdr] [else #f]))
+
+;; DA1 首位：VT100 系 / VT2xx+ 的型号码（首位是这些值时，其后才是能力码）
+(define da1-model-names
+  '((1  . "VT100") (4 . "VT132") (6 . "VT102") (7 . "VT131")
+    (12 . "VT125") (61 . "VT510?/VTE") (62 . "VT220") (63 . "VT320")
+    (64 . "VT420") (65 . "VT510-525")))
+
+(define (da1-model-name n)
+  (cond [(assoc n da1-model-names) => cdr] [(>= n 60) "VT5xx?"] [else #f]))
 
 ;; DA2 回复的 Pp（终端类型码）
 ;; 注：VTE 报 61、tmux 报 84，皆非标准值（notcurses 注释亦提及 tmux 用 84）。

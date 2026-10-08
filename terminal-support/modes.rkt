@@ -10,8 +10,8 @@
 
 (provide dec-private-mode-names
          ansi-mode-names
-         default-private-modes
-         default-ansi-modes)
+         all-private-modes
+         all-ansi-modes)
 
 ;; mode -> 名称（中文/英文混排，便于阅读）
 (define dec-private-mode-names
@@ -107,5 +107,5 @@
     (12 . "SRM 发送/接收")
     (20 . "LNM 自动换行(输出)")))
 
-(define default-private-modes (map car dec-private-mode-names))
-(define default-ansi-modes (map car ansi-mode-names))
+(define all-private-modes (map car dec-private-mode-names))
+(define all-ansi-modes (map car ansi-mode-names))

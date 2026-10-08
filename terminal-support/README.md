@@ -5,91 +5,94 @@
 本模块只做两件事：**发查询** + **建能力表（纯数据）**。
 **不做任何"启用/关闭功能"**——那属于调用方的策略。
 
+作为 `tui` 的子库，门户模块路径为 `tui/terminal-support/main`。
+
 ## 模块（分层）
 
 | 文件 | 层 | 职责 |
 |------|----|------|
-| `query.rkt` | 查询逻辑 | 请求构造 + 回复解析 + **复用取值函数**（纯函数） |
-| `io.rkt` | 传输 | 一次写出、一次读回 |
-| `modes.rkt` | 表 | 模式编号 ↔ 名称 |
-| `features.rkt` | 表 | DA1 特性码 / DA2 型号码 ↔ 名称 |
+| `query.rkt` | 查询原语 | 单元类型 `query` + 请求构造 `*-request` + 解析 `parse-*` + 取值函数（纯函数） |
+| `io.rkt` | 传输 | `exchange-queries` / `read-reply`：一次写出、一次读回 |
+| `modes.rkt` | 表 | 模式编号 ↔ 名称；`all-private-modes` / `all-ansi-modes` |
+| `device-attrs.rkt` | 表 | DA1/DA2 码 ↔ 名称 |
 | `groups.rkt` | 表 | 查询分组 + profile |
-| `spec.rkt` | 查询实现+默认表 | `query` 结构 + 单项 spec 构造器 + 组合表 |
-| `run.rkt` | 按表查询 | `run-specs` / `run-specs/raw` |
-| `caps.rkt` | 组装 | `assemble-caps`（纯数据，不做决策）+ 能力表访问 |
+| `catalog.rkt` | 查询目录+默认表 | `*-query` 构造器 + `*-queries` 表 + `group->queries` |
+| `run.rkt` | 按表查询 | `run-queries` / `run-queries/raw` |
+| `caps.rkt` | 能力表 | `assemble-caps`（纯数据）+ 访问 + `probe-terminal` |
 | `main.rkt` | **门户** | 对外唯一入口（重新导出各层） |
+
+## 数据模型
+
+```racket
+(struct query (id request parse))   ; 一条查询
+;;   id      : symbol 或 (cons 类别 参数) —— 结果键，在结果 hash 中唯一
+;;   request : bytes                      —— 发送字节
+;;   parse   : (-> bytes any/c)           —— 从整段原始回复取本项的值
+```
+
+- **表** = `(listof query)`。
+- **结果表** = `(hash/c id any/c)`：`run-queries` 的产物，`id → 值`（`#f` = 无数据）。
+
+```racket
+(struct caps (id id-source name version tmux?
+              da1 da2 da3 xtversion
+              xtgettcap xtgettcap?
+              kitty-flags kitty-graphics? xtmodkeys
+              cursor text-size pixel-size cell-size
+              private-modes ansi-modes
+              osc palette
+              colorterm term
+              raw)
+  #:transparent)
+```
 
 ## 组合基石（不做决策，只组合）
 
-一个 `query` = `(id request parse)`；一张表 = 一串 query。
-
 ```racket
 ;; 1) 用分组组一张表
-(define specs (group->specs '(identity mouse paste sync colors)))
+(define qs (group->queries '(identity mouse paste sync colors)))
 
 ;; 2) 按表查询 → 原始回复 + 结果表（id -> value）
-(define-values (raw results) (run-specs/raw specs))
+(define-values (raw results) (run-queries/raw qs))
 
 ;; 3) 纯组装成能力表
-(define caps (assemble-caps results raw))
+(define c (assemble-caps results raw))
 
 ;; 或加自定义查询
 (define my (query 'my-id #"\e[>0q" parse-xtversion))
-(run-specs (cons my specs))
+(run-queries (cons my qs))
 ```
 
-`probe-terminal` 只是 `default-specs`（= `default-profile`）的便捷封装。
-表：`identity-specs xtgettcap-specs kitty-specs mode-specs color-specs size-specs`，
-以及 `group->specs / profile->specs / default-specs`。
-
-**结果容器：`id -> value` 的 hash，且 `id` 必须唯一**——重复 id 会直接报错（不静默覆盖，
-避免丢结果）。`probe-terminal` 的 `#:private-modes/#:ansi-modes` 会先对组内模式去重，
-所以“额外指定已有的模式”不会误报。
-
-## 用法
-
-```racket
-(require "terminal-support/main.rkt")
-
-;; 前提：终端已进入 raw 模式（关闭 ECHO/ICANON）
-(define caps (probe-terminal))              ; 默认 profile='standard（只查 TUI 需要的）
-
-(terminal-caps-id caps)
-(caps-mode-available? caps 1006)            ; SGR 鼠标是否可用
-(caps-mode-state caps 2026)                 ; 'set/'reset/'permanently-set/'permanently-reset/'unrecognized/#f
-(caps-da1-features caps)                    ; => ("132 columns" "Sixel graphics" ...)
-(caps-da2-model caps)                       ; => "VT100" / "tmux" ...
-(caps-truecolor? caps)                      ; 由 XTGETTCAP RGB/Tc 判定
-(terminal-caps-text-size caps)              ; => (rows . cols) 或 #f
-```
+- `probe-terminal` 只是 `default-queries`（= `default-profile`）的便捷封装。
+- 表：`identity-queries xtgettcap-queries kitty-queries mode-queries color-queries size-queries`，
+  以及 `group->queries / profile->queries / default-queries`。
+- **结果 hash 的 `id` 必须唯一**：重复 `id` 直接报错（不静默覆盖）。
+  `probe-terminal` 的 `#:private-modes/#:ansi-modes` 会先对组内模式去重，故"额外指定已有模式"不误报。
 
 ## 查哪些：可配置（profile / 分组）
-
-不是所有终端都支持所有模式，**全查是浪费**（xterm.js 全查要 ~100ms+）。
-默认用 `'standard`，只查 TUI 真正需要的；需要全量再 `'full`。
 
 | profile | 私有模式 | ANSI | 说明 |
 |---------|:---:|:---:|------|
 | `'minimal` | 4 | 0 | 身份 + 尺寸 + 光标 |
 | `'standard`（默认） | 24 | 2 | 核心鼠标/键盘/备用屏/粘贴/focus/同步/颜色/尺寸 |
-| `'full` | 82 | 6 | 全部（含 extra/杂项） |
+| `'full` | 82 | 6 | 全部 |
 
 ```racket
 (probe-terminal #:profile 'full)
-(probe-terminal #:groups '(identity mouse paste colors))   ; 精确选组
-(probe-terminal #:private-modes '(1006 2026))              ; 额外指定模式
+(probe-terminal #:groups '(identity mouse paste colors))
+(probe-terminal #:private-modes '(1006 2026))   ; 额外追加
 ```
 
-分组全集见 `groups.rkt`：`identity xtgettcap kitty colors sizes`（非 DECRQM）
-与 `mouse mouse-extra keyboard keyboard-extra focus cursor screen paste paste-extra
-sync unicode resize selection readline printing misc`（DECRQM）。
-可用 `(profile-groups 'full)` / `(group-private-modes gs)` 查询。
+分组（`groups.rkt`）：
+- DECRQM：`mouse mouse-extra keyboard keyboard-extra focus cursor screen paste paste-extra
+  sync unicode resize selection readline printing misc`
+- 非 DECRQM：`identity xtgettcap kitty colors sizes`
 
 ## 查询范围（'full 时）
 
 | 类别 | 内容 |
 |------|------|
-| 设备属性 | DA1 `CSI c`（哨兵）、DA2 `CSI > c`、DA3 `CSI = c` |
+| 设备属性 | DA1 `CSI c`、DA2 `CSI > c`、DA3 `CSI = c` |
 | 身份 | XTVERSION `CSI > 0 q`、XTGETTCAP `DCS + q`（TN/Co/RGB/Tc/… 24 项） |
 | 模式 | DECRQM 逐项：82 个 DEC 私有 + 6 个 ANSI |
 | 键盘 | kitty `CSI ? u`、modifyOtherKeys `CSI ? 4 m`；kitty 图形 APC（默认不发） |
@@ -108,13 +111,25 @@ sync unicode resize selection readline printing misc`（DECRQM）。
 | 无回复 | `#f` | — | — | — |
 
 `caps-mode-supported?` = `available?`：**能处于"开"**（含 permanently-set）。
-`permanently-set` 是"一直开着"，算可用；只有 `permanently-reset`/不识别才不可用。
 
-## 真彩判定
+## 色深 / 颜色
 
-`caps-truecolor?` 只看 **XTGETTCAP `RGB`/`Tc`**。**不要用 OSC 的 `rgb:` 判真彩**——
-那只是 OSC 的回复格式，256 色终端也这么回（用 `caps-osc-rgb?` 表示"终端应答了颜色查询"）。
-无 XTGETTCAP 的终端（如 VTE/xterm.js）请由调用方回退到 `COLORTERM`。
+模块把"乱"的多个来源揉成确定结论，外部只读字段，**不需要二次解析**：
+
+```racket
+(caps-color-level c)         ; 'truecolor | '256 | '16 | 'unknown
+(caps-color c 10)            ; "rgb:cccc/cccc/cccc"（原始串）
+(caps-color-rgb c 10)        ; (204 204 204)  —— 已拆成 0-255 分量
+(caps-palette-color-rgb c 5) ; (170 0 187)
+(caps-truecolor c)           ; #t / #f / 'unknown（仅 XTGETTCAP RGB/Tc）
+(caps-osc-rgb? c)            ; OSC 是否以 rgb: 回复（≠ 真彩）
+```
+
+`caps-color-level` 优先级：**XTGETTCAP `RGB`/`Tc` > `COLORTERM` > XTGETTCAP `Co`
+> `COLORTERM`(其他值) > `TERM`(含 256color/direct/truecolor) > DA1 `ANSI color`**。
+`COLORTERM`/`TERM` 在 `probe-terminal`/`assemble-caps` 时以快照存入 `caps-colorterm`/`caps-term`。
+
+**注意**：`caps-truecolor` 只看 XTGETTCAP；不要用 OSC 的 `rgb:` 判真彩（那只是 OSC 回复格式）。
 
 ## 设计来源
 
@@ -130,6 +145,6 @@ sync unicode resize selection readline printing misc`（DECRQM）。
 ## 注意
 
 - 只做**只读查询**，不改终端持久状态（raw 模式由调用方负责）。
-- tmux/screen 会拦截并自答 DA2/DECRQM；那反映 mux 的能力（正确行为）。`terminal-caps-tmux?` 可识别。
-- `#:kitty-graphics? #t` 会发 APC 查询；不消费 APC 的终端（如 Linux console）可能把字节泄漏到屏幕，故默认关闭。
-- 终止用"读到静默"（`#:idle`），不是 DA1 早停：xterm.js 等回复非严格有序，早停会漏读并泄漏给 shell。
+- tmux/screen 会拦截并自答 DA2/DECRQM；那反映 mux 的能力（正确行为）。`caps-tmux?` 可识别。
+- `#:kitty-graphics? #t` 会发 APC 查询；不消费 APC 的终端可能把字节泄漏到屏幕，故默认关闭。
+- 终止用"读到静默"（`#:idle`），不是 DA1 早停：回复非严格有序，早停会漏读并泄漏给 shell。

@@ -13,7 +13,7 @@
 (provide private-mode-groups ansi-mode-groups special-groups
          all-private-groups all-ansi-groups all-special-groups
          profile-groups default-profile
-         group-private-modes group-ansi-modes group-special?)
+         group-private-modes group-ansi-modes)
 
 ;; ── DEC 私有模式分组（合起来 = modes.rkt 的全部 82 个）──
 (define private-mode-groups
@@ -80,6 +80,3 @@
    (apply append
           (for/list ([g (in-list groups)])
             (cond [(assoc g ansi-mode-groups) => cdr] [else '()])))))
-
-(define (group-special? groups g)
-  (and (memq g groups) #t))

@@ -31,8 +31,18 @@
 (define (say . xs) (for-each display xs) (display "\r\n") (flush-output))
 (define (env-or k) (or (getenv k) "-"))
 (define (fmt-nums ns) (string-join (map number->string ns) ";"))
-(define (pad s n) (~a s #:min-width n))
+
+;; 显示宽度：CJK 算 2 列，其余算 1（用于列对齐）
+(define (char-width c)
+  (define n (char->integer c))
+  (if (or (<= #x1100 n #x115F) (<= #x2E80 n #xA4CF) (<= #xAC00 n #xD7A3)
+          (<= #xF900 n #xFAFF) (<= #xFE30 n #xFE4F) (<= #xFF00 n #xFF60)
+          (<= #xFFE0 n #xFFE6))
+      2 1))
+(define (str-width s) (for/sum ([c (in-string s)]) (char-width c)))
+(define (pad s n) (string-append s (make-string (max 0 (- n (str-width s))) #\space)))
 (define (pair->s p) (if p (format "~a x ~a" (car p) (cdr p)) "-"))
+(define (lst->s l) (if (null? l) "-" (string-join l ", ")))
 
 (define (state-label st)
   (case st
@@ -66,29 +76,29 @@
   (define probe-ms (- (current-inexact-milliseconds) t0))
 
   (say (format "== 身份 ==   (探测耗时 ~a ms)" (real->decimal-string probe-ms 1)))
-  (say (format "  id        : ~a   (来源 ~a)" (terminal-caps-id caps) (terminal-caps-id-source caps)))
-  (when (terminal-caps-name caps)
-    (say (format "  name/ver  : ~a / ~a" (terminal-caps-name caps) (terminal-caps-version caps))))
-  (say (format "  tmux?     : ~a" (terminal-caps-tmux? caps)))
-  (say (format "  XTVERSION : ~a" (or (terminal-caps-xtversion caps) "-")))
-  (say (format "  DA1       : ~a" (map fmt-nums (terminal-caps-da1 caps))))
-  (say (format "  DA1 特性  : ~a" (caps-da1-features caps)))
-  (say (format "  DA2       : ~a   型号: ~a" (map fmt-nums (terminal-caps-da2 caps)) (or (caps-da2-model caps) "-")))
-  (say (format "  DA3       : ~a" (da3-show (terminal-caps-da3 caps))))
-  (define tc (terminal-caps-xtgettcap caps))
+  (say (format "  id        : ~a   (来源 ~a)" (caps-id caps) (caps-id-source caps)))
+  (when (caps-name caps)
+    (say (format "  name/ver  : ~a / ~a" (caps-name caps) (caps-version caps))))
+  (say (format "  tmux?     : ~a" (caps-tmux? caps)))
+  (say (format "  XTVERSION : ~a" (or (caps-xtversion caps) "-")))
+  (say (format "  DA1       : ~a" (lst->s (map fmt-nums (caps-da1 caps)))))
+  (say (format "  DA1 属性  : ~a" (lst->s (caps-da1-attrs caps))))
+  (say (format "  DA2       : ~a   型号: ~a" (lst->s (map fmt-nums (caps-da2 caps))) (or (caps-da2-model caps) "-")))
+  (say (format "  DA3       : ~a" (da3-show (caps-da3 caps))))
+  (define tc (caps-xtgettcap caps))
   (say (format "  XTGETTCAP : ~a"
                (cond
-                 [(not (terminal-caps-xtgettcap? caps)) "（未实现 DCS +q）"]
+                 [(not (caps-xtgettcap? caps)) "（未实现 DCS +q）"]
                  [(zero? (hash-count tc)) "（有回复，但所查名字都未找到）"]
                  [else (string-join (for/list ([(k v) (in-hash tc)])
                                       (format "~a=~a" k (if (string? v) v "(有)"))) "  ")])))
   (say "")
 
   (say "== 尺寸 ==")
-  (say (format "  文本区 cells : ~a" (pair->s (terminal-caps-text-size caps))))
-  (say (format "  文本区 pixels: ~a" (pair->s (terminal-caps-pixel-size caps))))
-  (say (format "  单元 pixels  : ~a" (pair->s (terminal-caps-cell-size caps))))
-  (say (format "  DSR 光标     : ~a" (pair->s (terminal-caps-cursor caps))))
+  (say (format "  文本区 cells : ~a" (pair->s (caps-text-size caps))))
+  (say (format "  文本区 pixels: ~a" (pair->s (caps-pixel-size caps))))
+  (say (format "  单元 pixels  : ~a" (pair->s (caps-cell-size caps))))
+  (say (format "  DSR 光标     : ~a" (pair->s (caps-cursor caps))))
   (say "")
 
   (define (mode-table title modes ansi?)
@@ -116,14 +126,19 @@
   (say "")
 
   (say "== 颜色 (OSC) ==")
-  (say (format "  fg(10) : ~a" (or (caps-color caps 10) "-")))
-  (say (format "  bg(11) : ~a" (or (caps-color caps 11) "-")))
-  (say (format "  cur(12): ~a" (or (caps-color caps 12) "-")))
-  (say (format "  osc-rgb? : ~a   真彩(XTGETTCAP RGB/Tc): ~a   色数(Co): ~a"
-               (caps-osc-rgb? caps)
-               (case (caps-truecolor caps) [(#t) "#t"] [(#f) "#f"] [else "未知(无 XTGETTCAP)"])
+  (define (color-line label code)
+    (define s (caps-color caps code))
+    (define rgb (caps-color-rgb caps code))
+    (say (format "  ~a: ~a~a" label (or s "-")
+                 (if rgb (format "   (~a,~a,~a)" (car rgb) (cadr rgb) (caddr rgb)) ""))))
+  (color-line "fg(10) " 10)
+  (color-line "bg(11) " 11)
+  (color-line "cur(12)" 12)
+  (say (format "  色深: ~a   osc-rgb?: ~a   真彩(XTGETTCAP RGB/Tc): ~a   色数(Co): ~a"
+               (caps-color-level caps) (caps-osc-rgb? caps)
+               (case (caps-truecolor caps) [(#t) "#t"] [(#f) "#f"] [else "未知"])
                (or (caps-colors-count caps) "-")))
-  (define pal (terminal-caps-palette caps))
+  (define pal (caps-palette caps))
   (when (positive? (hash-count pal))
     (say (format "  调色板 : ~a"
                  (string-join (for/list ([i (in-range 16)])
@@ -131,16 +146,16 @@
   (say "")
 
   (say "== kitty ==")
-  (say (format "  键盘 flags : ~a" (or (terminal-caps-kitty-flags caps) "（无回复）")))
-  (say (format "  modifyOtherKeys : ~a" (or (terminal-caps-xtmodkeys caps) "（无回复）")))
+  (say (format "  键盘 flags : ~a" (or (caps-kitty-flags caps) "（无回复）")))
+  (say (format "  modifyOtherKeys : ~a" (or (caps-xtmodkeys caps) "（无回复）")))
   (say (format "  graphics   : ~a" (if kitty-graphics?
-                                       (terminal-caps-kitty-graphics? caps)
+                                       (caps-kitty-graphics? caps)
                                        "（未查询）")))
   (say "")
 
   (when raw?
     (say "== 原始回复 ==")
-    (say (format "  ~s" (terminal-caps-raw caps)))
+    (say (format "  ~s" (caps-raw caps)))
     (say "")))
 
 (define (main)

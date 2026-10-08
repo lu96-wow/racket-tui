@@ -1,44 +1,58 @@
 #lang racket
 
 ;; ════════════════════════════════════════════════════════════════
-;; terminal-support/query.rkt
+;; terminal-support/query.rkt —— 查询原语
 ;;
-;; 终端查询序列的构造 + 回复解析（纯函数：无 I/O、无 FFI）。
+;; 三层内容，都围绕"终端查询"这一概念：
+;;   1. 单元类型：`query` = (id request parse)
+;;   2. 请求构造：`*-request`（返回发送字节）
+;;   3. 回复解析：`parse-*` + 复用取值函数（从整段原始回复取单项）
 ;;
-;; 这些序列/判定的正确实现取自现成开源项目：
-;;   · xterm ctlseqs          https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
-;;   · kitty keyboard         https://sw.kovidgoyal.net/kitty/keyboard-protocol/
-;;   · ncurses u6..u9         man 5 user_caps / terminfo(5)
-;;   · notcurses termdesc.c   IDQUERIES = DA3 + XTVERSION + XTGETTCAP + DA2
-;;   · crossterm unix.rs      kitty 探测 = "CSI ?u" + "CSI c" 哨兵
-;;   · termwiz caps/probed.rs XTVERSION 探测 + DA1 哨兵
-;;   · Vim term.c             DECRQM(2026/2048) + builtin kitty/modifyOtherKeys
+;; 纯函数、无 I/O。
+;;
+;; 序列/判定来源：xterm ctlseqs、kitty keyboard、ncurses u6..u9、
+;; notcurses termdesc.c、crossterm unix.rs、termwiz caps/probed.rs、Vim term.c。
 ;; ════════════════════════════════════════════════════════════════
 
 (require racket/string)
 
-(provide ESC ST BEL
-         ;; 查询构造
-         da1-query da2-query da3-query xtversion-query
-         dsr-query kitty-flags-query kitty-graphics-query xtmodkeys-query
-         decrqm-private-query decrqm-ansi-query
-         xtgettcap-query osc-color-query osc-palette-query
-         text-area-size-query text-area-pixel-size-query cell-pixel-size-query
-         ;; 解析
-         parse-da1 parse-da2 parse-da3 parse-xtversion parse-dcs
-         parse-dsr parse-kitty-flags parse-apc kitty-graphics-ok? parse-xtmodkeys
-         parse-decrqm-private parse-decrqm-ansi
-         parse-xtgettcap parse-osc parse-window-reports
-         da1-reply?
-         ;; 复用取值函数（从整段原始回复里取单项；供 spec 的 parse 用）
-         decrqm-private-pm decrqm-ansi-pm
-         osc-value osc-palette-value window-size
-         xtgettcap-lookup cursor-position kitty-flags-value
-         ;; 辅助
-         bytes->hex hex->bytes pm->state pm->label
-         split-name-version)
+(provide
+ ;; 单元类型
+ (struct-out query)
+ ;; 字节常量
+ ESC ST BEL
+ ;; 请求构造（发送字节）
+ da1-request da2-request da3-request xtversion-request
+ dsr-request kitty-flags-request kitty-graphics-request xtmodkeys-request
+ decrqm-private-request decrqm-ansi-request
+ xtgettcap-request osc-color-request osc-palette-request
+ text-area-size-request text-area-pixel-size-request cell-pixel-size-request
+ ;; 回复解析（整段原始回复）
+ parse-da1 parse-da2 parse-da3 parse-xtversion parse-dcs
+ parse-dsr parse-kitty-flags parse-apc kitty-graphics-ok? parse-xtmodkeys
+ parse-decrqm-private parse-decrqm-ansi
+ parse-xtgettcap parse-osc parse-window-reports
+ da1-reply?
+ ;; 复用取值函数（供 query 的 parse 用）
+ decrqm-private-pm decrqm-ansi-pm
+ osc-value osc-palette-value window-size
+ xtgettcap-lookup cursor-position kitty-flags-value
+ ;; 辅助
+ bytes->hex hex->bytes split-name-version)
 
-;; ── 基础字节 ──
+;; ════════════════════════════════════════════════════════════════
+;; 单元类型
+;; ════════════════════════════════════════════════════════════════
+
+;; id      : 结果键（symbol 或 (cons 类别 参数)），在结果 hash 中唯一
+;; request : bytes —— 发送字节
+;; parse   : (-> bytes any/c) —— 拿到整段原始回复，取出本项的值
+(struct query (id request parse) #:transparent)
+
+;; ════════════════════════════════════════════════════════════════
+;; 基础字节
+;; ════════════════════════════════════════════════════════════════
+
 (define ESC (bytes 27))
 (define ST  (bytes 27 92))   ; ESC \
 (define BEL (bytes 7))
@@ -46,70 +60,69 @@
 (define (b->s b) (bytes->string/latin-1 b))
 (define (s->b s) (string->bytes/latin-1 s))
 
-;; Racket 正则不支持 \x1b / \xHH(\d 也不支持)，ESC 只能 regexp-quote 真字符
+;; Racket 正则不支持 \x1b / \xHH（\d 也不支持），ESC 只能 regexp-quote 真字符
 (define ESC-C (string (integer->char 27)))
 (define BEL-C (string (integer->char 7)))
 (define ESC-Q (regexp-quote ESC-C))
 (define (rx . parts) (regexp (apply string-append ESC-Q parts)))
 
 ;; ════════════════════════════════════════════════════════════════
-;; 查询构造
+;; 请求构造
 ;; ════════════════════════════════════════════════════════════════
 
 ;; Device Attributes
-(define (da1-query) (bytes-append ESC (s->b "[c")))       ; Primary  (哨兵)
-(define (da2-query) (bytes-append ESC (s->b "[>c")))      ; Secondary (身份，放最后问)
-(define (da3-query) (bytes-append ESC (s->b "[=c")))      ; Tertiary  (VTE 识别)
+(define (da1-request) (bytes-append ESC (s->b "[c")))       ; Primary  (哨兵)
+(define (da2-request) (bytes-append ESC (s->b "[>c")))      ; Secondary (身份)
+(define (da3-request) (bytes-append ESC (s->b "[=c")))      ; Tertiary  (VTE 识别)
 
 ;; XTVERSION：名字+版本
-(define (xtversion-query) (bytes-append ESC (s->b "[>0q")))
+(define (xtversion-request) (bytes-append ESC (s->b "[>0q")))
 
-;; DSR：光标位置（= ncurses u6/u7，取尺寸兜底）
-(define (dsr-query) (bytes-append ESC (s->b "[6n")))
+;; DSR：光标位置（= ncurses u6/u7）
+(define (dsr-request) (bytes-append ESC (s->b "[6n")))
 
 ;; kitty 键盘渐进增强 flags
-(define (kitty-flags-query) (bytes-append ESC (s->b "[?u")))
+(define (kitty-flags-request) (bytes-append ESC (s->b "[?u")))
 
-;; modifyOtherKeys 级别查询（xterm 377+；Vim 的 t_CRK）
-(define (xtmodkeys-query) (bytes-append ESC (s->b "[?4m")))
+;; modifyOtherKeys 级别（xterm 377+；Vim 的 t_CRK）
+(define (xtmodkeys-request) (bytes-append ESC (s->b "[?4m")))
 
 ;; DECRQM：某模式是否被识别/置位
-(define (decrqm-private-query mode) (bytes-append ESC (s->b (format "[?~a$p" mode))))
-(define (decrqm-ansi-query mode)    (bytes-append ESC (s->b (format "[~a$p" mode))))
+(define (decrqm-private-request mode) (bytes-append ESC (s->b (format "[?~a$p" mode))))
+(define (decrqm-ansi-request mode)    (bytes-append ESC (s->b (format "[~a$p" mode))))
 
-;; XTGETTCAP：直接查 terminfo 能力（名字按字节 hex，多个用 ';' 分隔）
+;; XTGETTCAP：查 terminfo 能力（名字按字节 hex，多个用 ';' 分隔）
 (define (byte->hex2 x)
   (string-upcase (if (< x 16)
                      (string-append "0" (number->string x 16))
                      (number->string x 16))))
 (define (bytes->hex b)
   (apply string-append (for/list ([x (in-bytes b)]) (byte->hex2 x))))
-
-(define (xtgettcap-query names)   ; names : (listof string)
+(define (xtgettcap-request names)   ; names : (listof string)
   (bytes-append ESC (s->b "P+q")
                 (s->b (string-join (for/list ([n (in-list names)])
                                      (bytes->hex (s->b n))) ";"))
                 ST))
 
 ;; OSC 颜色查询：10=前景 11=背景 12=光标
-(define (osc-color-query n)
+(define (osc-color-request n)
   (bytes-append ESC (s->b (format "]~a;?" n)) ST))
 
 ;; OSC 4：调色板第 i 号色
-(define (osc-palette-query i)
+(define (osc-palette-request i)
   (bytes-append ESC (s->b (format "]4;~a;?" i)) ST))
 
-;; XTWINOPS 尺寸查询（termwiz 也用）
-(define (text-area-size-query)       (bytes-append ESC (s->b "[18t")))  ; → CSI 8;rows;cols t
-(define (text-area-pixel-size-query) (bytes-append ESC (s->b "[14t")))  ; → CSI 4;h;w t
-(define (cell-pixel-size-query)      (bytes-append ESC (s->b "[16t")))  ; → CSI 6;h;w t
+;; XTWINOPS 尺寸查询
+(define (text-area-size-request)       (bytes-append ESC (s->b "[18t")))  ; → CSI 8;rows;cols t
+(define (text-area-pixel-size-request) (bytes-append ESC (s->b "[14t")))  ; → CSI 4;h;w t
+(define (cell-pixel-size-request)      (bytes-append ESC (s->b "[16t")))  ; → CSI 6;h;w t
 
 ;; kitty 图形协议查询（APC，默认不发：不消费 APC 的终端会把字节泄漏到屏幕）
-(define kitty-graphics-query
+(define (kitty-graphics-request)
   (bytes-append ESC (bytes 95) (s->b "Gi=1,a=q;") ST))   ; ESC _ G i=1,a=q; ESC \
 
 ;; ════════════════════════════════════════════════════════════════
-;; 解析 —— 全部作用在"累积的原始回复字节"上
+;; 回复解析 —— 全部作用在"整段累积的原始回复字节"上
 ;; ════════════════════════════════════════════════════════════════
 
 ;; regexp-match* 只返回整串（不含捕获组），故逐串再用 regexp-match 取组
@@ -214,7 +227,7 @@
     (values (string->number (cadr m))
             (cons (string->number (caddr m)) (string->number (cadddr m))))))
 
-;; DA1 回复是否已出现：CSI ? ... c  （用作收尾哨兵）
+;; DA1 回复是否已出现：CSI ? ... c  （可用作收尾哨兵）
 (define da1-reply-rx (rx "\\[\\?[0-9;]*c"))
 (define (da1-reply? b)
   (regexp-match? da1-reply-rx (b->s b)))
@@ -260,19 +273,6 @@
   (list->bytes
    (for/list ([i (in-range 0 n 2)])
      (string->number (substring h i (+ i 2)) 16))))
-
-;; Pm 值 → 原始状态符号（不合并，保留语义）
-(define (pm->state pm)
-  (case pm
-    [(1) 'set] [(2) 'reset]
-    [(3) 'permanently-set] [(4) 'permanently-reset]
-    [(0) 'unrecognized] [else 'unknown]))
-
-(define (pm->label pm)
-  (case pm
-    [(0) "not recognized"] [(1) "set"] [(2) "reset"]
-    [(3) "permanently set"] [(4) "permanently reset"]
-    [else "?"]))
 
 ;; "VTE(8001)" → (values "VTE" "8001")；无括号则 (values s #f)
 (define (split-name-version s)

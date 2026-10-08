@@ -21,7 +21,7 @@
 (require racket/port
          "query.rkt")
 
-(provide read-reply exchange-queries exchange-queries/one)
+(provide read-reply exchange-queries)
 
 ;; 读到「done? 命中」或「idle 秒内无新数据」或总 timeout 为止，返回累积字节串。
 (define (read-reply #:timeout [timeout 0.30] #:idle [idle 0.05] #:done? [done? #f])
@@ -67,8 +67,3 @@
     (write-bytes q (current-output-port)))
   (flush-output)
   (read-reply #:timeout timeout #:idle idle #:done? done?))
-
-;; 单个查询的便捷封装（默认读到 idle；除非自身就是 DA1）。
-(define (exchange-queries/one query #:timeout [timeout 0.30] #:idle [idle 0.05]
-                              #:done? [done? #f])
-  (exchange-queries (list query) #:timeout timeout #:idle idle #:done? done?))
