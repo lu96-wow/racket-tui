@@ -38,7 +38,9 @@
  osc-value osc-palette-value window-size
  xtgettcap-lookup cursor-position kitty-flags-value
  ;; 辅助
- bytes->hex hex->bytes split-name-version vis-string)
+ bytes->hex hex->bytes split-name-version vis-string
+ ;; 颜色值解析
+ parse-color-string hex-comp->byte)
 
 ;; ════════════════════════════════════════════════════════════════
 ;; 单元类型
@@ -99,6 +101,8 @@
 (define (bytes->hex b)
   (apply string-append (for/list ([x (in-bytes b)]) (byte->hex2 x))))
 (define (xtgettcap-request names)   ; names : (listof string)
+  (when (null? names)
+    (error 'xtgettcap-request "至少需要一个 terminfo 能力名"))
   (bytes-append ESC (s->b "P+q")
                 (s->b (string-join (for/list ([n (in-list names)])
                                      (bytes->hex (s->b n))) ";"))
@@ -191,16 +195,20 @@
     (substring body 2)))
 
 ;; XTGETTCAP 回复体："[01]+rNAMEHEX[=VALUEHEX]"
-;; → (listof (list name found? value-or-#f))
+;; → (listof (list name found? value-or-#f))；畸形的体（非 hex / 奇数长度）直接跳过，
+;; 不让终端的坏字节把解析变成异常。
 (define xtgettcap-body-rx
   #px"^([01])\\+r([0-9A-Fa-f]+)(?:=([0-9A-Fa-f]+))?$")
 (define (parse-xtgettcap b)
-  (for/list ([body (in-list (parse-dcs b))]
-             #:when (regexp-match? #px"^[01]\\+r" body))
-    (define m (regexp-match xtgettcap-body-rx body))
-    (define name  (b->s (hex->bytes (caddr m))))
-    (define value (and (cadddr m) (b->s (hex->bytes (cadddr m)))))
-    (list name (equal? (cadr m) "1") value)))
+  (filter values
+          (for/list ([body (in-list (parse-dcs b))])
+            (define m (regexp-match xtgettcap-body-rx body))
+            (define nb (and m (hex->bytes (caddr m))))
+            (define vb (and m (cadddr m) (hex->bytes (cadddr m))))
+            (and nb
+                 (list (b->s nb)
+                       (equal? (cadr m) "1")
+                       (and vb (b->s vb)))))))
 
 ;; OSC ... (BEL | ST) → (listof content-string)  例："10;rgb:ffff/ffff/ffff"
 (define osc-rx
@@ -258,9 +266,10 @@
 
 (define (window-size raw code) (hash-ref (parse-window-reports raw) code #f))
 
+;; 命中 → 值(string) 或 #t（命中但无值）；未命中（含 "0+rNAME"）→ #f
 (define (xtgettcap-lookup raw name)
   (for/first ([e (in-list (parse-xtgettcap raw))] #:when (string=? (car e) name))
-    (and (cadr e) (caddr e))))
+    (and (cadr e) (or (caddr e) #t))))
 
 (define (cursor-position raw)
   (for/first ([c (in-list (parse-dsr raw))]) c))
@@ -272,11 +281,36 @@
 ;; 辅助
 ;; ════════════════════════════════════════════════════════════════
 
+;; 十六进制串 → bytes；非 hex 或奇数长度返回 #f（不抛异常，供解析坏回复时使用）
 (define (hex->bytes h)
-  (define n (- (string-length h) (remainder (string-length h) 2)))
-  (list->bytes
-   (for/list ([i (in-range 0 n 2)])
-     (string->number (substring h i (+ i 2)) 16))))
+  (and (regexp-match? #px"^(?:[0-9A-Fa-f]{2})*$" h)
+       (list->bytes
+        (for/list ([i (in-range 0 (string-length h) 2)])
+          (string->number (substring h i (+ i 2)) 16)))))
+
+;; 单个十六进制色分量 → 0-255
+(define (hex-comp->byte h)
+  (define n (string->number h 16))
+  (case (string-length h)
+    [(1) (* n 17)]
+    [(2) n]
+    [(3) (quotient n 16)]
+    [(4) (quotient n 256)]
+    [else (quotient (* n 255) (sub1 (expt 16 (string-length h))))]))
+
+;; OSC 颜色值（"rgb:rrrr/gggg/bbbb" 或 "#rrggbb"）→ (list r g b)，分量 0-255；不可解析则 #f。
+(define (parse-color-string s)
+  (cond
+    [(regexp-match #px"^rgb:([0-9A-Fa-f]+)/([0-9A-Fa-f]+)/([0-9A-Fa-f]+)$" s)
+     => (λ (m) (list (hex-comp->byte (cadr m))
+                     (hex-comp->byte (caddr m))
+                     (hex-comp->byte (cadddr m))))]
+    [(regexp-match #px"^#([0-9A-Fa-f]{6})$" s)
+     => (λ (m) (define h (cadr m))
+          (list (string->number (substring h 0 2) 16)
+                (string->number (substring h 2 4) 16)
+                (string->number (substring h 4 6) 16)))]
+    [else #f]))
 
 ;; "VTE(8001)" → (values "VTE" "8001")；无括号则 (values s #f)
 (define (split-name-version s)

@@ -11,10 +11,11 @@
 
 | 文件 | 层 | 职责 |
 |------|----|------|
-| `query.rkt` | 查询原语 | 单元类型 `query` + 请求构造 `*-request` + 解析 `parse-*` + 取值函数（纯函数） |
+| `query.rkt` | 查询原语 | 单元类型 `query` + 请求构造 `*-request` + 解析 `parse-*` + 取值函数 + 颜色值解析（纯函数） |
 | `io.rkt` | 传输 | `exchange-queries` / `read-reply`：一次写出、一次读回 |
 | `modes.rkt` | 表 | 模式编号 ↔ 名称；`all-private-modes` / `all-ansi-modes` |
 | `device-attrs.rkt` | 表 | DA1/DA2 码 ↔ 名称 |
+| `env.rkt` | 环境事实 | `env-snapshot` / `detect-mux` / `env-ssh?` |
 | `groups.rkt` | 表 | 查询分组 + profile |
 | `catalog.rkt` | 查询目录+默认表 | `*-query` 构造器 + `*-queries` 表 + `group->queries` |
 | `run.rkt` | 按表查询 | `run-queries` / `run-queries/raw` |

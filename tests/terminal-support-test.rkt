@@ -89,6 +89,9 @@
   (check-equal? (xtgettcap-lookup (B (j E "P1+r544E=565445" E "\\")) "TN") "VTE" "xtgettcap-lookup")
   (check-equal? (cursor-position (B (j E "[9;2R"))) (cons 9 2) "cursor-position")
   (check-equal? (kitty-flags-value (B (j E "[?3u"))) 3 "kitty-flags-value")
+  (check-equal? (parse-color-string "rgb:cccc/cccc/cccc") '(204 204 204) "parse-color-string: rgb:")
+  (check-equal? (parse-color-string "#0a141e") '(10 20 30) "parse-color-string: #rrggbb")
+  (check-equal? (parse-color-string "garbage") #f "parse-color-string: 非法 -> #f")
   (check-equal? (bytes->hex (string->bytes/utf-8 "TN")) "544E" "bytes->hex")
   (check-equal? (hex->bytes "544E") (string->bytes/utf-8 "TN") "hex->bytes")
   (check-equal? (call-with-values (λ () (split-name-version "xterm.js(6.1)")) list)
@@ -96,6 +99,23 @@
   (check-equal? (vis-string (string-append (string (integer->char 27)) "[9m")) "^[[9m" "vis-string: ESC")
   (check-equal? (vis-string (string (integer->char 7))) "^G" "vis-string: BEL")
   (check-equal? (vis-string "abc") "abc" "vis-string: 明文")
+
+  ;; ══════════════════════════════════════════════════════════════
+  ;; 3.5 健壮性 / 错误处理（不因坏回复抛异常；坏输入明确报错）
+  ;; ══════════════════════════════════════════════════════════════
+  (check-equal? (parse-xtgettcap (B (j E "P1+rG" E "\\"))) '() "XTGETTCAP: 非 hex 体被跳过")
+  (check-equal? (parse-xtgettcap (B (j E "P1+rABC" E "\\"))) '() "XTGETTCAP: 奇数长度 hex 被跳过")
+  (check-equal? (hex->bytes "ABC") #f "hex->bytes: 奇数长度 -> #f")
+  (check-equal? (hex->bytes "GG") #f "hex->bytes: 非 hex -> #f")
+  (check-equal? (xtgettcap-lookup (B (j E "P1+r544E" E "\\")) "TN") #t
+                "xtgettcap-lookup: 命中但无值 -> #t")
+  (check-equal? (xtgettcap-lookup (B (j E "P0+r544E" E "\\")) "TN") #f
+                "xtgettcap-lookup: 0+r（未找到）-> #f")
+  (check-exn exn? (λ () (group->queries '(identityy))) "未知组名报错")
+  (check-exn exn? (λ () (xtgettcap-request '())) "空 XTGETTCAP 名单报错")
+  (check-false (caps-mux (caps-from (j E "[>c"))) "空 DA2 参数不崩溃")
+  (check-equal? (caps-color-level (caps-from (j E "[?1;2c") #:env (hash "COLORTERM" "TrueColor")))
+                'truecolor "COLORTERM 大小写不敏感")
 
   ;; ══════════════════════════════════════════════════════════════
   ;; 4. 组装 + 访问

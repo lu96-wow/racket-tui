@@ -21,9 +21,17 @@
   (define ids (for/list ([q (in-list queries)]) (query-id q)))
   (define dup (check-duplicates ids))
   (when dup
-    (error 'run-queries
+    (error 'check-query-ids
            "duplicate query id: ~a（表的 id 必须唯一；同一查询不要放两次）" dup))
   ids)
+
+;; 单个 query 解析；把异常补上 query id 上下文，而非丢出一个无头错误。
+(define (parse-query q raw)
+  (with-handlers ([exn:fail?
+                   (λ (e)
+                     (error 'run-queries "query ~a 解析回复失败: ~a"
+                            (query-id q) (exn-message e)))])
+    ((query-parse q) raw)))
 
 ;; → (values raw-bytes result-hash)   result-hash : id -> value
 (define (run-queries/raw queries
@@ -36,7 +44,7 @@
                                 #:timeout timeout #:idle idle #:done? done?))
   (values raw
           (for/hash ([q (in-list queries)])
-            (values (query-id q) ((query-parse q) raw)))))
+            (values (query-id q) (parse-query q raw)))))
 
 ;; → result-hash
 (define (run-queries queries

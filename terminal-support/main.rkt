@@ -8,6 +8,7 @@
 ;;   io.rkt          传输：一次写出、一次读回
 ;;   modes.rkt       表：模式编号↔名称（纯数据）
 ;;   device-attrs.rkt表：DA1/DA2 码↔名称（纯数据）
+;;   env.rkt         环境事实：env-snapshot / detect-mux / env-ssh?
 ;;   groups.rkt      表：查询分组 + profile（纯数据）
 ;;   catalog.rkt     查询目录 + 默认表（*-query / *-queries / group->queries）
 ;;   run.rkt         按表查询（run-queries）
@@ -20,6 +21,7 @@
          "io.rkt"
          "modes.rkt"
          "device-attrs.rkt"
+         "env.rkt"
          "groups.rkt"
          "catalog.rkt"
          "run.rkt"
@@ -33,6 +35,8 @@
  ;; 表：模式 / 设备属性 / 分组
  (all-from-out "modes.rkt")
  (all-from-out "device-attrs.rkt")
+ ;; 环境事实
+ (all-from-out "env.rkt")
  (all-from-out "groups.rkt")
  ;; 查询目录 + 默认表
  (all-from-out "catalog.rkt")

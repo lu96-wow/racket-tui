@@ -27,6 +27,21 @@
  mode-queries color-queries size-queries
  group->queries profile->queries default-queries)
 
+;; ════════════════════════════════════════════════════════════════
+;; 分组名校验（避免把拼错的组名静默忽略）
+;; ════════════════════════════════════════════════════════════════
+
+(define all-query-groups
+  (remove-duplicates
+   (append all-private-groups all-ansi-groups all-special-groups)))
+
+(define (check-groups groups)
+  (for ([g (in-list groups)])
+    (unless (memq g all-query-groups)
+      (error 'group->queries "unknown query group: ~a\n  known: ~a"
+             g all-query-groups)))
+  groups)
+
 ;; ── 身份 / 设备属性 ──
 (define (da1-query)       (query 'da1       (da1-request)       parse-da1))
 (define (da2-query)       (query 'da2       (da2-request)       parse-da2))
@@ -93,6 +108,7 @@
                         #:xtgettcap-names [xtgettcap-names default-xtgettcap-names]
                         #:palette-indices [palette-indices default-palette-indices]
                         #:kitty-graphics? [kitty-graphics? #f])
+  (check-groups groups)
   (define (want? g) (and (memq g groups) #t))
   (append (if (want? 'identity)  (identity-queries) '())
           (if (want? 'xtgettcap) (xtgettcap-queries xtgettcap-names) '())

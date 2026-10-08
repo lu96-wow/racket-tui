@@ -14,10 +14,11 @@
          racket/list
          "query.rkt"
          "modes.rkt"
-         "device-attrs.rkt")
+         "device-attrs.rkt"
+         "env.rkt")
 
 (provide (struct-out caps)
-         assemble-caps caps->hash env-snapshot
+         assemble-caps caps->hash
          caps-mux?
          caps-mode-pm caps-mode-state caps-mode-supported?
          caps-mode-recognized? caps-mode-on? caps-mode-settable? caps-mode-available?
@@ -26,39 +27,6 @@
          caps-color caps-palette-color caps-colors-count
          caps-color-rgb caps-palette-color-rgb
          caps-osc-rgb? caps-truecolor caps-truecolor? caps-color-level)
-
-;; ════════════════════════════════════════════════════════════════
-;; 环境快照（消费方也可自己构造同名 hash）
-;; ════════════════════════════════════════════════════════════════
-
-;; 影响能力解读的环境变量 → 快照 hash（值可为 #f）
-(define env-vars
-  '("TERM" "COLORTERM" "TMUX" "STY" "ZELLIJ"
-    "SSH_CONNECTION" "SSH_CLIENT" "SSH_TTY"))
-
-(define (env-snapshot)
-  (for/hash ([k (in-list env-vars)]) (values k (getenv k))))
-
-;; 多路复用器：拦载/代答终端查询，故 caps 描述的是它而非外层终端。
-;; 只能启发式；顺序 = 由内到外的常见假设。
-(define (detect-mux env xtv da2)
-  (define (v k) (hash-ref env k #f))
-  (define t (let ([term (v "TERM")]) (and term (string-downcase term))))
-  (cond
-    [(or (v "TMUX")
-         (and xtv (string-contains? (string-downcase xtv) "tmux"))
-         (and (pair? da2) (= (car (car da2)) 84))   ; notcurses: tmux 的 DA2 Pp=84
-         (and t (string-prefix? t "tmux")))
-     'tmux]
-    [(or (v "STY") (and t (string-prefix? t "screen")))  'screen]
-    [(v "ZELLIJ")                                        'zellij]
-    [else #f]))
-
-(define (env-ssh? env)
-  (or (and (hash-ref env "SSH_CONNECTION" #f) #t)
-      (and (hash-ref env "SSH_CLIENT" #f) #t)
-      (and (hash-ref env "SSH_TTY" #f) #t)
-      #f))
 
 ;; ════════════════════════════════════════════════════════════════
 ;; 能力表（纯数据）
@@ -119,9 +87,9 @@
   (define-values (id id-source)
     (cond [xtv                   (values xtv 'xtversion)]
           [(and tn (string? tn)) (values tn 'xtgettcap)]
-          [(pair? da2)           (values (format "DA2:~a"
-                                                 (string-join (map number->string (car da2)) ";"))
-                                         'da2)]
+          [(and (pair? da2) (pair? (car da2)))
+           (values (format "DA2:~a" (string-join (map number->string (car da2)) ";"))
+                   'da2)]
           [else                  (values "unknown" 'unknown)]))
   (define-values (nm ver)
     (if (eq? id-source 'xtversion) (split-name-version xtv) (values #f #f)))
@@ -197,29 +165,7 @@
 (define (caps-color caps code) (hash-ref (caps-osc caps) code #f))
 (define (caps-palette-color caps i) (hash-ref (caps-palette caps) i #f))
 
-;; OSC 颜色值（"rgb:rrrr/gggg/bbbb" 或 "#rrggbb"）→ (list r g b)，分量 0-255；不可解析则 #f。
-(define (hex-comp->byte h)
-  (define n (string->number h 16))
-  (case (string-length h)
-    [(1) (* n 17)]
-    [(2) n]
-    [(3) (quotient n 16)]
-    [(4) (quotient n 256)]
-    [else (quotient (* n 255) (sub1 (expt 16 (string-length h))))]))
-
-(define (parse-color-string s)
-  (cond
-    [(regexp-match #px"^rgb:([0-9A-Fa-f]+)/([0-9A-Fa-f]+)/([0-9A-Fa-f]+)$" s)
-     => (λ (m) (list (hex-comp->byte (cadr m))
-                     (hex-comp->byte (caddr m))
-                     (hex-comp->byte (cadddr m))))]
-    [(regexp-match #px"^#([0-9A-Fa-f]{6})$" s)
-     => (λ (m) (define h (cadr m))
-          (list (string->number (substring h 0 2) 16)
-                (string->number (substring h 2 4) 16)
-                (string->number (substring h 4 6) 16)))]
-    [else #f]))
-
+;; OSC 颜色值（"rgb:rrrr/gggg/bbbb" 或 "#rrggbb"）的解析在 query.rkt（parse-color-string）。
 (define (caps-color-rgb caps code)
   (define s (caps-color caps code))
   (and s (parse-color-string s)))
@@ -252,7 +198,7 @@
 (define (caps-color-level caps)
   (define tc (caps-xtgettcap caps))
   (define co (or (caps-colors-count caps) 0))
-  (define ct (caps-colorterm caps))
+  (define ct (let ([v (caps-colorterm caps)]) (and v (string-downcase v))))
   (define term (caps-term caps))
   (define (term-match? rx) (and term (regexp-match? rx (string-downcase term))))
   (cond
@@ -277,6 +223,9 @@
         'version       (caps-version c)
         'mux           (caps-mux c)
         'ssh?          (caps-ssh? c)
+        'da1           (caps-da1 c)
+        'da2           (caps-da2 c)
+        'da3           (caps-da3 c)
         'xtversion     (caps-xtversion c)
         'xtgettcap?    (caps-xtgettcap? c)
         'xtgettcap     (caps-xtgettcap c)
