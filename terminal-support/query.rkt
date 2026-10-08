@@ -20,16 +20,20 @@
 (provide ESC ST BEL
          ;; 查询构造
          da1-query da2-query da3-query xtversion-query
-         dsr-query kitty-flags-query kitty-graphics-query
+         dsr-query kitty-flags-query kitty-graphics-query xtmodkeys-query
          decrqm-private-query decrqm-ansi-query
          xtgettcap-query osc-color-query osc-palette-query
          text-area-size-query text-area-pixel-size-query cell-pixel-size-query
          ;; 解析
          parse-da1 parse-da2 parse-da3 parse-xtversion parse-dcs
-         parse-dsr parse-kitty-flags parse-apc kitty-graphics-ok?
+         parse-dsr parse-kitty-flags parse-apc kitty-graphics-ok? parse-xtmodkeys
          parse-decrqm-private parse-decrqm-ansi
          parse-xtgettcap parse-osc parse-window-reports
          da1-reply?
+         ;; 复用取值函数（从整段原始回复里取单项；供 spec 的 parse 用）
+         decrqm-private-pm decrqm-ansi-pm
+         osc-value osc-palette-value window-size
+         xtgettcap-lookup cursor-position kitty-flags-value
          ;; 辅助
          bytes->hex hex->bytes pm->state pm->label
          split-name-version)
@@ -65,6 +69,9 @@
 
 ;; kitty 键盘渐进增强 flags
 (define (kitty-flags-query) (bytes-append ESC (s->b "[?u")))
+
+;; modifyOtherKeys 级别查询（xterm 377+；Vim 的 t_CRK）
+(define (xtmodkeys-query) (bytes-append ESC (s->b "[?4m")))
 
 ;; DECRQM：某模式是否被识别/置位
 (define (decrqm-private-query mode) (bytes-append ESC (s->b (format "[?~a$p" mode))))
@@ -134,6 +141,12 @@
   (for/list ([m (in-list (all-matches (rx "\\[\\?([0-9]+)u") b))])
     (string->number (cadr m))))
 
+;; CSI > 4 ; Pv m → Pv （modifyOtherKeys 级别）
+(define xtmodkeys-rx (rx "\\[>4;([0-9]+)m"))
+(define (parse-xtmodkeys b)
+  (for/first ([m (in-list (all-matches xtmodkeys-rx b))])
+    (string->number (cadr m))))
+
 ;; CSI ? Ps;Pm $ y → (listof (cons mode Pm))
 (define (parse-decrqm-private b)
   (for/list ([m (in-list (all-matches (rx "\\[\\?([0-9]+);([0-9]+)\\$y") b))])
@@ -163,7 +176,7 @@
     (substring body 2)))
 
 ;; XTGETTCAP 回复体："[01]+rNAMEHEX[=VALUEHEX]"
-;; → (listof (list name value-or-#f))
+;; → (listof (list name found? value-or-#f))
 (define xtgettcap-body-rx
   #px"^([01])\\+r([0-9A-Fa-f]+)(?:=([0-9A-Fa-f]+))?$")
 (define (parse-xtgettcap b)
@@ -172,7 +185,7 @@
     (define m (regexp-match xtgettcap-body-rx body))
     (define name  (b->s (hex->bytes (caddr m))))
     (define value (and (cadddr m) (b->s (hex->bytes (cadddr m)))))
-    (list name value)))
+    (list name (equal? (cadr m) "1") value)))
 
 ;; OSC ... (BEL | ST) → (listof content-string)  例："10;rgb:ffff/ffff/ffff"
 (define osc-rx
@@ -205,6 +218,38 @@
 (define da1-reply-rx (rx "\\[\\?[0-9;]*c"))
 (define (da1-reply? b)
   (regexp-match? da1-reply-rx (b->s b)))
+
+;; ════════════════════════════════════════════════════════════════
+;; 复用取值函数 —— 从整段原始回复里取某一项
+;; ════════════════════════════════════════════════════════════════
+
+(define (decrqm-private-pm raw mode)
+  (for/first ([p (in-list (parse-decrqm-private raw))] #:when (= (car p) mode)) (cdr p)))
+
+(define (decrqm-ansi-pm raw mode)
+  (for/first ([p (in-list (parse-decrqm-ansi raw))] #:when (= (car p) mode)) (cdr p)))
+
+(define (osc-value raw code)
+  (define prefix (format "~a;" code))
+  (for/first ([s (in-list (parse-osc raw))] #:when (string-prefix? s prefix))
+    (substring s (string-length prefix))))
+
+(define (osc-palette-value raw idx)
+  (define prefix (format "4;~a;" idx))
+  (for/first ([s (in-list (parse-osc raw))] #:when (string-prefix? s prefix))
+    (substring s (string-length prefix))))
+
+(define (window-size raw code) (hash-ref (parse-window-reports raw) code #f))
+
+(define (xtgettcap-lookup raw name)
+  (for/first ([e (in-list (parse-xtgettcap raw))] #:when (string=? (car e) name))
+    (and (cadr e) (caddr e))))
+
+(define (cursor-position raw)
+  (for/first ([c (in-list (parse-dsr raw))]) c))
+
+(define (kitty-flags-value raw)
+  (for/first ([f (in-list (parse-kitty-flags raw))]) f))
 
 ;; ════════════════════════════════════════════════════════════════
 ;; 辅助
