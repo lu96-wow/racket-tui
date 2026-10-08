@@ -1,7 +1,8 @@
 # Char Backend（字符图后端）
 
 > 目标：把 tui 的输出渲染成**纯字符网格**，供 AI 调试 / 自动化测试 / 无终端（无 tty）环境使用。
-> 与真实终端后端 `tui` 同名同 API，**只改 require 路径即可切换**。
+> 与真实终端后端 `tui` 在输出 / 输入 / 样式 API 上同名同签名，**只改 require 路径即可切换**；
+> 终端能力探测（`probe-caps` / `features` / `current-features`）是终端专有，char 后端不提供。
 >
 > char 后端**不加载 termios / FFI**，因此可在任何平台和沙箱（非 Linux、CI、AI 运行环境）运行；
 > base 支持 Linux 与 Android/Termux（Termux 的 Racket BC 报 `os* = 'android`）。
@@ -336,6 +337,7 @@ char 后端的输入有两个语义：
 | alt buffer | 真正维护主/副双网格（`screen-alt-enable!/disable!`），语义对齐 base 的 `ESC[?1049h/l`：alt 期间主屏内容保留 |
 | 输入 | 事件模型/归一化逻辑自带（复制自 base，有对拍测试），**零 FFI**；`read-event/raw` / `read-event-noblock/raw` 为 base 专有（字节级读 stdin），char 不提供 |
 | 坐标系 | `get-cursor` 1-based，`screen-cursor` 0-based |
+| 能力探测 | `probe-caps` / `features` / `features-of` / `current-features` / `use-color-from-features!` 为 base 专有（char 后端没有终端可探测），char 不提供 |
 
 ---
 

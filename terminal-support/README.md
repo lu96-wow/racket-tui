@@ -95,7 +95,7 @@
 | 类别 | 内容 |
 |------|------|
 | 设备属性 | DA1 `CSI c`、DA2 `CSI > c`、DA3 `CSI = c` |
-| 身份 | XTVERSION `CSI > 0 q`、XTGETTCAP `DCS + q`（TN/Co/RGB/Tc/… 24 项） |
+| 身份 | XTVERSION `CSI > 0 q`、XTGETTCAP `DCS + q`（TN/Co/RGB/Tc/… 25 项） |
 | 模式 | DECRQM 逐项：82 个 DEC 私有 + 6 个 ANSI |
 | 键盘 | kitty `CSI ? u`、modifyOtherKeys `CSI ? 4 m`；kitty 图形 APC（默认不发） |
 | 颜色 | OSC 10/11/12、OSC 4 调色板 0–15 |

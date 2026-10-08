@@ -69,10 +69,10 @@ raco pkg install --link
 
 ## Char Backend (AI-driven debugging, no TTY)
 
-`tui/char` is a drop-in mirror of the whole API whose output goes to an in-memory
-character grid instead of the terminal. It renders each frame as plain text
-(no escape codes), which makes it easy for AI agents, tests and CI to inspect UI
-state without a terminal.
+`tui/char` is a drop-in mirror of the output / input / style API whose output
+goes to an in-memory character grid instead of the terminal. It renders each
+frame as plain text (no escape codes), which makes it easy for AI agents, tests
+and CI to inspect UI state without a terminal.
 
 ```racket
 (require tui)        ; real terminal
@@ -104,7 +104,9 @@ count = 42
 
 Highlights:
 
-- Same API, switch only by the `require` path — call sites stay unchanged.
+- Same API for output / input / styles — switch only by the `require` path, call
+  sites stay unchanged. Terminal capability probing (`probe-caps`, `features`,
+  `current-features`) is terminal-only and not provided by the char backend.
 - **No termios / FFI**: runs on any platform and sandbox (non-Linux, CI, AI
   environments); `tui` itself is Linux-only.
 - `format-*` returns ops instead of ANSI bytes, so there is **no ANSI parsing** on
@@ -420,6 +422,31 @@ key: 快捷回调（仅限无修饰命名键）> `#:text`（可打印且无 Ctrl
 
 > ⚠️ 不要在 body 里用 `(exit)` 退出——`exit` 会直接终止进程，**不会**运行清理（终端会留在 raw 模式/alt buffer）。
 > 需要退出时用 `running?` 标志 + `loop-input/stop`（见下方 Complete Example）。
+
+## 能力探测（Capability Detection）
+
+`tui-init` 在进入 raw 模式后、启用任何功能之前，先向终端发只读查询
+（DA1/DA2、DECRQM、XTGETTCAP、OSC、XTWINOPS），组装能力记录，再经 `features-of`
+得到一个**保守**的 `features` 值：不支持 / 未知一律视为关。**不读 `$TERM` 猜测。**
+alt 备用屏（1049）、SGR 鼠标（1006）、括号粘贴（2004）等只在被确认支持时才启用，
+退出时按逆序关闭。探测异常会降级为最保守默认，不会导致 TUI 起不来。
+
+```racket
+(with-tui
+ (λ ()
+   (define f (current-features))     ; 本次会话已确认的能力
+   (when (features-mouse? f) ...)    ; 按能力分支
+   ...))
+```
+
+- `(probe-caps #:in #:out #:profile #:env ...)` — 探测（须在 raw 模式后调用；异常返回 `#f`）。
+  默认查 `'standard` 档，覆盖 identity / XTGETTCAP / kitty / 颜色 / 尺寸 / 鼠标 / 粘贴 / 备用屏 / sync / 键盘模式。
+- `(features-of caps)` — 能力记录 → `features`（纯函数、保守）。
+- `(current-features)` — 当前会话的 `features`（`tui-init` 设置，`tui-exit` 恢复）。
+- `(features-color f)` — `'16` / `'256` / `'truecolor`；`tui-init` 据此用
+  `use-color-from-features!` 选命名样式的 registry。直接 `put-rgb-*` / `put-256-*` 不受影响（始终发出）。
+
+`tui/char` 后端不做探测（没有终端），不提供这些名字。
 
 ## Buffer
 

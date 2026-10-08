@@ -133,6 +133,7 @@ Knowing any one tier, the other two can be derived.
 @tabular[#:sep @hspace[1]
          (list (list @bold{Category} @bold{Representative functions})
                (list "Lifecycle" @elem{@racket[with-tui] @racket[tui-init] @racket[enable-mouse!]})
+               (list "Capabilities" @elem{@racket[current-features] @racket[features-of] @racket[probe-caps]})
                (list "Basic output" @elem{@racket[put] @racket[put-bytes] @racket[put-newline]})
                (list "Positioned output" @elem{@racket[put-at] @racket[put-at!]})
                (list "Cursor" @elem{@racket[cursor-move] @racket[put-cursor-save]})
@@ -154,9 +155,10 @@ restored whether the body returns normally or raises an exception. Exceptions
 from the body propagate outward; they are never swallowed.
 
 @defproc[(with-tui [body (-> any)]) any]{
-Enters raw mode with the alternate screen buffer, runs @racket[body], then
-restores the terminal (raw mode off, alt buffer disabled, mouse and bracketed
-paste off, cursor shown, colors reset).
+Probes terminal capabilities, enters raw mode with the alternate screen buffer,
+enables the supported features (alternate screen, mouse, bracketed paste), runs
+@racket[body], then restores the terminal (raw mode off, alt buffer disabled,
+mouse and bracketed paste off, cursor shown, colors reset).
 }
 
 @defproc[(with-tui-nobuffer [body (-> any)]) any]{
@@ -170,10 +172,11 @@ the terminal must display typed input while the program reads keys.
 }
 
 @defproc[(tui-init) void?]
-Initializes the terminal in raw mode with the alternate screen buffer.
-Raises an error if the current input port is not a terminal. If initialization
-fails partway, already-changed terminal state is rolled back before the error
-is re-raised.
+Probes the terminal's capabilities, derives a conservative @racket[features]
+value, and initializes the terminal in raw mode with the alternate screen
+buffer. Features the terminal does not support are left off. Raises an error if
+the current input port is not a terminal. If initialization fails partway,
+already-changed terminal state is rolled back before the error is re-raised.
 
 @defproc[(tui-exit) void?]
 Restores the terminal to its pre-@racket[tui-init] state. Idempotent: each
@@ -197,6 +200,46 @@ Disables mouse event tracking.
 Enables bracketed paste mode.
 @defproc[(disable-bracketed-paste!) void?]
 Disables bracketed paste mode.
+
+@subsection{Capability detection}
+
+Before enabling anything, @racket[tui-init] sends read-only queries to the
+terminal (DA1/DA2, DECRQM, XTGETTCAP, OSC, XTWINOPS), assembles a capability
+record, and derives a conservative @racket[features] value. Unsupported or
+unknown capabilities are treated as off; @envvar{TERM} is never consulted.
+
+@defproc[(probe-caps [#:in in input-port?]
+                     [#:out out output-port?]
+                     [#:profile profile symbol?]
+                     [#:env env hash?]
+                     [#:timeout timeout real?]
+                     [#:idle idle real?]
+                     [#:on-error on-error procedure?])
+         any/c]{
+Sends the @racket[profile] query set to @racket[out] and reads replies from
+@racket[in], returning the assembled capability record. Must run after raw mode
+is entered. Returns @racket[#f] on error (after calling @racket[on-error]), so
+callers can fall back to conservative defaults.
+}
+
+@defstruct*[features ([color (or/c '16 '256 'truecolor)]
+                      [mouse? boolean?]
+                      [paste? boolean?]
+                      [alt-screen? boolean?]
+                      [kitty-keys? boolean?]
+                      [sync? boolean?])]{
+A conservative description of terminal support.
+}
+
+@defproc[(features-of [caps any/c]) features?]{
+Derives @racket[features] from a capability record, treating unknown values as
+unsupported (@racket['16] for color, @racket[#f] otherwise).
+}
+
+@defparam[current-features f features?]{
+The features of the active session; set by @racket[tui-init] and restored by
+@racket[tui-exit].
+}
 
 @margin-note{
 Do not call @racket[(exit)] inside a @tt{with-tui} body: it terminates the
