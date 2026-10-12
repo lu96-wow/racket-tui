@@ -17,6 +17,21 @@ or
 raco pkg install racket-tui
 ```
 
+### Termux
+
+在 Termux 安装前需要先装 `libsqlite` 库，否则文档（Scribble）构建失败：
+
+```bash
+pkg install libsqlite
+raco pkg install racket-tui
+```
+
+或者跳过文档构建：
+
+```bash
+raco pkg install --no-docs racket-tui
+```
+
 包名由 `info.rkt` 指定为 `tui`，安装后：
 
 ```racket
