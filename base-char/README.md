@@ -193,15 +193,37 @@ char 后端的输入有两个语义：
 (read-event-noblock)          ; 非阻塞取一个
 ```
 
-`spec` 可以是：
+`spec` 支持一套刻意做得比 base 更好写的注入 DSL（详见 `base-char/io/event.rkt` 顶部注释）。
+修饰键是**粘性**的：作用于紧跟其后的按键 token，写了不带键会报错。
 
 | 形态 | 含义 |
 |---|---|
-| `event?` 结构体 | 原样入队，例如 `(key-event #\a no-mods)` |
-| `#\a` | 普通字符键 |
+| `"hello"` | 逐字符按键（支持 UTF-8），最常用 |
+| `#\a` / `#\你` | 单个字符键 |
 | `'enter` / `'up` / `'tab` … | 命名键 |
-| `(key mods)` | 带修饰键，例如 `(list #\a (mods #t #f #f))` |
-| `(type data mods)` | 低层 raw 形式，走 `normalize-event` |
+| `'ctrl #\c` / `'alt #\x` / `'shift 'up` | 粘性修饰键 + 按键（可叠加 `'ctrl 'alt #\x`） |
+| `'shift "abc"` | 修饰键作用于整串 |
+| `'key <key> [mods]` | 显式按键 + 显式 mods（与前缀粘性 mods 合并） |
+| `'text "abc"` | 同裸字符串 |
+| `'paste "a\nb"` | `paste-event` |
+| `'resize 40 120` | `resize-event` |
+| `'mouse 'press 'left 3 4` | `mouse-event`（`action button x y [mods]`，符号要引） |
+| `'utf8 "你"` | 走 `utf8` 归一化路径（可传 string 或 bytes） |
+| `event?` 结构体 | 原样入队，例如 `(key-event #\a no-mods)` |
+| `(key mods)` | 兼容旧写法，例如 `(list #\a (mods #t #f #f))` |
+| `(type data mods)` | 兼容旧写法，低层 raw → `normalize-event` |
+
+例（同一串）：
+
+```racket
+(char-input-push!
+ "he" #\l #\l #\o        ; 敲 "hello"
+ 'backspace               ; 删一个
+ 'shift "!"               ; shift + !
+ 'enter
+ 'paste " world"
+ 'ctrl #\c)               ; 退出
+```
 
 完整循环（无终端）：
 

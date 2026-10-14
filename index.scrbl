@@ -1169,9 +1169,27 @@ the same UI rendered through ops and through ANSI bytes must agree.
 @subsection{Scripted input and event loops}
 
 Input comes from a script queue rather than the terminal.
-@racket[(char-input-push! spec ...)] accepts an event struct, a character, a
-named-key symbol such as @racket['enter], a @racket[(key mods)] pair, or a raw
-@racket[(type data mods)] tuple.
+@racket[(char-input-push! spec ...)] takes a deliberately ergonomic spec DSL,
+where modifiers are sticky and apply to the next key token:
+
+@itemlist[
+  @item{@racket["hello"] --- type each character (UTF-8 ok);}
+  @item{@racket[#\a] / @racket['enter] --- a character or named key;}
+  @item{@racket['ctrl #\c], @racket['alt #\x], @racket['shift 'up],
+        @racket['ctrl 'alt #\x] --- modifier(s) + key;
+        @racket['shift "abc"] applies to a whole string;}
+  @item{@racket['key key [mods]] --- explicit key (mods merged with any sticky ones);}
+  @item{@racket['paste "a\nb"], @racket['resize 40 120],
+        @racket['mouse 'press 'left 3 4], @racket['utf8 "你"] ---
+        paste / resize / mouse / utf8 events;}
+  @item{an @racket[event?] struct is queued as-is; the legacy
+        @racket[(key mods)] and @racket[(type data mods)] forms still work.}
+]
+A dangling modifier (e.g. @racket['ctrl] with no following key) raises an
+error. Note that char injects normalized events, not raw bytes: byte-level
+decoding (@racket[current-key-protocol], ESC sequences, kitty keys) is
+simulated only as far as @racket[normalize-event] goes and is otherwise a
+@tt{base}-only concern.
 
 @racket[(read-event)] @bold{blocks} by default (like the real terminal), so a
 loop does not spin when there is no input; @racket[(read-event-noblock)] is the

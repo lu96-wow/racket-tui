@@ -377,31 +377,180 @@
 (define closed? (box #f))
 (define sema (box (make-semaphore 0)))
 
-(define (spec->event s)
-  (cond
-    [(event? s) s]
-    [(char? s)
-     ;; 与真实终端一致：单字节特殊键先经 byte->key 归一化
-     ;; （#\tab→'tab, #\return/#\newline→'enter, #\backspace→'backspace,
-     ;;  #\escape→'escape；#\space 仍保持 #\space）。非 ASCII char 原样保留。
-     (key-event (if (< (char->integer s) 128)
-                    (byte->key (char->integer s))
-                    s)
-                no-mods)]
-    [(symbol? s) (key-event s no-mods)]
-    [(and (list? s) (= (length s) 2) (mods? (cadr s)))
-     (key-event (car s) (cadr s))]
-    [(and (list? s) (= (length s) 3))
-     (normalize-event (car s) (cadr s) (caddr s))]
-    [else (error 'char-input-push! "无法识别的输入 spec: ~a" s)]))
+;; ════════════════════════════════════════════════════════════════
+;; 便捷注入 DSL
+;;
+;; char 的存在意义是「让 AI / 测试顺手地模拟输入」，所以这里刻意比 base
+;; 的原始事件更好写。按顺序解析，修饰键是「粘性」的：
+;;
+;;   "hello"          等价类型串：逐字符 → 5 个 key-event（支持 UTF-8）
+;;   'enter 'up 'tab  命名键
+;;   #\a #\你          单字符键
+;;   'ctrl #\c        ctrl+c（'alt / 'shift 同理，可叠加：'ctrl 'alt #\x）
+;;   'shift "abc"     shift+a/b/c（修饰键作用于整串）
+;;   'key 'up (mods #f #f #t)   显式按键 + 显式 mods
+;;   'text "abc"      与裸字符串同义
+;;   'paste "line1\nline2"      paste-event
+;;   'resize 40 120              resize-event
+;;   'mouse 'press 'left 3 4      mouse-event（action button x y [mods]，符号要引）
+;;   'mouse 'scroll 'up 3 4      滚轮（button 位放方向）
+;;   'utf8 "你"                 走 utf8 归一化路径（可传 string 或 bytes）
+;;   event? 结构体        原样入队
+;;   (key mods)                兼容旧写法：key + mods（mods 或 3 布尔列表）
+;;   (type data mods)          兼容旧写法：低层 raw → normalize-event
+;;
+;; 修饰键必须被下一个「按键 token」消费，悬空会报错（例如只写 'ctrl 不带键）。
+;; 只注入，不解析字节：这是 char 输入保真度的边界（真终端解码在 base）。
+;; ════════════════════════════════════════════════════════════════
+
+(define modifier-keywords '(ctrl alt shift))
+
+(define (modifier->mods s)
+  (case s
+    [(ctrl)  (mods #t #f #f)]
+    [(alt)   (mods #f #t #f)]
+    [(shift) (mods #f #f #t)]))
+
+(define (mods-merge a b)
+  (mods (or (mods-ctrl? a) (mods-ctrl? b))
+        (or (mods-alt? a) (mods-alt? b))
+        (or (mods-shift? a) (mods-shift? b))))
+
+;; mods 结构体或 3 布尔列表都接受；其它返回 #f
+(define (as-mods x)
+  (cond [(mods? x) x]
+        [(and (list? x) (= 3 (length x)) (andmap boolean? x)) (apply mods x)]
+        [else #f]))
+
+;; 与真实终端一致：ASCII 单字节特殊键先经 byte->key 归一化
+;; （#\tab→'tab, #\return/#\newline→'enter, #\backspace→'backspace,
+;;  #\escape→'escape；#\space 仍保持 #\space）。非 ASCII char 原样保留。
+(define (normalize-char-key c)
+  (if (< (char->integer c) 128) (byte->key (char->integer c)) c))
+
+(define (take-n lst n what)
+  (let loop ([l lst] [n n] [acc '()])
+    (cond [(zero? n) (values (reverse acc) l)]
+          [(pair? l) (loop (cdr l) (sub1 n) (cons (car l) acc))]
+          [else (error 'char-input-push! "~a 参数不足" what)])))
+
+;; (listof spec) → (listof event?)，按序展开；抛错信息尽量直白
+(define (specs->events specs)
+  (define pending (mods #f #f #f))
+  (define acc '())
+  (define (emit1 e) (set! acc (cons e acc)))
+  (define (take-pending!)
+    (define m pending)
+    (set! pending (mods #f #f #f))
+    m)
+  (define (need-clean! what)
+    (unless (no-mods? pending)
+      (error 'char-input-push! "~a 不能带粘性修饰键" what)))
+  (define (emit-key key m)
+    (cond
+      [(string? key) (for ([c (in-string key)]) (emit1 (key-event (normalize-char-key c) m)))]
+      [(char? key)   (emit1 (key-event (normalize-char-key key) m))]
+      [(symbol? key) (emit1 (key-event key m))]
+      [else (error 'char-input-push! "非法按键: ~a" key)]))
+  (define (optional-mods rest)
+    ;; 若紧随一个 mods 值则消费掉，返回 (values mods rest)
+    (if (and (pair? rest) (as-mods (car rest)))
+        (values (as-mods (car rest)) (cdr rest))
+        (values no-mods rest)))
+  (let loop ([ss specs])
+    (cond
+      [(null? ss) (void)]
+      [else
+       (define s (car ss))
+       (define rest (cdr ss))
+       (cond
+         ;; 粘性修饰键
+         [(and (symbol? s) (memq s modifier-keywords))
+          (set! pending (mods-merge pending (modifier->mods s)))
+          (loop rest)]
+         ;; 'paste <string>
+         [(eq? s 'paste)
+          (need-clean! 'paste)
+          (match rest
+            [(cons (? string? str) rest*)
+             (emit1 (paste-event (string->bytes/utf-8 str) str))
+             (loop rest*)]
+            [_ (error 'char-input-push! "'paste 需要紧跟一个字符串")])]
+         ;; 'resize <rows> <cols>
+         [(eq? s 'resize)
+          (need-clean! 'resize)
+          (define-values (args rest*) (take-n rest 2 "'resize"))
+          (match-define (list rows cols) args)
+          (unless (and (exact-positive-integer? rows) (exact-positive-integer? cols))
+            (error 'char-input-push! "'resize 需要 <rows> <cols>（正整数）"))
+          (emit1 (resize-event rows cols))
+          (loop rest*)]
+         ;; 'mouse <action> <button> <x> <y> [mods]
+         [(eq? s 'mouse)
+          (need-clean! 'mouse)
+          (define-values (args rest*) (take-n rest 4 "'mouse"))
+          (match-define (list action button x y) args)
+          (define-values (m rest**) (optional-mods rest*))
+          (unless (and (symbol? action)
+                       (or (symbol? button) (not button))
+                       (exact-integer? x) (exact-integer? y))
+            (error 'char-input-push! "'mouse 需要 <action> <button> <x> <y> [mods]"))
+          (emit1 (mouse-event action button x y m))
+          (loop rest**)]
+         ;; 'key <key> [mods]
+         [(eq? s 'key)
+          (define-values (args rest*) (take-n rest 1 "'key"))
+          (define-values (m rest**) (optional-mods rest*))
+          (emit-key (car args) (mods-merge (take-pending!) m))
+          (loop rest**)]
+         ;; 'text <string>（同裸字符串）
+         [(eq? s 'text)
+          (match rest
+            [(cons (? string? str) rest*)
+             (emit-key str (take-pending!))
+             (loop rest*)]
+            [_ (error 'char-input-push! "'text 需要紧跟一个字符串")])]
+         ;; 'utf8 <string|bytes>
+         [(eq? s 'utf8)
+          (need-clean! 'utf8)
+          (match rest
+            [(cons (and d (or (? string?) (? bytes?))) rest*)
+             (emit1 (normalize-event 'utf8 (if (string? d) (string->bytes/utf-8 d) d) #f))
+             (loop rest*)]
+            [_ (error 'char-input-push! "'utf8 需要 string 或 bytes")])]
+         ;; 事件结构体：原样
+         [(event? s)
+          (need-clean! 'event)
+          (emit1 s)
+          (loop rest)]
+         ;; 裸字符串：逐字符打
+         [(string? s) (emit-key s (take-pending!)) (loop rest)]
+         ;; 裸字符 / 命名键
+         [(or (char? s) (symbol? s)) (emit-key s (take-pending!)) (loop rest)]
+         ;; 旧写法 (key mods)
+         [(and (list? s) (= 2 (length s)) (as-mods (cadr s)))
+          (emit-key (car s) (mods-merge (take-pending!) (as-mods (cadr s))))
+          (loop rest)]
+         ;; 旧写法 (type data mods) 低层 raw
+         [(and (list? s) (= 3 (length s)))
+          (emit1 (normalize-event (car s) (cadr s)
+                                  (mods-merge (take-pending!) (->mods (caddr s)))))
+          (loop rest)]
+         [else (error 'char-input-push! "无法识别的输入 spec: ~a" s)])]))
+  (unless (no-mods? pending)
+    (error 'char-input-push! "修饰键悬空：~a 后面没有按键"
+           (filter (λ (k) (case k [(ctrl) (mods-ctrl? pending)]
+                                 [(alt) (mods-alt? pending)]
+                                 [(shift) (mods-shift? pending)])) modifier-keywords)))
+  (reverse acc))
 
 (define (char-input-push! . specs)
-  (define was-empty? (null? (unbox queue)))
-  (for ([s specs])
-    (set-box! queue (append (unbox queue) (list (spec->event s)))))
-  ;; 仅当队列由空变非空时唤醒一个等待者，避免陈旧的 semaphore 计数
-  (when (and was-empty? (pair? (unbox queue)))
-    (semaphore-post (unbox sema))))
+  (define events (specs->events specs))
+  (when (pair? events)
+    (define was-empty? (null? (unbox queue)))
+    (set-box! queue (append (unbox queue) events))
+    ;; 仅当队列由空变非空时唤醒一个等待者，避免陈旧的 semaphore 计数
+    (when was-empty? (semaphore-post (unbox sema)))))
 
 (define (char-input-empty?) (null? (unbox queue)))
 (define (char-input-remaining) (length (unbox queue)))
