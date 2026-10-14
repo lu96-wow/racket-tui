@@ -5,7 +5,7 @@
 (require rackunit
          "../char.rkt")
 
-;; 与 base 一致：with-tui 不带尺寸关键字，尺寸走 current-screen-size
+;; char 的尺寸入口：with-tui 不带尺寸关键字，尺寸走 current-screen-size（char 专有）
 (define (with-sized-tui rows cols thunk)
   (parameterize ([current-screen-size (cons rows cols)])
     (with-tui thunk)))

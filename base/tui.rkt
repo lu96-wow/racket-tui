@@ -102,14 +102,6 @@
     (use-color-from-features! f)               ; 只选 registry，无 I/O
 
     (resize-monitor-start) (set! session-resize? #t)
-
-    ;; [char-compat] 尺寸：与 tui/char 的 current-screen-size 对齐。调用方若未
-    ;; parameterize（仍是默认 24×80）则填入真实终端尺寸，显式给出固定尺寸时
-    ;; 保留之——这样固定尺寸的调试代码切到 base 后无需改调用点。
-    (when (equal? (current-screen-size) (cons 24 80))
-      (let-values ([(rows cols) (get-window-size)])
-        (when (and rows cols) (current-screen-size (cons rows cols)))))
-
     ;; alt / mouse / paste：只启用已确认支持者；no-buffer 变体 skip alt
     (plan-enable! feature-plan f #:skip (if alt? '() '(alt-screen)))))
 

@@ -1,10 +1,12 @@
 # Char Backend（字符图后端）
 
 > 目标：把 tui 的输出渲染成**纯字符网格**，供 AI 调试 / 自动化测试 / 无终端（无 tty）环境使用。
-> 与真实终端后端 `tui` 在输出 / 输入 / 样式 API 上同名同签名，**只改 require 路径即可切换**；
-> 能力探测的具体手段 `probe-caps`（终端查询）是 base 专有，char 不提供；但
-> `features` / `current-features` / `default-features` / `features-*?` 同名可用，
-> char 下为 `default-features`（仅 color 由 `$TERM` 猜测）。
+> char 是**独立测试沙盒**：输出 / 输入 / 样式这套概念它自己实现，名字沿用 base
+> 只是为了写起来一致；**不承诺与 base 的 require 互换，base 也不为它做任何兼容**。
+> 推荐流程：用 char 测通，再把应用代码**手工迁移**到 base。
+> 能力探测（`probe-caps` / `features` / `current-features` / `default-features` /
+> `use-color-from-features!` / `current-key-protocol`）是 base 专有，char 不提供；
+> char 的色深档位自己按 `$TERM` 猜。
 >
 > char 后端**不加载 termios / FFI**，因此可在任何平台和沙箱（非 Linux、CI、AI 运行环境）运行；
 > base 支持 Linux 与 Android/Termux（Termux 的 Racket BC 报 `os* = 'android`）。
@@ -22,7 +24,7 @@
 #lang racket
 (require tui/char)
 
-(parameterize ([current-screen-size (cons 6 30)])   ; 与 base 一致：尺寸走 parameter
+(parameterize ([current-screen-size (cons 6 30)])   ; char 用它固定调试尺寸（base 无此参数）
  (with-tui
   (λ ()
     (put-bytes
@@ -64,7 +66,7 @@ base       用户代码 ──► put-*/format-* ──► ANSI 字节 ──►
 base-char  用户代码 ──► put-*/format-* ──► op        ──► grid ──► 纯字符图
 ```
 
-- 上层 API 与 `base` **完全同名同签名**，调用点不用改。
+- 上层 API 与 `base` 在**输出 / 输入 / 样式**这套概念上同名（char 自己实现，写起来一致）。
 - 唯一被替换的「叶子」是：
   - `base-char/ansi/ansi-format.rkt`：`format-*` 返回 **op / op-seq**（不再是 ANSI 字节）
   - `base-char/io/output.rkt`：`put-*` 把 op 作用到网格
@@ -436,12 +438,12 @@ char 后端的输入有两个语义：
 | `format-*` 返回类型 | char 下是 op-seq，不是 bytes；当字节用会在编译期报错（不会静默出错） |
 | 硬编码 ANSI 字面量 | 如 `#"\e[2J"` 会被当成普通文本写入网格；只用 `format-*`/`put-*` 则无此问题 |
 | `screen-clear` | char 下会额外归位光标（erase + home） |
-| 尺寸入口 | 与 base 同签名同语义：`with-tui`/`tui-init` **不接受** `#:rows/#:cols`，尺寸走 `(parameterize ([current-screen-size (cons rows cols)]) ...)`；base 未覆盖时用真实终端尺寸，char 用它建 grid |
+| 尺寸入口 | char 专有：`with-tui`/`tui-init` **不接受** `#:rows/#:cols`，尺寸走 `(parameterize ([current-screen-size (cons rows cols)]) ...)`，char 用它建 grid（默认 24×80）。base 无此参数，真终端尺寸用 `get-window-size` / resize 事件 |
 | alt buffer | 真正维护主/副双网格（`screen-alt-enable!/disable!`），语义对齐 base 的 `ESC[?1049h/l`：alt 期间主屏内容保留 |
 | 输入 | 事件模型/归一化逻辑自带（复制自 base，有对拍测试），**零 FFI**；`read-event/raw` / `read-event-noblock/raw` 为 base 专有（字节级读 stdin），char 不提供 |
 | 坐标系 | `get-cursor` 1-based，`screen-cursor` 0-based |
-| 能力探测 | `probe-caps` 为 base 专有（真终端查询）；`features` / `features-of` / `current-features` / `default-features` / `features-*?` / `use-color-from-features!` / `use-color-auto!` 两个后端都有。char 无终端可探测，`default-features` 即全部不支持，只有 color 由 `$TERM` 猜测 |
-| 颜色档位 | 两后端都有 `use-256color!` / `use-16color!` / `use-color-auto!` / `use-color-from-features!`；base 的 `use-color-auto!` 读 `current-features`（探测结果），char 读 `$TERM` |
+| 能力探测 | `probe-caps` / `features` / `features-of` / `current-features` / `default-features` / `features-*?` / `use-color-from-features!` / `current-key-protocol` 均为 **base 专有**，char 不提供（无终端可探测） |
+| 颜色档位 | char 只有 `use-256color!` / `use-16color!` / `use-color-auto!`（按 `$TERM`）；base 用 `use-color-from-features!` + `current-features`（探测结果）。`use-color-auto!` 是 **char 专有** |
 
 ---
 

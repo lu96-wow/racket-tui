@@ -6,7 +6,6 @@
 (require "screen/session.rkt"
          "screen/grid.rkt"
          "terminal/resize.rkt"
-         "terminal/features.rkt"
          "io/event.rkt"
          "io/output.rkt"
          "io/output-color.rkt"
@@ -24,10 +23,8 @@
   (current-screen (make-grid (car size) (cdr size)))
   (frame-reset!)
   (init-newline-var)
-  ;; 与 base/tui.rkt 相同的 init 路径：先由（猜测的）色深得到 features，再
-  ;; 用 use-color-from-features! 选 registry。char 无法探测，只有 color 有意义。
-  (current-features (features (use-color-auto!) #f #f #f #f #f))
-  (use-color-from-features! (current-features)))
+  ;; 无终端可探测，色深档位由 $TERM 猜测（char 自己的逻辑，不镜像 base）
+  (use-color-auto!))
 
 ;; 与 base 的 tui-exit 一致：退出时恢复主屏（即便 body 出错时停在 alt）
 (define (char-exit!)

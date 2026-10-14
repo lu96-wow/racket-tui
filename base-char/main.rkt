@@ -14,7 +14,6 @@
          "terminal/platform.rkt"
          "terminal/cursor-state.rkt"
          "terminal/config.rkt"
-         "terminal/features.rkt"
          "ansi/ansi-var.rkt"
          "ansi/ansi-format.rkt"
          "ansi/input-var.rkt"
@@ -43,7 +42,6 @@
          (all-from-out "terminal/platform.rkt")
          (all-from-out "terminal/cursor-state.rkt")
          (all-from-out "terminal/config.rkt")
-         (all-from-out "terminal/features.rkt")
          (all-from-out "ansi/ansi-var.rkt")
          (all-from-out "ansi/ansi-format.rkt")
          (all-from-out "ansi/input-var.rkt")

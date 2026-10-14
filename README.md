@@ -121,13 +121,14 @@ count = 42
 
 Highlights:
 
-- Same API for output / input / styles / capabilities — switch only by the
-  `require` path, call sites stay unchanged. `current-screen-size`,
-  `current-features`, `features`, `default-features`, `features-*?`,
-  `current-key-protocol`, `use-color-auto!` and `use-color-from-features!` are
-  provided by both. Only `probe-caps` (the actual terminal query) is
-  terminal-only; on `tui/char` features stay at `default-features` with the
-  color tier inferred from `$TERM`.
+- `tui/char` is an **independent test sandbox**, not a drop-in for `tui`: it
+  implements the output / input / style / event concepts itself (same names for
+  convenience), and the intended flow is to get an app working against it, then
+  port it to `tui` by hand. `tui` carries no char-specific code. Capability
+  probing (`probe-caps`, `features`, `current-features`,
+  `use-color-from-features!`, …) is `tui`-only; `tui/char` infers its color tier
+  from `$TERM` and adds a debug-only layer (`current-screen-size`, frame
+  history/diffs, input DSL).
 - **No termios / FFI**: runs on any platform and sandbox (non-Linux, CI, AI
   environments); `tui` itself is Linux-only.
 - `format-*` returns ops instead of ANSI bytes, so there is **no ANSI parsing** on

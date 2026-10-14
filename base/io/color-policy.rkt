@@ -12,11 +12,9 @@
 ;; ════════════════════════════════════════════════════════════════
 
 (require "output-color.rkt"
-         "../terminal/features.rkt"
-         "../terminal/session.rkt")
+         "../terminal/features.rkt")
 
-(provide use-color-from-features!
-         use-color-auto!)
+(provide use-color-from-features!)
 
 ;; 应用 features 里的色深档位；返回实际选用的档位（便于测试/日志）。
 (define (use-color-from-features! f)
@@ -25,9 +23,3 @@
     [(truecolor 256) (use-256color!)]
     [else (use-16color!)])
   tier)
-
-;; [char-compat] 与 tui/char 端同名同语义：按当前会话 features 自动选档位。
-;; 提供它只为让使用 use-color-auto! 的调用点在两端都能编译/运行；
-;; 会话外（current-features = default-features）等价于 16 色。
-(define (use-color-auto!)
-  (use-color-from-features! (current-features)))

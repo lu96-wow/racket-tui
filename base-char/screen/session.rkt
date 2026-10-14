@@ -5,20 +5,14 @@
 
 (require "grid.rkt"
          "render.rkt"
-         "history.rkt"
-         "../terminal/features.rkt")
+         "history.rkt")
 
 (provide current-screen current-screen-size the-screen call-with-screen
-         current-features
          screen-alt-enable! screen-alt-disable! screen-alt-active?
          current-frame-hook current-frame-dedup? frame-end! frame-reset!)
 
 ;; 屏幕尺寸（行 . 列），无真实终端时的默认尺寸
 (define current-screen-size (make-parameter (cons 24 80)))
-
-;; 与 base/terminal/session.rkt 同名：当前会话能力。char 无终端可探测，
-;; 默认 default-features（全不支持）；tui-init 只根据 $TERM 填 color 档位。
-(define current-features (make-parameter default-features))
 
 ;; 当前 grid；#f 表示尚未创建
 (define current-screen (make-parameter #f))
