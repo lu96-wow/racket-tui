@@ -384,7 +384,8 @@
 ;; 的原始事件更好写。按顺序解析，修饰键是「粘性」的：
 ;;
 ;;   "hello"          等价类型串：逐字符 → 5 个 key-event（支持 UTF-8）
-;;   'enter 'up 'tab  命名键
+;;   'enter 'up 'tab  命名键（别名：'return/'newline→'enter, 'esc→'escape,
+;;                     'delete→'del, 'space→#\space, 'pgup/'pgdn）
 ;;   #\a #\你          单字符键
 ;;   'ctrl #\c        ctrl+c（'alt / 'shift 同理，可叠加：'ctrl 'alt #\x）
 ;;   'shift "abc"     shift+a/b/c（修饰键作用于整串）
@@ -404,6 +405,18 @@
 ;; ════════════════════════════════════════════════════════════════
 
 (define modifier-keywords '(ctrl alt shift))
+
+;; 常用别名 → 规范键。特别地：space 在事件里是字符 #\space 而不是符号，
+;; 'space 这种很自然的写法帮它转过去。
+(define (canonical-key k)
+  (case k
+    [(space) #\space]
+    [(return newline) 'enter]
+    [(esc) 'escape]
+    [(delete) 'del]
+    [(page-up pgup) 'pageup]
+    [(page-down pgdn) 'pagedown]
+    [else k]))
 
 (define (modifier->mods s)
   (case s
@@ -450,7 +463,7 @@
     (cond
       [(string? key) (for ([c (in-string key)]) (emit1 (key-event (normalize-char-key c) m)))]
       [(char? key)   (emit1 (key-event (normalize-char-key key) m))]
-      [(symbol? key) (emit1 (key-event key m))]
+      [(symbol? key) (emit1 (key-event (canonical-key key) m))]
       [else (error 'char-input-push! "非法按键: ~a" key)]))
   (define (optional-mods rest)
     ;; 若紧随一个 mods 值则消费掉，返回 (values mods rest)

@@ -13,7 +13,7 @@
 (require "width.rkt")
 
 (provide (struct-out cell) (struct-out grid)
-         make-grid blank-cell cell-default?
+         make-grid blank-cell cell-default? grid-copy grid-equal?
          grid-ref grid-set-cell!
          grid-clear! grid-resize!
          grid-cursor grid-move! grid-move-rel!
@@ -60,6 +60,19 @@
         #f #f '()
         #f #f #t #f
         0 (max 0 (- rows 1))))
+
+;; 帧历史 / 事后查询用：深拷贝 cells，其余字段按值复制。
+(define (grid-copy g)
+  (struct-copy grid g
+    [cells (for/vector ([row (in-vector (grid-cells g))]) (vector-copy row))]))
+
+;; 整屏内容完全相同（含 text/fg/bg/attrs；不含光标）。用于帧去重。
+(define (grid-equal? a b)
+  (and (= (grid-rows a) (grid-rows b))
+       (= (grid-cols a) (grid-cols b))
+       (for/and ([ra (in-vector (grid-cells a))] [rb (in-vector (grid-cells b))])
+         (for/and ([ca (in-vector ra)] [cb (in-vector rb)])
+           (equal? ca cb)))))
 
 (define (grid-ref g row col)
   (vector-ref (vector-ref (grid-cells g) row) col))

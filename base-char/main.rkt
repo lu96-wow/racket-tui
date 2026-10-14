@@ -28,6 +28,7 @@
          "screen/grid.rkt"
          "screen/render.rkt"
          "screen/frame.rkt"
+         "screen/history.rkt"
          "screen/ansi-parse.rkt"
          "run.rkt")
 
@@ -56,5 +57,6 @@
          (all-from-out "screen/grid.rkt")
          (all-from-out "screen/render.rkt")
          (all-from-out "screen/frame.rkt")
+         (all-from-out "screen/history.rkt")
          (all-from-out "screen/ansi-parse.rkt")
          (all-from-out "run.rkt"))

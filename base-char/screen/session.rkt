@@ -5,6 +5,7 @@
 
 (require "grid.rkt"
          "render.rkt"
+         "history.rkt"
          "../terminal/features.rkt")
 
 (provide current-screen current-screen-size the-screen call-with-screen
@@ -60,21 +61,23 @@
     (screen-alt? #f)))
 
 ;; 帧钩子：每当一次绘制完成（flush!）时，用当前 grid 调用它。
-;; 默认去重：与上一帧字符图完全相同的帧不再触发，避免不阻塞循环里
-;; “没变也在一直输出”。用 current-frame-dedup? 关闭。
+;; 默认去重：与上一帧**视觉状态完全相同**（文本 + 颜色 + 属性）的帧不再触发，
+;; 避免不阻塞循环里“没变也在一直输出”。注意只有颜色变化也算变化（文本去重
+;; 会把它误判为没变，所以这里比的是整块 cells）。用 current-frame-dedup? 关闭。
 (define current-frame-hook (make-parameter #f))
 (define current-frame-dedup? (make-parameter #t))
-(define last-frame-text (box #f))
+(define last-frame-grid (box #f))
 
 (define (frame-reset!)
-  (set-box! last-frame-text #f))
+  (set-box! last-frame-grid #f)
+  (history-clear!))
 
 (define (frame-end!)
-  (when (current-frame-hook)
-    (define g (the-screen))
-    (if (current-frame-dedup?)
-        (let ([txt (grid->text g)])
-          (unless (equal? txt (unbox last-frame-text))
-            (set-box! last-frame-text txt)
-            ((current-frame-hook) g)))
-        ((current-frame-hook) g))))
+  (define g (the-screen))
+  (define dedup? (current-frame-dedup?))
+  (define prev (unbox last-frame-grid))
+  (unless (and dedup? prev (grid-equal? prev g))
+    (when dedup? (set-box! last-frame-grid (grid-copy g)))
+    ;; 历史与钩子独立：即使没设 current-frame-hook，也保留帧快照（信息不丢）
+    (history-push! g)
+    (when (current-frame-hook) ((current-frame-hook) g))))

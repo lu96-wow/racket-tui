@@ -95,4 +95,9 @@
     (define evs (drain!))
     (check-equal? (keys evs) (list #\a #\b 'enter #\c #\d))
     (check-true (mods-ctrl? (mods-of (list-ref evs 3))))
-    (check-true (mods-ctrl? (mods-of (list-ref evs 4))))))
+    (check-true (mods-ctrl? (mods-of (list-ref evs 4)))))
+
+  (test-case "命名键别名"
+    (char-input-push! 'space 'return 'newline 'esc 'delete 'pgup 'pgdn)
+    (check-equal? (keys (drain!))
+                  (list #\space 'enter 'enter 'escape 'del 'pageup 'pagedown))))

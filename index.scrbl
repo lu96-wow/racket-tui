@@ -1202,21 +1202,47 @@ same signatures as @tt{tui}.
 @subsection{Frames and bounded runs}
 
 @racket[flush!] triggers @racket[current-frame-hook] with the current grid, but
-only when the rendered character grid actually changed
-(@racket[current-frame-dedup?], on by default), so an idle loop does not keep
-emitting frames. @racket[(screen-frame-log-enable! path)] appends every frame as
-plain text to a file; @racket[(screen-frame-count)] and
+only when the rendered character grid actually changed -- the check covers text
+@italic{and} colors/attributes (@racket[current-frame-dedup?], on by default),
+so a color-only change is not mistaken for an idle frame. An idle loop therefore
+does not keep emitting frames. @racket[(screen-frame-log-enable! path)] appends
+every frame as plain text to a file (@racket[#:diff? #t] writes only the
+differences); @racket[(screen-frame-count)] and
 @racket[(screen-frame-log-disable!)] complete the API.
+
+Deduped frames are also snapshotted into a bounded in-memory history
+(@racket[current-frame-history-size], 32 by default, 0 disables), so nothing is
+lost even though you only print changes:
+
+@itemlist[
+  @item{@racket[(char-history)] / @racket[(char-frame-at i)] --- frame text,
+        oldest to newest;}
+  @item{@racket[(char-history-ref i)] --- the whole grid snapshot of frame
+        @racket[i], so colors/attributes/cursor remain queryable after the
+        fact;}
+  @item{@racket[(char-diff)] / @racket[(frame-diff a b)] --- unified-diff text
+        listing only changed rows (consecutive rows merged into one hunk);
+        @racket[(char-diff #:styles? #t)] also reports style changes;}
+  @item{@racket[(char-style-diff)] / @racket[(style-diff ga gb)] --- only the
+        color/attribute changes, as column ranges with old @racket[->] new
+        (e.g. @tt{cols 0..3 fg(255,0,0) -> fg(0,0,0)}); @racket[(grid-diff ga gb)]
+        combines both;}
+  @item{@racket[(char-log-enable! #:to port #:diff? #t)] --- print only the
+        text+style diff of each changed frame; @racket[(char-log-disable!)]
+        stops it.}
+]
 
 For deterministic debugging, @racket[char-run] processes a finite list of
 events, rendering once per event and returning the sequence of frame strings
 (at most one frame per event plus the initial frame), so headless runs never
-flood output:
+flood output; with @racket[#:diff? #t] it returns the first frame followed by
+one diff per change:
 
 @racketblock[
 (char-run (list #\+ #\+ #\-)
           #:handle (lambda (ev) ...)
           #:render (lambda () ...)
+          #:diff? #t
           #:rows 24 #:cols 80)
 ]
 
@@ -1229,6 +1255,8 @@ flood output:
         @racket[(current-screen-size)] — grid session state.}
   @item{@racket[(screen-size g)], @racket[(screen-cursor-cell g)],
         @racket[(screen-style-at g row col)] — queries.}
+  @item{@racket[(char-history)] / @racket[(char-frame-at i)] /
+        @racket[(char-diff)] — frame history and diffs.}
 ]
 
 The full reference lives in @tt{base-char/README.md} in the source repository.

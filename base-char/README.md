@@ -200,7 +200,7 @@ char 后端的输入有两个语义：
 |---|---|
 | `"hello"` | 逐字符按键（支持 UTF-8），最常用 |
 | `#\a` / `#\你` | 单个字符键 |
-| `'enter` / `'up` / `'tab` … | 命名键 |
+| `'enter` / `'up` / `'tab` … | 命名键（别名 `'return`/`'newline`→`'enter`、`'esc`→`'escape`、`'delete`→`'del`、`'space`→`#\space`） |
 | `'ctrl #\c` / `'alt #\x` / `'shift 'up` | 粘性修饰键 + 按键（可叠加 `'ctrl 'alt #\x`） |
 | `'shift "abc"` | 修饰键作用于整串 |
 | `'key <key> [mods]` | 显式按键 + 显式 mods（与前缀粘性 mods 合并） |
@@ -278,9 +278,11 @@ char 后端的输入有两个语义：
             #:render   (λ () ...)        ; 绘制到当前网格
             #:snapshot char-frame        ; 抓帧（默认 char-frame）
             #:stop     (λ () quit?)      ; 额外提前停止条件
-            #:dedup?   #t                ; 跳过与上一帧相同的帧
+            #:dedup?   #t                ; 跳过与上一帧视觉相同的帧
+            #:diff?    #f                ; #t → 返回 (首帧 diff ...)（文本）
+            #:styles?  #f                ; #:diff? 时样式变化也写进 diff
             #:rows 24 #:cols 80))
-;; => (listof string)  帧序列
+;; => (listof string)  帧序列（#:diff? #f）或首帧 + 逐帧 diff（#:diff? #t）
 ```
 
 不建议在 `loop-input-noblock` 里无条件打印：`read-event-noblock` 每轮都返回，
@@ -318,6 +320,83 @@ char 后端的输入有两个语义：
 ── frame 2 ──
 ...
 ```
+
+---
+
+## 帧历史与 diff（只在变化时看新内容）
+
+调试循环的默认诉求是：**不要每帧都刷整屏，但信息也不能丢**。char 的做法是
+把去重后的每一帧整块 grid 快照留在内存（`current-frame-history-size`，默认
+32；`0` 关闭），需要时再按需取用：
+
+```racket
+(char-history)              ; 各帧纯文本（旧→新）
+(char-history-count)        ; 帧数
+(char-frame-at i)           ; 第 i 帧文本（0 = 最旧）
+(char-history-ref i)        ; 第 i 帧的 grid 快照 → 再喂 screen-styled-cells 等
+(char-diff)                 ; 最近两帧的**文本**差异（无变化/帧不足 → ""）
+(char-diff #:styles? #t)    ; 文本 + 样式差异
+(char-style-diff)           ; 最近两帧的**样式**差异（只看颜色/属性）
+(frame-diff a b)            ; 任意两帧文本的差异
+(style-diff ga gb)          ; 任意两帧 grid 的样式差异
+(grid-diff ga gb)           ; 文本 + 样式
+```
+
+`char-diff` / `frame-diff` 只列**发生变化的行**，连续变化合并成一个 hunk：
+
+```
+@@ row 0 @@
+-count = 41
++count = 42
+```
+
+`style-diff` 只列**样式发生变化的列区间**，并给出旧→新：
+
+```
+@@ row 0 style @@
+  cols 0..3  fg(255,0,0) -> fg(0,0,0)
+```
+
+样式默认不进帧文本，需要时用 `style-diff` / `screen-styled-cells` /
+`screen-attr-ranges` / `screen-style-at` 按需取。
+
+> **去重看的是整块视觉状态（文本 + 颜色 + 属性），不只是文本。** 否则「文本
+> 不变、只改了颜色」的帧会被当成没变而丢掉。`current-frame-dedup?` 仍可关闭。
+
+因为历史存的是整块 grid，旧帧的颜色/属性/光标都能事后查（不是只存文本），
+所以「不刷屏」和「信息不丢」可以同时成立。
+
+### 循环里只打印变化：`char-log-enable!`
+
+把帧钩子挂到端口上，默认只写 diff（首帧整屏）：
+
+```racket
+(char-log-enable!)                        ; 默认 #:diff? #t，写 stdout
+(char-log-enable! #:to port #:diff? #f)   ; 或整帧
+(char-log-disable!)
+```
+
+`screen-frame-log-enable!` 同样支持 `#:diff? #t`，逐帧落盘时只写差异。
+`demo/char-debug-loop.rkt` 是一个完整例子：首帧整屏，之后每次变化只出几行，
+没变化的事件（如按键 `q`）不产生任何输出。
+
+### 实时循环
+
+生产者线程喂输入 + 阻塞主循环 + `char-log-enable!` 是最顺手的实时调试形态：
+主循环不空转，输出只在变化时出现。`stop?` 是**每轮求值的表达式**，不是 thunk，
+所以写 `quit?` 而不是 `(λ () quit?)`：
+
+```racket
+(thread (λ ()
+          (for ([k (in-list '(down down up))])
+            (sleep 0.05) (char-input-push! k))
+          (char-input-close!)))
+
+(loop-input/stop (or quit? (char-input-exhausted?))
+                 (λ (ev) (handler ev) (draw) (flush!)))
+```
+
+完整例子（含 viewport 滚动 + 选中高亮）：`demo/char-live-debug.rkt`。
 
 ---
 
@@ -377,7 +456,8 @@ char 后端的输入有两个语义：
 | 光标 | `get-cursor` `update-cursor!` `screen-cursor` `screen-cursor-cell` `screen-size` |
 | 属性 | `screen-ref` `cell-text/fg/bg/attrs` `style->string` `screen-style-at` `screen-current-style` `screen-styled-cells` `screen-attr-ranges` |
 | 输入 | `char-input-push!` `char-input-close!` `char-input-exhausted?` `char-input-open?` `char-input-empty?` `char-input-clear!` `char-input-remaining` `read-event` `read-event-noblock` `build-input` `loop-input*` |
-| 运行 | `char-run` `current-frame-hook` `current-frame-dedup?` `frame-end!` `frame-reset!` `flush!` `screen-frame-log-enable!` `screen-frame-log-disable!` `screen-frame-count` |
+| 运行 / 帧 | `char-run` `current-frame-hook` `current-frame-dedup?` `frame-end!` `frame-reset!` `flush!` `screen-frame-log-enable!` `screen-frame-log-disable!` `screen-frame-count` |
+| 历史 / diff | `current-frame-history-size` `char-history` `char-history-count` `char-history-ref` `char-frame-at` `char-diff` `char-style-diff` `frame-diff` `style-diff` `grid-diff` `char-log-enable!` `char-log-disable!` |
 | 底层 | `make-grid` `grid-ref` `cell?` `blank-cell` `cell-default?` `make-ansi-parser` `ansi-parser-*` |
 
 ---

@@ -134,12 +134,22 @@ Highlights:
   the main path; a parser is kept only as a test oracle.
 - `bytes-append` is shadowed (module-local) to make the batch idiom work as-is.
 - Query cursor position and per-cell attributes on demand.
-- Scripted input (`char-input-push!`) + full event loop with `build-input` /
+- Scripted input with an ergonomic DSL (`char-input-push! "hello" 'ctrl #\c
+  'paste "..." 'resize 40 120`) + full event loop with `build-input` /
   `loop-input/stop`, so it runs headless.
 - Bounded by design: blocking input by default, frame deduplication, and a
   `char-run` runner that renders once per scripted event — headless loops never
-  spin or flood frames.
-- Per-frame snapshots to plain text or a log file via `flush!` / frame hooks.
+  spin or flood frames. `char-run #:diff? #t` returns the first frame followed by
+  one diff per change.
+- Lazy observation: deduped frames go into a bounded in-memory history
+  (`char-history`, `char-history-ref`) so colors/attributes stay queryable. Frame
+  dedup covers text **and** styles, `char-diff` / `char-style-diff` (and
+  `char-log-enable!`) print **only what changed**, and the full frame / per-cell
+  styles are fetched on demand (`char-frame`, `screen-styled-cells`,
+  `screen-attr-ranges`).
+- Real-time debugging: a producer thread feeds `char-input-push!` while a
+  blocking `loop-input/stop` draws and `char-log-enable!` streams only the diffs
+  — see `demo/char-live-debug.rkt`.
 
 Full documentation: [`base-char/README.md`](base-char/README.md).
 
