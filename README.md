@@ -54,6 +54,8 @@ raco pkg install --link
 
 ## Quick Start
 
+窗口起始点为: (1 1)
+
 ```racket
 #lang racket
 
