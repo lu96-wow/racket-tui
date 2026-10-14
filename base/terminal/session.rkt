@@ -12,6 +12,14 @@
 
 (require "features.rkt")
 
-(provide current-features)
+(provide current-features
+         current-screen-size)
 
 (define current-features (make-parameter default-features))
+
+;; [char-compat] 会话尺寸 (rows . cols)。此参数是为兼容 tui/char 端而存在的：
+;; char 用它给内存 grid 定尺寸，用户可 parameterize 成固定尺寸（测试 / 调试）；
+;; base 侧未覆盖（仍是默认 24×80）时 tui-init 会填入真实终端尺寸（见 base/tui.rkt）。
+;; base 的实际输出仍由终端决定，此参数的作用是让同一份代码在 tui / tui/char
+;; 间切换时同名、同语义、能编译。
+(define current-screen-size (make-parameter (cons 24 80)))

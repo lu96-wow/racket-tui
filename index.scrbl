@@ -133,7 +133,7 @@ Knowing any one tier, the other two can be derived.
 @tabular[#:sep @hspace[1]
          (list (list @bold{Category} @bold{Representative functions})
                (list "Lifecycle" @elem{@racket[with-tui] @racket[tui-init] @racket[enable-mouse!]})
-               (list "Capabilities" @elem{@racket[current-features] @racket[features-of] @racket[probe-caps]})
+               (list "Capabilities" @elem{@racket[current-features] @racket[current-screen-size] @racket[features-of] @racket[probe-caps]})
                (list "Basic output" @elem{@racket[put] @racket[put-bytes] @racket[put-newline]})
                (list "Positioned output" @elem{@racket[put-at] @racket[put-at!]})
                (list "Cursor" @elem{@racket[cursor-move] @racket[put-cursor-save]})
@@ -238,7 +238,18 @@ unsupported (@racket['16] for color, @racket[#f] otherwise).
 
 @defparam[current-features f features?]{
 The features of the active session; set by @racket[tui-init] and restored by
-@racket[tui-exit].
+@racket[tui-exit]. On @tt{tui/char} there is nothing to probe, so this stays
+at @racket[default-features] except for the color tier.
+}
+
+@defparam[current-screen-size size (cons/c exact-positive-integer? exact-positive-integer?)]{
+The session size as @racket[(cons rows cols)]. It defaults to
+@racket[(cons 24 80)]; @racket[tui-init] fills in the real terminal size when
+the value is still the default, so an explicit
+@racket[(parameterize ([current-screen-size (cons rows cols)]) ...)] is
+preserved (useful for tests/debugging). On @tt{tui/char} it sizes the
+character grid. The name and semantics are identical on both backends, so the
+same code works after switching the @racket[require] path.
 }
 
 @margin-note{
@@ -508,7 +519,7 @@ and so on.
 The active style registry. @racket[style-define!] writes into both the
 256-color and 16-color registries, while @racket[style-apply!] and
 @racket[style->bytes] read whichever one is current. Changed by
-@racket[use-256color!], @racket[use-16color!] and
+@racket[use-256color!], @racket[use-16color!], @racket[use-color-auto!] and
 @racket[use-color-from-features!].
 }
 
@@ -520,6 +531,12 @@ Selects the 16-color style registry.
 Selects the style registry according to the terminal capabilities in
 @racket[f] (a @racket[features] value). Called automatically by
 @racket[tui-init] after capability probing.
+}
+
+@defproc[(use-color-auto!) (or/c '16 '256 'truecolor)]{
+Selects the style registry from @racket[(current-features)]. Provided by both
+backends; on @tt{tui/char} there is no probe, so the color tier is inferred
+from @racket[$TERM] and stored into @racket[current-features].
 }
 
 @subsection{Built-in styles}
@@ -1069,7 +1086,13 @@ frame as plain text (no escape codes), which makes it practical for AI agents,
 tests and CI to inspect UI state without a TTY. Switch backends by the
 @racket[require] path only; call sites stay unchanged. Unlike @tt{tui},
 @tt{tui/char} does not load termios or FFI, so it runs on any platform or
-sandbox.
+sandbox. Session state such as @racket[current-screen-size],
+@racket[current-features], @racket[features], @racket[default-features],
+@racket[current-key-protocol], @racket[use-color-auto!] and
+@racket[use-color-from-features!] is provided by both; only @racket[probe-caps]
+(the terminal query itself) is @tt{tui}-only, and on @tt{tui/char} the feature
+set stays at @racket[default-features] except for the color tier inferred from
+@racket[$TERM].
 
 @racketblock[
 (require tui)        ; real terminal

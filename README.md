@@ -121,9 +121,13 @@ count = 42
 
 Highlights:
 
-- Same API for output / input / styles — switch only by the `require` path, call
-  sites stay unchanged. Terminal capability probing (`probe-caps`, `features`,
-  `current-features`) is terminal-only and not provided by the char backend.
+- Same API for output / input / styles / capabilities — switch only by the
+  `require` path, call sites stay unchanged. `current-screen-size`,
+  `current-features`, `features`, `default-features`, `features-*?`,
+  `current-key-protocol`, `use-color-auto!` and `use-color-from-features!` are
+  provided by both. Only `probe-caps` (the actual terminal query) is
+  terminal-only; on `tui/char` features stay at `default-features` with the
+  color tier inferred from `$TERM`.
 - **No termios / FFI**: runs on any platform and sandbox (non-Linux, CI, AI
   environments); `tui` itself is Linux-only.
 - `format-*` returns ops instead of ANSI bytes, so there is **no ANSI parsing** on

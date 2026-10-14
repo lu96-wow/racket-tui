@@ -34,6 +34,8 @@
  build-input
  ;; 事件源注册（与 base 同名）
  on-source call-with-source-registry
+ ;; 输入解码协议（与 base 同名；char 输入为脚本队列，本参数仅为切换兼容）
+ current-key-protocol
  ;; 脚本输入
  read-event read-event-noblock
  char-input-push! char-input-empty? char-input-clear! char-input-remaining
@@ -432,6 +434,10 @@
 
 (struct source (evt proc) #:transparent)
 (define current-source-registry (make-parameter #f))
+
+;; 与 base/io/input.rkt 同名。char 的输入来自脚本队列，不做字节级协议解码，
+;; 因此读写此参数不影响行为；提供它是为了让切换后端时调用点无需改动。
+(define current-key-protocol (make-parameter 'ansi))
 
 (define (call-with-source-registry thunk)
   (parameterize ([current-source-registry (box '())])

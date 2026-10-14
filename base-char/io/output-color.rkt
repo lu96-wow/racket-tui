@@ -6,7 +6,8 @@
 (require "./output.rkt"
          "../ansi/ansi-format.rkt"
          "../screen/ops.rkt"
-         "../terminal/cursor-state.rkt")
+         "../terminal/cursor-state.rkt"
+         "../terminal/features.rkt")
 
 (define (make-style . specs)
   (λ () (for-each (λ (s) (s)) (filter procedure? specs))))
@@ -162,19 +163,42 @@
 
 ;; ── 颜色深度 ─────────────────────────────────────────────
 
-(define (detect-color-depth)
+;; 无终端可探测，退回 $TERM 猜测；与 base 的 features-color 档位同名。
+(define (color-tier-auto)
   (define term (getenv "TERM"))
-  (if (and term (regexp-match? #rx"256color" term))
-      registry-256
-      registry-16))
+  (cond
+    [(and term (regexp-match? #rx"truecolor|24bit" term)) 'truecolor]
+    [(and term (regexp-match? #rx"256color" term)) '256]
+    [else '16]))
+
+(define (detect-color-depth)
+  (case (color-tier-auto)
+    [(truecolor 256) registry-256]
+    [else registry-16]))
 
 (define (use-256color!) (current-registry registry-256))
 (define (use-16color!)  (current-registry registry-16))
-(define (use-color-auto!) (current-registry (detect-color-depth)))
+
+;; 与 base 同名同返值：选档并返回实际档位（'16 / '256 / 'truecolor）。
+(define (use-color-auto!)
+  (define tier (color-tier-auto))
+  (case tier
+    [(truecolor 256) (use-256color!)]
+    [else (use-16color!)])
+  tier)
+
+;; 与 base/io/color-policy.rkt 同名同语义：按 features 的色深档位选 registry。
+;; char 的 features 里 color 是唯一有意义的字段（其余能力恒为 #f）。
+(define (use-color-from-features! f)
+  (case (features-color f)
+    [(truecolor 256) (use-256color!)]
+    [else (use-16color!)])
+  (features-color f))
 
 (provide
  style-define! style-apply! style-reset style->bytes
  current-registry use-256color! use-16color! use-color-auto!
+ use-color-from-features!
  put-styled put-styled-at put-styled-at!
  put-styled-bold put-styled-bold-at put-styled-bold-at!
  put-styled-dim put-styled-dim-at put-styled-dim-at!
